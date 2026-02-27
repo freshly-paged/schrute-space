@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-pixel: "Press Start 2P", cursive;
+}
+
+.pixel-border {
+  box-shadow: 
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000,
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000;
+}
+
+.pixel-button {
+  position: relative;
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #7a0019;
+  color: white;
+  text-decoration: none;
+  box-shadow: 
+    inset -4px -4px 0 0 #4a000f,
+    inset 4px 4px 0 0 #a30022,
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000,
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000;
+}
+
+.pixel-button:active {
+  box-shadow: 
+    inset 4px 4px 0 0 #4a000f,
+    inset -4px -4px 0 0 #a30022,
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000,
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000;
+}
