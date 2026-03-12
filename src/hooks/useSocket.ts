@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Player, ChatMessage } from '../types';
 import { AuthUser } from './useAuth';
+import { useGameStore } from '../store/useGameStore';
 
 export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -83,7 +84,19 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       });
     });
 
+    newSocket.on('paperReamsLoaded', (count: number) => {
+      useGameStore.getState().setPaperReams(count);
+    });
+
+    // Sync paper reams to server whenever the count changes
+    const unsubscribeReams = useGameStore.subscribe((state, prev) => {
+      if (state.paperReams !== prev.paperReams) {
+        newSocket.emit('savePaperReams', state.paperReams);
+      }
+    });
+
     return () => {
+      unsubscribeReams();
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

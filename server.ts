@@ -8,10 +8,40 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
+import pg from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ── Database ────────────────────────────────────────────────────────────────
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      email       TEXT PRIMARY KEY,
+      paper_reams INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+}
+
+async function getPaperReams(email: string): Promise<number> {
+  const { rows } = await pool.query(
+    'SELECT paper_reams FROM users WHERE email = $1',
+    [email]
+  );
+  return rows[0]?.paper_reams ?? 0;
+}
+
+async function savePaperReams(email: string, count: number): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (email, paper_reams) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET paper_reams = EXCLUDED.paper_reams`,
+    [email, count]
+  );
+}
+
+// ── Config ───────────────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL;
@@ -20,6 +50,7 @@ const JWT_SECRET = process.env.SESSION_SECRET || "schrute-jwt-secret";
 const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
 
 async function startServer() {
+  await initDb();
   const app = express();
   app.set("trust proxy", 1);
   const httpServer = createServer(app);
@@ -294,8 +325,19 @@ io.on("connection", (socket) => {
 
       // Broadcast new player to others in the same room
       socket.to(room).emit("newPlayer", rooms[room][socket.id]);
+
+      // Send persisted paper reams to this player
+      getPaperReams(user.email).then((count) => {
+        socket.emit("paperReamsLoaded", count);
+      });
       
       console.log(`User ${socket.id} joined room: ${room}`);
+    });
+
+    socket.on("savePaperReams", (count: number) => {
+      if (typeof count === 'number' && count >= 0) {
+        savePaperReams(user.email, Math.floor(count));
+      }
     });
 
     socket.on("chatMessage", (messageText: string) => {

@@ -4,6 +4,7 @@ interface GameState {
   // Paper Clicker State
   paperReams: number;
   addPaper: (amount: number) => void;
+  setPaperReams: (count: number) => void;
 
   // Pomodoro State
   isTimerActive: boolean;
@@ -29,6 +30,7 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   paperReams: 0,
   addPaper: (amount) => set((state) => ({ paperReams: state.paperReams + amount })),
+  setPaperReams: (count) => set({ paperReams: count }),
 
   isTimerActive: false,
   isTimerPaused: false,
