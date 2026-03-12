@@ -1,0 +1,81 @@
+import React, { useRef } from 'react';
+import { Box, Billboard, Text } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useGameStore } from '../../store/useGameStore';
+import { Chair } from './Chair';
+
+export const Desk = ({
+  id,
+  position,
+  rotation = [0, 0, 0],
+  hasChair = true,
+}: {
+  id: string;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  hasChair?: boolean;
+}) => {
+  const setNearestDeskId = useGameStore((state) => state.setNearestDeskId);
+  const nearestDeskId = useGameStore((state) => state.nearestDeskId);
+  const isTimerActive = useGameStore((state) => state.isTimerActive);
+  const deskRef = useRef<THREE.Group>(null);
+
+  useFrame((state) => {
+    if (!deskRef.current) return;
+    const player = state.scene.getObjectByName('localPlayer');
+    if (!player) return;
+
+    const distance = player.position.distanceTo(deskRef.current.position);
+    if (distance < 2) {
+      if (nearestDeskId !== id) setNearestDeskId(id);
+    } else if (nearestDeskId === id) {
+      setNearestDeskId(null);
+    }
+  });
+
+  const isNearest = nearestDeskId === id;
+
+  return (
+    <group ref={deskRef} position={position} rotation={rotation}>
+      {isNearest && !isTimerActive && (
+        <Billboard position={[0, 2.5, 0]}>
+          <Text fontSize={0.2} color="white" outlineColor="black" outlineWidth={0.02}>
+            Press [E] to Start Focus
+          </Text>
+        </Billboard>
+      )}
+
+      {/* Table top */}
+      <Box args={[2, 0.1, 1]} position={[0, 0.95, 0]}>
+        <meshStandardMaterial color={isNearest ? '#a0522d' : '#8B4513'} />
+      </Box>
+      {/* Legs */}
+      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, -0.4]}>
+        <meshStandardMaterial color="#333" />
+      </Box>
+      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, -0.4]}>
+        <meshStandardMaterial color="#333" />
+      </Box>
+      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, 0.4]}>
+        <meshStandardMaterial color="#333" />
+      </Box>
+      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, 0.4]}>
+        <meshStandardMaterial color="#333" />
+      </Box>
+      {/* Monitor */}
+      <group position={[0, 1.0, 0]}>
+        <Box args={[0.6, 0.4, 0.05]} position={[0, 0.2, -0.2]}>
+          <meshStandardMaterial color="#111" />
+        </Box>
+        <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
+          <meshStandardMaterial color="#222" />
+        </Box>
+        <Box args={[0.4, 0.02, 0.2]} position={[0, 0.01, 0.1]}>
+          <meshStandardMaterial color="#222" />
+        </Box>
+      </group>
+      {hasChair && <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} />}
+    </group>
+  );
+};
