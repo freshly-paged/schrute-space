@@ -23,6 +23,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --region="$REGION" \
   --project="$PROJECT_ID" \
   --ingress=internal \
+  --clear-base-image \
   --add-cloudsql-instances="$CLOUDSQL_INSTANCE"
 
 echo "Done! Service URL:"

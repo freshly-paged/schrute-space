@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
+import fs from "fs";
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -418,9 +419,12 @@ io.on("connection", (socket) => {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distPath = path.join(__dirname, "dist");
+    console.log(`Serving static files from: ${distPath}`);
+    console.log(`dist/index.html exists: ${fs.existsSync(path.join(distPath, "index.html"))}`);
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
