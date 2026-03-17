@@ -102,7 +102,7 @@ async function startServer() {
   app.use(authenticateToken);
   io.engine.use(sessionMiddleware);
 
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 
   // Track active users by email to prevent multiple sessions
   const activeUsers = new Map<string, string>(); // email -> socketId
