@@ -2,8 +2,8 @@ import React, { useRef } from 'react';
 import { Box, Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useGameStore } from '../../store/useGameStore';
-import { Chair } from './Chair';
+import { useGameStore } from '../../../store/useGameStore';
+import { Chair } from '../shared/props/Chair';
 
 export const Desk = ({
   id,
