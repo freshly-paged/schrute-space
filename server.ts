@@ -265,6 +265,16 @@ async function startServer() {
     res.json((req as any).user || (req.session as any).user || null);
   });
 
+  app.get("/api/player", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const [paperReams, avatarConfig] = await Promise.all([
+      getPaperReams(user.email),
+      getAvatarConfig(user.email),
+    ]);
+    res.json({ paperReams, avatarConfig });
+  });
+
   app.post("/api/avatar", express.json(), async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });

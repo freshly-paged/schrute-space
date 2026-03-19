@@ -35,6 +35,8 @@ export const LocalPlayer = ({
   const [, get] = useKeyboardControls();
   const playerRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
+  const lastActiveDeskIdRef = useRef<string | null>(null);
+  const wasTimerActiveRef = useRef(false);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -49,6 +51,7 @@ export const LocalPlayer = ({
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
 
   const focusProgress = isTimerActive ? 1 - timeLeft / (25 * 60) : 0;
+  const sessionPaper = useGameStore((state) => state.sessionPaper);
 
   // Emit focus state to server whenever it changes
   useEffect(() => {
@@ -64,7 +67,33 @@ export const LocalPlayer = ({
     // Keep camera below roof
     if (state.camera.position.y > 7.5) state.camera.position.y = 7.5;
 
+    // Track active desk while session is running
+    if (isTimerActive && activeDeskId) {
+      lastActiveDeskIdRef.current = activeDeskId;
+    }
+
+    // Eject player from chair when session ends
+    if (wasTimerActiveRef.current && !isTimerActive && lastActiveDeskIdRef.current) {
+      const desk = DESKS.find((d) => d.id === lastActiveDeskIdRef.current);
+      if (desk) {
+        const chairDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), desk.rotation[1]);
+        const ejectedPos: [number, number, number] = [
+          desk.position[0] + chairDir.x * 2.5,
+          desk.position[1],
+          desk.position[2] + chairDir.z * 2.5,
+        ];
+        const ejectedRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
+        setPosition(ejectedPos);
+        setRotation(ejectedRot);
+        socket?.connected &&
+          socket.emit('playerMovement', { position: ejectedPos, rotation: ejectedRot, isRolling: false, rollTimer: 0 });
+      }
+      lastActiveDeskIdRef.current = null;
+    }
+    wasTimerActiveRef.current = isTimerActive;
+
     const rawKeys = get();
+
     const keys =
       isChatFocused || isTimerActive
         ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
@@ -219,18 +248,36 @@ export const LocalPlayer = ({
           </Text>
         </Billboard>
         {isTimerActive && (
-          <Billboard position={[0, 2.7, 0]}>
-            <mesh>
-              <planeGeometry args={[1.0, 0.12]} />
-              <meshBasicMaterial color="#1e293b" transparent opacity={0.85} />
+          <Billboard position={[0, 3.0, 0]}>
+            {/* Outer background */}
+            <mesh position={[0, 0.1, -0.001]}>
+              <planeGeometry args={[1.8, sessionPaper > 0 ? 0.78 : 0.58]} />
+              <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
             </mesh>
-            <mesh position={[-(1 - focusProgress) / 2, 0, 0.001]}>
-              <planeGeometry args={[Math.max(0.001, focusProgress), 0.09]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            <Text fontSize={0.07} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
+            {/* Label */}
+            <Text fontSize={0.18} color="#22c55e" position={[0, 0.22, 0]} anchorX="center" anchorY="middle">
               FOCUS
             </Text>
+            {/* Bar background */}
+            <mesh position={[0, 0, 0]}>
+              <planeGeometry args={[1.6, 0.22]} />
+              <meshBasicMaterial color="#1e293b" />
+            </mesh>
+            {/* Bar fill */}
+            <mesh position={[-(1.6 - focusProgress * 1.6) / 2, 0, 0.001]}>
+              <planeGeometry args={[Math.max(0.001, focusProgress * 1.6), 0.18]} />
+              <meshBasicMaterial color="#22c55e" />
+            </mesh>
+            {/* Percent label */}
+            <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
+              {`${Math.round(focusProgress * 100)}%`}
+            </Text>
+            {/* Session paper count */}
+            {sessionPaper > 0 && (
+              <Text fontSize={0.11} color="#86efac" position={[0, -0.22, 0.001]} anchorX="center" anchorY="middle">
+                {`+${sessionPaper} paper`}
+              </Text>
+            )}
           </Billboard>
         )}
         <ChatBubble text={lastMessage} time={lastMessageTime} />

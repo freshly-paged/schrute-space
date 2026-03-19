@@ -39,17 +39,29 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
         </Text>
       </Billboard>
       {player.isFocused && player.focusProgress != null && (
-        <Billboard position={[0, 2.7, 0]}>
-          <mesh>
-            <planeGeometry args={[1.0, 0.12]} />
-            <meshBasicMaterial color="#1e293b" transparent opacity={0.85} />
+        <Billboard position={[0, 3.0, 0]}>
+          {/* Outer background */}
+          <mesh position={[0, 0.1, -0.001]}>
+            <planeGeometry args={[1.8, 0.58]} />
+            <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
           </mesh>
-          <mesh position={[-(1 - player.focusProgress) / 2, 0, 0.001]}>
-            <planeGeometry args={[Math.max(0.001, player.focusProgress), 0.09]} />
+          {/* Label */}
+          <Text fontSize={0.18} color="#22c55e" position={[0, 0.22, 0]} anchorX="center" anchorY="middle">
+            FOCUS
+          </Text>
+          {/* Bar background */}
+          <mesh position={[0, 0, 0]}>
+            <planeGeometry args={[1.6, 0.22]} />
+            <meshBasicMaterial color="#1e293b" />
+          </mesh>
+          {/* Bar fill */}
+          <mesh position={[-(1.6 - player.focusProgress * 1.6) / 2, 0, 0.001]}>
+            <planeGeometry args={[Math.max(0.001, player.focusProgress * 1.6), 0.18]} />
             <meshBasicMaterial color="#22c55e" />
           </mesh>
-          <Text fontSize={0.07} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
-            FOCUS
+          {/* Percent label */}
+          <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
+            {`${Math.round(player.focusProgress * 100)}%`}
           </Text>
         </Billboard>
       )}

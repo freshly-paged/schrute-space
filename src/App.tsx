@@ -12,6 +12,7 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -39,7 +40,7 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize'>('landing');
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
@@ -63,6 +64,19 @@ export default function App() {
         handleJoin(lastRoom);
       }
     }
+  }, [user, currentRoom]);
+
+  // Load player stats from DB when on landing page
+  useEffect(() => {
+    if (!user || currentRoom) return;
+    const token = localStorage.getItem('office_auth_token');
+    fetch('/api/player', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.paperReams === 'number') setPaperReams(data.paperReams);
+        if (data.avatarConfig) setAvatarConfig(data.avatarConfig);
+      })
+      .catch(() => {});
   }, [user, currentRoom]);
 
   const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
@@ -145,7 +159,7 @@ export default function App() {
 
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
-    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} />;
+    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} avatarConfig={avatarConfig} paperReams={paperReams} />;
   }
 
   // ── Game ─────────────────────────────────────────────────────────────────
@@ -171,6 +185,7 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
+      <PaperBurst />
 
       <button
         onClick={() => setShowUI((v) => !v)}

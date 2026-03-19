@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm install          # Install dependencies
-npm run dev          # Start dev server (runs server.ts via tsx on port 3000)
+npm run dev          # Start dev server (runs server.ts via tsx on port 8080)
 npm run build        # Vite production build to dist/
 npm run lint         # TypeScript type-check (tsc --noEmit)
 npm run clean        # Remove dist/
@@ -21,6 +21,7 @@ Copy `.env.example` to `.env.local` and populate:
 - `SESSION_SECRET` — Express session + JWT signing secret
 - `APP_URL` — Canonical app URL (used for OAuth redirect URI construction)
 - `GEMINI_API_KEY` — Google Gemini API key (injected into Vite build via `vite.config.ts`)
+- `DATABASE_URL` — PostgreSQL connection string; server auto-creates `users` table on startup (stores `paper_reams` and `avatar_config` per email)
 
 ## Architecture
 
