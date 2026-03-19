@@ -12,6 +12,8 @@ interface GameState {
   isTimerPaused: boolean;
   timerMode: 'focus' | 'break';
   timeLeft: number; // in seconds
+  sessionPaper: number; // paper earned in current focus session
+  lastPaperEarnedAt: number; // timestamp — changes when paper is earned, triggers animation
   startTimer: (mode: 'focus' | 'break') => void;
   stopTimer: () => void;
   togglePause: () => void;
@@ -41,36 +43,45 @@ export const useGameStore = create<GameState>((set) => ({
   isTimerPaused: false,
   timerMode: 'focus',
   timeLeft: 25 * 60,
-  startTimer: (mode) => set((state) => ({ 
-    isTimerActive: true, 
+  sessionPaper: 0,
+  lastPaperEarnedAt: 0,
+  startTimer: (mode) => set((state) => ({
+    isTimerActive: true,
     isTimerPaused: false,
-    timerMode: mode, 
+    timerMode: mode,
     timeLeft: mode === 'focus' ? 25 * 60 : 5 * 60,
-    activeDeskId: state.nearestDeskId
+    activeDeskId: state.nearestDeskId,
+    sessionPaper: 0,
+    lastPaperEarnedAt: 0,
   })),
-  stopTimer: () => set({ isTimerActive: false, isTimerPaused: false, activeDeskId: null }),
+  stopTimer: () => set({ isTimerActive: false, isTimerPaused: false, activeDeskId: null, sessionPaper: 0 }),
   togglePause: () => set((state) => ({ isTimerPaused: !state.isTimerPaused })),
   tickTimer: () => set((state) => {
     if (state.isTimerPaused || !state.isTimerActive) return {};
     if (state.timeLeft <= 0) {
       return { isTimerActive: false, isTimerPaused: false, timeLeft: 0, activeDeskId: null };
     }
-    
+
     const newTimeLeft = state.timeLeft - 1;
     let newPaperReams = state.paperReams;
-    
+    let newSessionPaper = state.sessionPaper;
+    let newLastPaperEarnedAt = state.lastPaperEarnedAt;
+
     // Passive generation: 1 paper every 30 seconds during focus
     if (state.timerMode === 'focus' && (1500 - newTimeLeft) % 30 === 0 && newTimeLeft < 1500) {
       newPaperReams += 1;
+      newSessionPaper += 1;
+      newLastPaperEarnedAt = Date.now();
     }
 
-    return { timeLeft: newTimeLeft, paperReams: newPaperReams };
+    return { timeLeft: newTimeLeft, paperReams: newPaperReams, sessionPaper: newSessionPaper, lastPaperEarnedAt: newLastPaperEarnedAt };
   }),
   resetTimer: () => set((state) => ({
     isTimerActive: false,
     isTimerPaused: false,
     timeLeft: state.timerMode === 'focus' ? 25 * 60 : 5 * 60,
-    activeDeskId: null
+    activeDeskId: null,
+    sessionPaper: 0,
   })),
 
   nearestDeskId: null,

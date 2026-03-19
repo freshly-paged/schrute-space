@@ -4,15 +4,16 @@ import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 
 export const PomodoroUI = () => {
-  const { 
-    isTimerActive, 
+  const {
+    isTimerActive,
     isTimerPaused,
-    timerMode, 
-    timeLeft, 
-    tickTimer, 
-    stopTimer, 
+    timerMode,
+    timeLeft,
+    tickTimer,
+    stopTimer,
     togglePause,
-    nearestDeskId 
+    nearestDeskId,
+    sessionPaper,
   } = useGameStore();
 
   useEffect(() => {
@@ -59,8 +60,18 @@ export const PomodoroUI = () => {
             </div>
 
             {timerMode === 'focus' && (
-              <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold mb-6 animate-pulse text-center">
-                {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
+              <div className="flex flex-col items-center gap-1 mb-6">
+                <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold animate-pulse text-center">
+                  {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
+                </div>
+                {sessionPaper > 0 && (
+                  <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-full">
+                    <span className="text-sm">📄</span>
+                    <span className="text-emerald-300 text-[11px] font-bold">
+                      +{sessionPaper} ream{sessionPaper !== 1 ? 's' : ''} this session
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

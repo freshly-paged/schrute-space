@@ -35,6 +35,8 @@ export const LocalPlayer = ({
   const [, get] = useKeyboardControls();
   const playerRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
+  const lastActiveDeskIdRef = useRef<string | null>(null);
+  const wasTimerActiveRef = useRef(false);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -49,6 +51,7 @@ export const LocalPlayer = ({
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
 
   const focusProgress = isTimerActive ? 1 - timeLeft / (25 * 60) : 0;
+  const sessionPaper = useGameStore((state) => state.sessionPaper);
 
   // Emit focus state to server whenever it changes
   useEffect(() => {
@@ -64,7 +67,33 @@ export const LocalPlayer = ({
     // Keep camera below roof
     if (state.camera.position.y > 7.5) state.camera.position.y = 7.5;
 
+    // Track active desk while session is running
+    if (isTimerActive && activeDeskId) {
+      lastActiveDeskIdRef.current = activeDeskId;
+    }
+
+    // Eject player from chair when session ends
+    if (wasTimerActiveRef.current && !isTimerActive && lastActiveDeskIdRef.current) {
+      const desk = DESKS.find((d) => d.id === lastActiveDeskIdRef.current);
+      if (desk) {
+        const chairDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), desk.rotation[1]);
+        const ejectedPos: [number, number, number] = [
+          desk.position[0] + chairDir.x * 2.5,
+          desk.position[1],
+          desk.position[2] + chairDir.z * 2.5,
+        ];
+        const ejectedRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
+        setPosition(ejectedPos);
+        setRotation(ejectedRot);
+        socket?.connected &&
+          socket.emit('playerMovement', { position: ejectedPos, rotation: ejectedRot, isRolling: false, rollTimer: 0 });
+      }
+      lastActiveDeskIdRef.current = null;
+    }
+    wasTimerActiveRef.current = isTimerActive;
+
     const rawKeys = get();
+
     const keys =
       isChatFocused || isTimerActive
         ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
@@ -222,7 +251,7 @@ export const LocalPlayer = ({
           <Billboard position={[0, 3.0, 0]}>
             {/* Outer background */}
             <mesh position={[0, 0.1, -0.001]}>
-              <planeGeometry args={[1.8, 0.58]} />
+              <planeGeometry args={[1.8, sessionPaper > 0 ? 0.78 : 0.58]} />
               <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
             </mesh>
             {/* Label */}
@@ -243,6 +272,12 @@ export const LocalPlayer = ({
             <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
               {`${Math.round(focusProgress * 100)}%`}
             </Text>
+            {/* Session paper count */}
+            {sessionPaper > 0 && (
+              <Text fontSize={0.11} color="#86efac" position={[0, -0.22, 0.001]} anchorX="center" anchorY="middle">
+                {`+${sessionPaper} paper`}
+              </Text>
+            )}
           </Billboard>
         )}
         <ChatBubble text={lastMessage} time={lastMessageTime} />

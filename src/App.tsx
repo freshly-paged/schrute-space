@@ -12,6 +12,7 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -184,6 +185,7 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
+      <PaperBurst />
 
       <button
         onClick={() => setShowUI((v) => !v)}
