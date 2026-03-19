@@ -26,6 +26,19 @@ export interface Player {
   avatarConfig?: AvatarConfig;
 }
 
+export interface FurnitureItem {
+  id: string;
+  type: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  config: Record<string, unknown>;
+}
+
+export interface DeskItem extends FurnitureItem {
+  type: 'desk';
+  config: { ownerEmail: string; ownerName: string; model?: string; [key: string]: unknown };
+}
+
 export interface ChatMessage {
   id: string;
   playerId: string;

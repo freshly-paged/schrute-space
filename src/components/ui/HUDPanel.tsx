@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, LogOut } from 'lucide-react';
+import { Users, Monitor, Coffee, Briefcase, LogOut, Layout } from 'lucide-react';
 
 interface HUDPanelProps {
   playerCount: number;
@@ -7,6 +7,7 @@ interface HUDPanelProps {
   currentRoom: string;
   paperReams: number;
   onExitRoom: () => void;
+  onCustomizeOffice: () => void;
 }
 
 export const HUDPanel = ({
@@ -15,6 +16,7 @@ export const HUDPanel = ({
   currentRoom,
   paperReams,
   onExitRoom,
+  onCustomizeOffice,
 }: HUDPanelProps) => (
   <div className="flex flex-col gap-4">
     <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl max-w-xs">
@@ -53,7 +55,14 @@ export const HUDPanel = ({
         </div>
       </div>
 
-      <div className="mt-6 pt-6 border-t border-white/10">
+      <div className="mt-6 pt-6 border-t border-white/10 flex flex-col gap-2">
+        <button
+          onClick={onCustomizeOffice}
+          className="w-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+        >
+          <Layout className="w-3 h-3" />
+          Customize Office
+        </button>
         <button
           onClick={onExitRoom}
           className="w-full bg-indigo-500/20 hover:bg-indigo-500/40 border border-indigo-500/50 text-indigo-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"

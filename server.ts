@@ -29,6 +29,12 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS room_layouts (
+      room_id TEXT PRIMARY KEY,
+      layout  JSONB NOT NULL DEFAULT '[]'
+    )
+  `);
 }
 
 async function getPaperReams(email: string): Promise<number> {
@@ -69,6 +75,75 @@ async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<vo
      ON CONFLICT (email) DO UPDATE SET avatar_config = EXCLUDED.avatar_config`,
     [email, JSON.stringify(config)]
   );
+}
+
+// ── Room Layout ───────────────────────────────────────────────────────────────
+
+interface FurnitureItem {
+  id: string;
+  type: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  config: Record<string, unknown>;
+}
+
+interface DeskItem extends FurnitureItem {
+  type: 'desk';
+  config: { ownerEmail: string; ownerName: string; [key: string]: unknown };
+}
+
+async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
+  const { rows } = await pool.query(
+    'SELECT layout FROM room_layouts WHERE room_id = $1',
+    [roomId]
+  );
+  return (rows[0]?.layout as FurnitureItem[]) ?? [];
+}
+
+async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_layouts (room_id, layout) VALUES ($1, $2)
+     ON CONFLICT (room_id) DO UPDATE SET layout = EXCLUDED.layout`,
+    [roomId, JSON.stringify(layout)]
+  );
+}
+
+function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
+  const columns = [-11.5, -9.0, -6.5, -4.0, -1.5];
+  const rows = [-16.5, -14.0, -11.5, -9.0, -6.5, -4.0, -2.5];
+  for (const z of rows) {
+    for (const x of columns) {
+      const occupied = existingDesks.some((d) => {
+        const dx = d.position[0] - x;
+        const dz = d.position[2] - z;
+        return Math.sqrt(dx * dx + dz * dz) < 2.5;
+      });
+      if (!occupied) return [x, 0, z];
+    }
+  }
+  // Fallback: random position in the sales floor area
+  return [Math.random() * 12 - 12, 0, Math.random() * 16 - 18];
+}
+
+async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
+  const layout = await getRoomLayout(roomId);
+  const existingDesk = layout.find(
+    (f) => f.type === 'desk' && (f as DeskItem).config.ownerEmail === email
+  );
+  if (existingDesk) return layout;
+
+  const desks = layout.filter((f): f is DeskItem => f.type === 'desk');
+  const position = generateSpawnPosition(desks);
+  const newDesk: DeskItem = {
+    id: `desk-${email}`,
+    type: 'desk',
+    position,
+    rotation: [0, 0, 0],
+    config: { ownerEmail: email, ownerName: name },
+  };
+  const updated = [...layout, newDesk];
+  await saveRoomLayout(roomId, updated);
+  return updated;
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -286,6 +361,18 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  app.post("/api/room-layout", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId, layout } = req.body ?? {};
+    if (typeof roomId !== 'string' || !Array.isArray(layout)) {
+      return res.status(400).json({ error: "Invalid layout" });
+    }
+    await saveRoomLayout(roomId, layout as FurnitureItem[]);
+    io.to(roomId).emit("roomLayoutUpdated", layout);
+    res.json({ ok: true });
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) console.error("Logout error:", err);
@@ -388,6 +475,15 @@ io.on("connection", (socket) => {
           // Broadcast updated player with avatar config to others
           socket.to(room).emit("newPlayer", rooms[room][socket.id]);
         }
+      });
+      // Ensure player has a desk and send the full room layout
+      ensurePlayerDesk(room, user.email, user.name).then((layout) => {
+        socket.emit("roomLayoutLoaded", layout);
+        // Broadcast updated layout to others in the room
+        socket.to(room).emit("roomLayoutUpdated", layout);
+      }).catch((err) => {
+        console.error("Error ensuring player desk:", err);
+        socket.emit("roomLayoutLoaded", []);
       });
       
       console.log(`User ${socket.id} joined room: ${room}`);
@@ -523,4 +619,7 @@ io.on("connection", (socket) => {
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
