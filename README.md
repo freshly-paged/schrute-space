@@ -38,7 +38,7 @@
    ```bash
    npm run dev
    ```
-   App runs at `http://localhost:3000`.
+   App runs at `http://localhost:8080`.
 
 
 ### Stopping / restarting the database
