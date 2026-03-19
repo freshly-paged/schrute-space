@@ -10,11 +10,13 @@ export const Desk = ({
   position,
   rotation = [0, 0, 0],
   hasChair = true,
+  ownerName,
 }: {
   id: string;
   position: [number, number, number];
   rotation?: [number, number, number];
   hasChair?: boolean;
+  ownerName?: string;
 }) => {
   const setNearestDeskId = useGameStore((state) => state.setNearestDeskId);
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
@@ -40,6 +42,18 @@ export const Desk = ({
 
   return (
     <group ref={deskRef} position={position} rotation={rotation}>
+      {ownerName && (
+        <Billboard position={[0, 1.8, 0]}>
+          <Text
+            fontSize={0.18}
+            color="#fde68a"
+            outlineColor="black"
+            outlineWidth={0.02}
+          >
+            {ownerName}
+          </Text>
+        </Billboard>
+      )}
       {isNearest && !isTimerActive && (
         <Billboard position={[0, 2.5, 0]}>
           <Text

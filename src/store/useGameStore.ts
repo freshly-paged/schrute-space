@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG } from '../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem } from '../types';
 
 interface GameState {
   // Paper Clicker State
@@ -32,6 +32,8 @@ interface GameState {
   setOccupiedDeskIds: (ids: string[]) => void;
   setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
+  roomLayout: FurnitureItem[];
+  setRoomLayout: (layout: FurnitureItem[]) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -105,4 +107,6 @@ export const useGameStore = create<GameState>((set) => ({
     localStorage.setItem('avatar_config', JSON.stringify(config));
     set({ avatarConfig: config });
   },
+  roomLayout: [],
+  setRoomLayout: (layout) => set({ roomLayout: layout }),
 }));
