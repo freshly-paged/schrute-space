@@ -26,8 +26,7 @@ export const BREAK_ROOM_COLLISION_BOXES: THREE.Box3[] = [
 ];
 
 export const BreakRoom = () => (
-  // Group positioned at [-15, 0, 15] in OfficeEnvironment — all positions below are local
-  <group>
+  <group position={[-15, 0, 15]}>
     {/* ── Walls ── */}
     {/* Back wall (z = -6) */}
     <Box args={[12, 8, 0.3]} position={[0, 4, -6]}>

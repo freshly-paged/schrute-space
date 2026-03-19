@@ -59,7 +59,7 @@
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| W1 | **Office visual revamp** | Current Three.js scene is bare; needs proper textures, furniture models, lighting, and The Office set dressing | `[ ]` |
+| W1 | **Office visual revamp** | Current Three.js scene is bare; needs proper textures, furniture models, lighting, and The Office set dressing | `[~]` |
 | W2 | **Break room** | Separate area / sub-room with coffee machine, couch, fridge; triggers break activity buffs | `[ ]` |
 | W3 | **Water cooler** | Interactable prop near common area for team synergy interactions | `[ ]` |
 | W4 | **Conference room** | Dedicated space for meeting state (R1) and potential minigames | `[ ]` |
