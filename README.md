@@ -54,3 +54,6 @@ docker rm schrute-postgres     # remove container entirely
 ```
 
 ---
+
+### Deployment
+Automatically deployed when changes to main branch is detected.

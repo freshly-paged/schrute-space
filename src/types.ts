@@ -8,6 +8,9 @@ export interface Player {
   lastMessageTime?: number;
   isRolling?: boolean;
   rollTimer?: number;
+  isFocused?: boolean;
+  focusProgress?: number; // 0-1
+  activeDeskId?: string | null;
 }
 
 export interface ChatMessage {

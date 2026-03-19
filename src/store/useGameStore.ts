@@ -21,9 +21,11 @@ interface GameState {
   nearestDeskId: string | null;
   activeDeskId: string | null;
   isChatFocused: boolean;
+  occupiedDeskIds: string[];
   user: { id: string, email: string, name: string, picture: string } | null;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
+  setOccupiedDeskIds: (ids: string[]) => void;
   setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
 }
 
@@ -71,8 +73,10 @@ export const useGameStore = create<GameState>((set) => ({
   nearestDeskId: null,
   activeDeskId: null,
   isChatFocused: false,
+  occupiedDeskIds: [],
   user: null,
   setNearestDeskId: (id) => set({ nearestDeskId: id }),
   setChatFocused: (focused) => set({ isChatFocused: focused }),
+  setOccupiedDeskIds: (ids) => set({ occupiedDeskIds: ids }),
   setUser: (user) => set({ user }),
 }));

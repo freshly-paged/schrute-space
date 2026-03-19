@@ -36,6 +36,21 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
           {player.name}
         </Text>
       </Billboard>
+      {player.isFocused && player.focusProgress != null && (
+        <Billboard position={[0, 2.7, 0]}>
+          <mesh>
+            <planeGeometry args={[1.0, 0.12]} />
+            <meshBasicMaterial color="#1e293b" transparent opacity={0.85} />
+          </mesh>
+          <mesh position={[-(1 - player.focusProgress) / 2, 0, 0.001]}>
+            <planeGeometry args={[Math.max(0.001, player.focusProgress), 0.09]} />
+            <meshBasicMaterial color="#22c55e" />
+          </mesh>
+          <Text fontSize={0.07} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
+            FOCUS
+          </Text>
+        </Billboard>
+      )}
       <ChatBubble text={player.lastMessage} time={player.lastMessageTime} />
     </group>
   );

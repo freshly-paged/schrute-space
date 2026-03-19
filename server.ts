@@ -389,6 +389,23 @@ io.on("connection", (socket) => {
       }
     });
 
+    socket.on("playerFocusUpdate", (data: { isFocused: boolean; focusProgress: number; activeDeskId: string | null }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+
+      if (playerRoom && rooms[playerRoom][socket.id]) {
+        rooms[playerRoom][socket.id].isFocused = data.isFocused;
+        rooms[playerRoom][socket.id].focusProgress = data.focusProgress;
+        rooms[playerRoom][socket.id].activeDeskId = data.activeDeskId;
+        socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
       

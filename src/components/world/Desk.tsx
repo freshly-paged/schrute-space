@@ -19,6 +19,8 @@ export const Desk = ({
   const setNearestDeskId = useGameStore((state) => state.setNearestDeskId);
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
+  const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
+  const isOccupied = occupiedDeskIds.includes(id);
   const deskRef = useRef<THREE.Group>(null);
 
   useFrame((state) => {
@@ -40,15 +42,20 @@ export const Desk = ({
     <group ref={deskRef} position={position} rotation={rotation}>
       {isNearest && !isTimerActive && (
         <Billboard position={[0, 2.5, 0]}>
-          <Text fontSize={0.2} color="white" outlineColor="black" outlineWidth={0.02}>
-            Press [E] to Start Focus
+          <Text
+            fontSize={0.2}
+            color={isOccupied ? '#f87171' : 'white'}
+            outlineColor="black"
+            outlineWidth={0.02}
+          >
+            {isOccupied ? 'Desk Occupied' : 'Press [E] to Start Focus'}
           </Text>
         </Billboard>
       )}
 
       {/* Table top */}
       <Box args={[2, 0.1, 1]} position={[0, 0.95, 0]}>
-        <meshStandardMaterial color={isNearest ? '#a0522d' : '#8B4513'} />
+        <meshStandardMaterial color={isOccupied ? '#6b3a3a' : isNearest ? '#a0522d' : '#8B4513'} />
       </Box>
       {/* Legs */}
       <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, -0.4]}>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Stars, Html, KeyboardControls } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,13 +43,25 @@ export default function App() {
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
+    localStorage.setItem('last_room', room);
     window.location.search = `?room=${room}`;
   };
 
   const handleExitRoom = () => {
+    localStorage.removeItem('last_room');
     setCurrentRoom(null);
     window.location.search = '';
   };
+
+  // Auto-redirect authenticated users to their last room
+  useEffect(() => {
+    if (user && !currentRoom) {
+      const lastRoom = localStorage.getItem('last_room');
+      if (lastRoom) {
+        handleJoin(lastRoom);
+      }
+    }
+  }, [user, currentRoom]);
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
