@@ -62,9 +62,10 @@ export function usePlayerPhysics() {
   }
 
   // Returns the new Y position after applying gravity and landing
-  function applyGravity(position: [number, number, number], delta: number): number {
+  function applyGravity(position: [number, number, number], delta: number, extraBoxes: THREE.Box3[] = []): number {
     let groundY = 0;
-    for (const box of COLLISION_BOXES) {
+    const allBoxes = extraBoxes.length > 0 ? [...COLLISION_BOXES, ...extraBoxes] : COLLISION_BOXES;
+    for (const box of allBoxes) {
       if (
         position[0] >= box.min.x && position[0] <= box.max.x &&
         position[2] >= box.min.z && position[2] <= box.max.z &&
@@ -102,7 +103,8 @@ export function usePlayerPhysics() {
     position: [number, number, number],
     moveVector: THREE.Vector3,
     speed: number,
-    otherPlayers: Record<string, Player>
+    otherPlayers: Record<string, Player>,
+    extraBoxes: THREE.Box3[] = []
   ): [number, number, number] {
     if (moveVector.length() === 0) return position;
 
@@ -111,11 +113,11 @@ export function usePlayerPhysics() {
 
     const testX = [...newPos] as [number, number, number];
     testX[0] += scaled.x;
-    if (!hasCollision(testX, otherPlayers)) newPos[0] = testX[0];
+    if (!hasCollision(testX, otherPlayers, extraBoxes)) newPos[0] = testX[0];
 
     const testZ = [...newPos] as [number, number, number];
     testZ[2] += scaled.z;
-    if (!hasCollision(testZ, otherPlayers)) newPos[2] = testZ[2];
+    if (!hasCollision(testZ, otherPlayers, extraBoxes)) newPos[2] = testZ[2];
 
     return newPos;
   }
@@ -132,13 +134,14 @@ export function usePlayerPhysics() {
   };
 }
 
-function hasCollision(position: [number, number, number], otherPlayers: Record<string, Player>): boolean {
+function hasCollision(position: [number, number, number], otherPlayers: Record<string, Player>, extraBoxes: THREE.Box3[] = []): boolean {
   const playerBox = new THREE.Box3().setFromCenterAndSize(
     new THREE.Vector3(position[0], position[1] + 0.8, position[2]),
     new THREE.Vector3(0.5, 1.4, 0.5)
   );
 
-  for (const box of COLLISION_BOXES) {
+  const allBoxes = extraBoxes.length > 0 ? [...COLLISION_BOXES, ...extraBoxes] : COLLISION_BOXES;
+  for (const box of allBoxes) {
     if (playerBox.intersectsBox(box)) return true;
   }
 

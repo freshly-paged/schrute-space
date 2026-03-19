@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Player, ChatMessage, AvatarConfig } from '../types';
+import { Player, ChatMessage, AvatarConfig, FurnitureItem } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
 
@@ -107,6 +107,14 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
 
     newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
       useGameStore.getState().setAvatarConfig(config);
+    });
+
+    newSocket.on('roomLayoutLoaded', (layout: FurnitureItem[]) => {
+      useGameStore.getState().setRoomLayout(layout);
+    });
+
+    newSocket.on('roomLayoutUpdated', (layout: FurnitureItem[]) => {
+      useGameStore.getState().setRoomLayout(layout);
     });
 
     // Sync paper reams to server whenever the count changes

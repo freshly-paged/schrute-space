@@ -1,12 +1,15 @@
 import React from 'react';
 import { Box, Plane, Text } from '@react-three/drei';
-import { DESKS } from '../../constants';
 import { Chair } from './Chair';
 import { Desk } from './Desk';
 import { BeetFarm } from './BeetFarm';
 import { Banner } from './Banner';
+import { useGameStore } from '../../store/useGameStore';
+import { DeskItem } from '../../types';
 
-export const OfficeEnvironment = () => (
+export const OfficeEnvironment = () => {
+  const desks = useGameStore((s) => s.roomLayout).filter((f): f is DeskItem => f.type === 'desk');
+  return (
   <group>
     {/* Floor */}
     <Plane args={[50, 50]} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
@@ -33,8 +36,8 @@ export const OfficeEnvironment = () => (
     </Box>
 
     {/* Desks */}
-    {DESKS.map((desk) => (
-      <Desk key={desk.id} {...desk} />
+    {desks.map((desk) => (
+      <Desk key={desk.id} id={desk.id} position={desk.position} rotation={desk.rotation} ownerName={String(desk.config.ownerName)} />
     ))}
 
     <Banner position={[-3.5, 6, -6]} />
@@ -112,4 +115,5 @@ export const OfficeEnvironment = () => (
 
     <BeetFarm position={[-18, 0, -18]} />
   </group>
-);
+  );
+};

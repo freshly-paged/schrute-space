@@ -29,20 +29,6 @@ export const DESKS = [
 ];
 
 export const COLLISION_BOXES = [
-  // Desks (Axis-aligned or approximated)
-  new THREE.Box3(new THREE.Vector3(-10.6, 0, -16.1), new THREE.Vector3(-9.4, 1.0, -13.9)), // Pam's Desk (1x2 rotated)
-  new THREE.Box3(new THREE.Vector3(-6.1, 0, -5.6), new THREE.Vector3(-3.9, 1.0, -4.4)),
-  new THREE.Box3(new THREE.Vector3(-6.1, 0, -7.6), new THREE.Vector3(-3.9, 1.0, -6.4)),
-  new THREE.Box3(new THREE.Vector3(-3.1, 0, -5.6), new THREE.Vector3(-0.9, 1.0, -4.4)),
-  new THREE.Box3(new THREE.Vector3(-3.1, 0, -7.6), new THREE.Vector3(-0.9, 1.0, -6.4)),
-  
-  // Sales Team Chairs
-  new THREE.Box3(new THREE.Vector3(-11.1, 0, -15.3), new THREE.Vector3(-10.5, 0.5, -14.7)), // Pam's Chair
-  new THREE.Box3(new THREE.Vector3(-5.3, 0, -4.5), new THREE.Vector3(-4.7, 0.5, -3.9)),
-  new THREE.Box3(new THREE.Vector3(-5.3, 0, -8.1), new THREE.Vector3(-4.7, 0.5, -7.5)),
-  new THREE.Box3(new THREE.Vector3(-2.3, 0, -4.5), new THREE.Vector3(-1.7, 0.5, -3.9)),
-  new THREE.Box3(new THREE.Vector3(-2.3, 0, -8.1), new THREE.Vector3(-1.7, 0.5, -7.5)),
-  
   // Michael's Office Walls & Desk
   new THREE.Box3(new THREE.Vector3(10, 0, -10.1), new THREE.Vector3(20, 8, -9.9)), // Wall 1
   new THREE.Box3(new THREE.Vector3(9.9, 0, -20), new THREE.Vector3(10.1, 8, -10)), // Wall 2

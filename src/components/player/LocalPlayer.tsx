@@ -3,8 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
-import { Player } from '../../types';
-import { getDeterministicColor, DESKS } from '../../constants';
+import { Player, DeskItem } from '../../types';
+import { getDeterministicColor } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
@@ -49,6 +49,28 @@ export const LocalPlayer = ({
   const isChatFocused = useGameStore((state) => state.isChatFocused);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
+  const roomLayout = useGameStore((state) => state.roomLayout);
+
+  // Build AABB collision boxes for each desk based on its current position/rotation
+  const deskBoxes = useMemo(() =>
+    roomLayout
+      .filter((f): f is DeskItem => f.type === 'desk')
+      .map((desk) => {
+        const [x, y, z] = desk.position;
+        const rotY = desk.rotation[1];
+        // Desk tabletop is 2 units wide × 1 unit deep in local space.
+        // Rotate the half-extents to get a world-space AABB.
+        const cosR = Math.abs(Math.cos(rotY));
+        const sinR = Math.abs(Math.sin(rotY));
+        const halfX = 1.0 * cosR + 0.5 * sinR;
+        const halfZ = 1.0 * sinR + 0.5 * cosR;
+        return new THREE.Box3(
+          new THREE.Vector3(x - halfX, y, z - halfZ),
+          new THREE.Vector3(x + halfX, y + 1.0, z + halfZ)
+        );
+      }),
+    [roomLayout]
+  );
 
   const focusProgress = isTimerActive ? 1 - timeLeft / (25 * 60) : 0;
   const sessionPaper = useGameStore((state) => state.sessionPaper);
@@ -74,7 +96,7 @@ export const LocalPlayer = ({
 
     // Eject player from chair when session ends
     if (wasTimerActiveRef.current && !isTimerActive && lastActiveDeskIdRef.current) {
-      const desk = DESKS.find((d) => d.id === lastActiveDeskIdRef.current);
+      const desk = roomLayout.find((d) => d.id === lastActiveDeskIdRef.current);
       if (desk) {
         const chairDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), desk.rotation[1]);
         const ejectedPos: [number, number, number] = [
@@ -109,7 +131,7 @@ export const LocalPlayer = ({
 
     // Lock to desk chair during focus session
     if (isTimerActive && activeDeskId) {
-      const desk = DESKS.find((d) => d.id === activeDeskId);
+      const desk = roomLayout.find((d) => d.id === activeDeskId);
       if (desk) {
         const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
@@ -150,7 +172,7 @@ export const LocalPlayer = ({
     let newPosition: [number, number, number] = [...position];
     let newRotation: [number, number, number] = [...rotation];
 
-    newPosition[1] = physics.applyGravity(newPosition, delta);
+    newPosition[1] = physics.applyGravity(newPosition, delta, deskBoxes);
 
     // Camera-relative movement vector
     const cameraDir = new THREE.Vector3();
@@ -168,7 +190,7 @@ export const LocalPlayer = ({
     if (right && !physics.isRolling.current) moveVector.sub(cameraSide);
 
     if (moveVector.length() > 0) {
-      newPosition = physics.applyMovement(newPosition, moveVector, speed, players);
+      newPosition = physics.applyMovement(newPosition, moveVector, speed, players, deskBoxes);
       newRotation[1] = Math.atan2(moveVector.x, moveVector.z);
     }
 

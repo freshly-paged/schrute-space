@@ -14,6 +14,8 @@ import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
+import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
+import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
 import { OtherPlayer } from './components/player/OtherPlayer';
@@ -40,8 +42,8 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams } = useGameStore();
-  const [view, setView] = useState<'landing' | 'customize'>('landing');
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout } = useGameStore();
+  const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
@@ -78,6 +80,16 @@ export default function App() {
       })
       .catch(() => {});
   }, [user, currentRoom]);
+
+  const handleSaveOfficeLayout = useCallback(async (layout: FurnitureItem[]) => {
+    setRoomLayout(layout);
+    const token = localStorage.getItem('office_auth_token');
+    await fetch('/api/room-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ roomId: currentRoom, layout }),
+    });
+  }, [currentRoom, setRoomLayout]);
 
   const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
     setAvatarConfig(config);
@@ -157,6 +169,18 @@ export default function App() {
     );
   }
 
+  // ── Office customization (in-room) ──────────────────────────────────────
+  if (currentRoom && view === 'customize-office') {
+    return (
+      <OfficeCustomizationPage
+        roomId={currentRoom}
+        initialLayout={roomLayout}
+        onBack={() => setView('landing')}
+        onSave={handleSaveOfficeLayout}
+      />
+    );
+  }
+
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
     return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} avatarConfig={avatarConfig} paperReams={paperReams} />;
@@ -179,6 +203,7 @@ export default function App() {
               currentRoom={currentRoom}
               paperReams={paperReams}
               onExitRoom={handleExitRoom}
+              onCustomizeOffice={() => setView('customize-office')}
             />
           </motion.div>
         )}
