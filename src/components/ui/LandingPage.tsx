@@ -11,7 +11,7 @@ export const PixelBeet = () => (
   </div>
 );
 
-export const LandingPage = ({ onJoin, userName, onLogout }: { onJoin: (room: string) => void, userName: string, onLogout: () => void }) => {
+export const LandingPage = ({ onJoin, userName, onLogout, onCustomize }: { onJoin: (room: string) => void, userName: string, onLogout: () => void, onCustomize: () => void }) => {
   const [roomInput, setRoomInput] = useState('');
 
   return (
@@ -73,14 +73,21 @@ export const LandingPage = ({ onJoin, userName, onLogout }: { onJoin: (room: str
           </div>
           
           <div className="flex flex-col gap-3">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={!roomInput.trim()}
               className="pixel-button text-xs py-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               JOIN OFFICE
             </button>
-            <button 
+            <button
+              type="button"
+              onClick={onCustomize}
+              className="pixel-button text-xs py-4 bg-[#cbd5e1] hover:bg-[#b0bec5] text-slate-700"
+            >
+              CUSTOMIZE AVATAR
+            </button>
+            <button
               type="button"
               onClick={onLogout}
               className="text-[8px] text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest"

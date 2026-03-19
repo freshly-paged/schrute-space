@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Player, ChatMessage } from '../types';
+import { Player, ChatMessage, AvatarConfig } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
 
@@ -8,6 +8,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [players, setPlayers] = useState<Record<string, Player>>({});
   const [isConnected, setIsConnected] = useState(false);
+
+  const syncOccupiedDesks = (playerMap: Record<string, Player>) => {
+    const ids = Object.values(playerMap)
+      .filter((p) => p.activeDeskId)
+      .map((p) => p.activeDeskId as string);
+    useGameStore.getState().setOccupiedDeskIds(ids);
+  };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [lastLocalMessage, setLastLocalMessage] = useState<{ text: string; time: number } | null>(null);
   const [disconnectReason, setDisconnectReason] = useState<string | null>(null);
@@ -46,14 +53,23 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       const others = { ...serverPlayers };
       delete others[newSocket.id!];
       setPlayers(others);
+      syncOccupiedDesks(others);
     });
 
     newSocket.on('newPlayer', (player: Player) => {
-      setPlayers((prev) => ({ ...prev, [player.id]: player }));
+      setPlayers((prev) => {
+        const next = { ...prev, [player.id]: player };
+        syncOccupiedDesks(next);
+        return next;
+      });
     });
 
     newSocket.on('playerMoved', (player: Player) => {
-      setPlayers((prev) => ({ ...prev, [player.id]: player }));
+      setPlayers((prev) => {
+        const next = { ...prev, [player.id]: player };
+        syncOccupiedDesks(next);
+        return next;
+      });
     });
 
     newSocket.on('chatMessage', (message: ChatMessage) => {
@@ -80,12 +96,17 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       setPlayers((prev) => {
         const next = { ...prev };
         delete next[id];
+        syncOccupiedDesks(next);
         return next;
       });
     });
 
     newSocket.on('paperReamsLoaded', (count: number) => {
       useGameStore.getState().setPaperReams(count);
+    });
+
+    newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
+      useGameStore.getState().setAvatarConfig(config);
     });
 
     // Sync paper reams to server whenever the count changes
@@ -108,6 +129,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     [socket]
   );
 
+  const saveAvatarConfig = useCallback(
+    (config: AvatarConfig) => {
+      socket?.emit('saveAvatarConfig', config);
+    },
+    [socket]
+  );
+
   return {
     socket,
     players,
@@ -117,5 +145,6 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     disconnectReason,
     connectionError,
     sendMessage,
+    saveAvatarConfig,
   };
 }

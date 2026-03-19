@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
 
-export const CharacterAvatar = ({ color, isMoving, isGrounded, isRolling, rollProgress = 0 }: { color: string, isMoving: boolean, isGrounded: boolean, isRolling: boolean, rollProgress?: number }) => {
+export const CharacterAvatar = ({ color, isMoving, isGrounded, isRolling, rollProgress = 0, skinTone = '#ffdbac', pantColor = '#333333' }: { color: string, isMoving: boolean, isGrounded: boolean, isRolling: boolean, rollProgress?: number, skinTone?: string, pantColor?: string }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
@@ -55,20 +55,27 @@ export const CharacterAvatar = ({ color, isMoving, isGrounded, isRolling, rollPr
       
       {/* Head */}
       <Box args={[0.4, 0.4, 0.4]} position={[0, 1.5, 0]}>
-        <meshStandardMaterial color="#ffdbac" />
+        <meshStandardMaterial color={skinTone} />
+      </Box>
+      {/* Eyes */}
+      <Box args={[0.07, 0.07, 0.02]} position={[-0.09, 1.54, 0.21]}>
+        <meshStandardMaterial color="#1a1a1a" />
+      </Box>
+      <Box args={[0.07, 0.07, 0.02]} position={[0.09, 1.54, 0.21]}>
+        <meshStandardMaterial color="#1a1a1a" />
       </Box>
 
       {/* Arms */}
       <group position={[-0.35, 1.2, 0]}>
         <mesh ref={leftArmRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.15, 0.5, 0.15]} />
-          <meshStandardMaterial color="#ffdbac" />
+          <meshStandardMaterial color={skinTone} />
         </mesh>
       </group>
       <group position={[0.35, 1.2, 0]}>
         <mesh ref={rightArmRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.15, 0.5, 0.15]} />
-          <meshStandardMaterial color="#ffdbac" />
+          <meshStandardMaterial color={skinTone} />
         </mesh>
       </group>
 
@@ -76,13 +83,13 @@ export const CharacterAvatar = ({ color, isMoving, isGrounded, isRolling, rollPr
       <group position={[-0.15, 0.5, 0]}>
         <mesh ref={leftLegRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.2, 0.5, 0.2]} />
-          <meshStandardMaterial color="#333" />
+          <meshStandardMaterial color={pantColor} />
         </mesh>
       </group>
       <group position={[0.15, 0.5, 0]}>
         <mesh ref={rightLegRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.2, 0.5, 0.2]} />
-          <meshStandardMaterial color="#333" />
+          <meshStandardMaterial color={pantColor} />
         </mesh>
       </group>
     </group>

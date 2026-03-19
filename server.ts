@@ -26,6 +26,9 @@ async function initDb() {
       paper_reams INTEGER NOT NULL DEFAULT 0
     )
   `);
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
+  `);
 }
 
 async function getPaperReams(email: string): Promise<number> {
@@ -41,6 +44,30 @@ async function savePaperReams(email: string, count: number): Promise<void> {
     `INSERT INTO users (email, paper_reams) VALUES ($1, $2)
      ON CONFLICT (email) DO UPDATE SET paper_reams = EXCLUDED.paper_reams`,
     [email, count]
+  );
+}
+
+interface AvatarConfig {
+  shirtColor: string;
+  skinTone: string;
+  pantColor: string;
+}
+
+async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
+  const { rows } = await pool.query(
+    'SELECT avatar_config FROM users WHERE email = $1',
+    [email]
+  );
+  const config = rows[0]?.avatar_config;
+  if (!config || Object.keys(config).length === 0) return null;
+  return config as AvatarConfig;
+}
+
+async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (email, avatar_config) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET avatar_config = EXCLUDED.avatar_config`,
+    [email, JSON.stringify(config)]
   );
 }
 
@@ -238,6 +265,17 @@ async function startServer() {
     res.json((req as any).user || (req.session as any).user || null);
   });
 
+  app.post("/api/avatar", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { shirtColor, skinTone, pantColor } = req.body ?? {};
+    if (typeof shirtColor !== 'string' || typeof skinTone !== 'string' || typeof pantColor !== 'string') {
+      return res.status(400).json({ error: "Invalid avatar config" });
+    }
+    await saveAvatarConfig(user.email, { shirtColor, skinTone, pantColor });
+    res.json({ ok: true });
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) console.error("Logout error:", err);
@@ -329,9 +367,17 @@ io.on("connection", (socket) => {
       // Broadcast new player to others in the same room
       socket.to(room).emit("newPlayer", rooms[room][socket.id]);
 
-      // Send persisted paper reams to this player
+      // Send persisted paper reams and avatar config to this player
       getPaperReams(user.email).then((count) => {
         socket.emit("paperReamsLoaded", count);
+      });
+      getAvatarConfig(user.email).then((config) => {
+        if (config) {
+          rooms[room][socket.id].avatarConfig = config;
+          socket.emit("avatarConfigLoaded", config);
+          // Broadcast updated player with avatar config to others
+          socket.to(room).emit("newPlayer", rooms[room][socket.id]);
+        }
       });
       
       console.log(`User ${socket.id} joined room: ${room}`);
@@ -340,6 +386,23 @@ io.on("connection", (socket) => {
     socket.on("savePaperReams", (count: number) => {
       if (typeof count === 'number' && count >= 0) {
         savePaperReams(user.email, Math.floor(count));
+      }
+    });
+
+    socket.on("saveAvatarConfig", (config: AvatarConfig) => {
+      if (!config || typeof config !== 'object') return;
+      const { shirtColor, skinTone, pantColor } = config;
+      if (typeof shirtColor !== 'string' || typeof skinTone !== 'string' || typeof pantColor !== 'string') return;
+      const sanitized: AvatarConfig = { shirtColor, skinTone, pantColor };
+      saveAvatarConfig(user.email, sanitized);
+      // Update in-memory state and broadcast to room
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) { playerRoom = roomId; break; }
+      }
+      if (playerRoom && rooms[playerRoom][socket.id]) {
+        rooms[playerRoom][socket.id].avatarConfig = sanitized;
+        socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
       }
     });
 
@@ -385,6 +448,23 @@ io.on("connection", (socket) => {
         rooms[playerRoom][socket.id].rotation = movementData.rotation;
         rooms[playerRoom][socket.id].isRolling = movementData.isRolling;
         rooms[playerRoom][socket.id].rollTimer = movementData.rollTimer;
+        socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+      }
+    });
+
+    socket.on("playerFocusUpdate", (data: { isFocused: boolean; focusProgress: number; activeDeskId: string | null }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+
+      if (playerRoom && rooms[playerRoom][socket.id]) {
+        rooms[playerRoom][socket.id].isFocused = data.isFocused;
+        rooms[playerRoom][socket.id].focusProgress = data.focusProgress;
+        rooms[playerRoom][socket.id].activeDeskId = data.activeDeskId;
         socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
       }
     });

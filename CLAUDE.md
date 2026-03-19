@@ -24,7 +24,7 @@ Copy `.env.example` to `.env.local` and populate:
 
 ## Architecture
 
-**Single-process dev server** (`server.ts`): Express + Socket.IO server that also runs Vite as middleware. In production, serves static `dist/` files. Always runs on port 3000.
+**Single-process dev server** (`server.ts`): Express + Socket.IO server that also runs Vite as middleware. In production, serves static `dist/` files. Always runs on port 8080.
 
 **Auth flow** (`src/hooks/useAuth.ts`): Google OAuth via popup window. On success, the popup stores a JWT in `localStorage` (`office_auth_token`) and sends a `postMessage` to the opener. The hook polls `/api/auth/me` until logged in, and authenticates the Socket.IO connection using `socket.handshake.auth.token`. Single-session enforcement: connecting with the same email disconnects the previous socket with a `forceDisconnect` event.
 

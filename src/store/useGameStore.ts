@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG } from '../types';
 
 interface GameState {
   // Paper Clicker State
@@ -21,10 +22,14 @@ interface GameState {
   nearestDeskId: string | null;
   activeDeskId: string | null;
   isChatFocused: boolean;
+  occupiedDeskIds: string[];
   user: { id: string, email: string, name: string, picture: string } | null;
+  avatarConfig: AvatarConfig;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
+  setOccupiedDeskIds: (ids: string[]) => void;
   setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
+  setAvatarConfig: (config: AvatarConfig) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -71,8 +76,22 @@ export const useGameStore = create<GameState>((set) => ({
   nearestDeskId: null,
   activeDeskId: null,
   isChatFocused: false,
+  occupiedDeskIds: [],
   user: null,
+  avatarConfig: (() => {
+    try {
+      const stored = localStorage.getItem('avatar_config');
+      return stored ? { ...DEFAULT_AVATAR_CONFIG, ...JSON.parse(stored) } : DEFAULT_AVATAR_CONFIG;
+    } catch {
+      return DEFAULT_AVATAR_CONFIG;
+    }
+  })(),
   setNearestDeskId: (id) => set({ nearestDeskId: id }),
   setChatFocused: (focused) => set({ isChatFocused: focused }),
+  setOccupiedDeskIds: (ids) => set({ occupiedDeskIds: ids }),
   setUser: (user) => set({ user }),
+  setAvatarConfig: (config) => {
+    localStorage.setItem('avatar_config', JSON.stringify(config));
+    set({ avatarConfig: config });
+  },
 }));

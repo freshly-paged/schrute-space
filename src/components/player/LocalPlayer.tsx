@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,6 +6,7 @@ import { Socket } from 'socket.io-client';
 import { Player } from '../../types';
 import { getDeterministicColor, DESKS } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
+import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
@@ -35,7 +36,8 @@ export const LocalPlayer = ({
   const playerRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
 
-  const playerColor = useMemo(() => getDeterministicColor(playerName), [playerName]);
+  const avatarConfig = useGameStore((state) => state.avatarConfig);
+  const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
   const physics = usePlayerPhysics();
 
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
@@ -43,6 +45,20 @@ export const LocalPlayer = ({
   const startTimer = useGameStore((state) => state.startTimer);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
+  const timeLeft = useGameStore((state) => state.timeLeft);
+  const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
+
+  const focusProgress = isTimerActive ? 1 - timeLeft / (25 * 60) : 0;
+
+  // Emit focus state to server whenever it changes
+  useEffect(() => {
+    if (!socket?.connected) return;
+    socket.emit('playerFocusUpdate', {
+      isFocused: isTimerActive,
+      focusProgress,
+      activeDeskId: isTimerActive ? activeDeskId : null,
+    });
+  }, [socket, isTimerActive, timeLeft, activeDeskId]);
 
   useFrame((state, delta) => {
     // Keep camera below roof
@@ -57,8 +73,8 @@ export const LocalPlayer = ({
 
     setIsMoving(forward || backward || left || right);
 
-    // Desk interaction
-    if (interact && nearestDeskId && !isTimerActive) {
+    // Desk interaction — block if desk is occupied by another player
+    if (interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');
     }
 
@@ -193,6 +209,8 @@ export const LocalPlayer = ({
             isMoving={isMoving}
             isGrounded={physics.isGrounded.current}
             isRolling={physics.isRolling.current}
+            skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+            pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
           />
         </group>
         <Billboard position={[0, 2.2, 0]}>
@@ -200,6 +218,21 @@ export const LocalPlayer = ({
             {playerName}
           </Text>
         </Billboard>
+        {isTimerActive && (
+          <Billboard position={[0, 2.7, 0]}>
+            <mesh>
+              <planeGeometry args={[1.0, 0.12]} />
+              <meshBasicMaterial color="#1e293b" transparent opacity={0.85} />
+            </mesh>
+            <mesh position={[-(1 - focusProgress) / 2, 0, 0.001]}>
+              <planeGeometry args={[Math.max(0.001, focusProgress), 0.09]} />
+              <meshBasicMaterial color="#22c55e" />
+            </mesh>
+            <Text fontSize={0.07} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
+              FOCUS
+            </Text>
+          </Billboard>
+        )}
         <ChatBubble text={lastMessage} time={lastMessageTime} />
       </group>
     </>
