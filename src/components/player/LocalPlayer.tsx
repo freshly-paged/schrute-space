@@ -12,7 +12,9 @@ import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
 const BOUNDS = 24;
-const CAMERA_BOUNDS = 24.5;
+const CAMERA_BOUNDS = 24;
+// Camera is clamped within this radius of the player to prevent wall-clipping
+const CAMERA_ORBIT_LEASH = 13;
 
 interface LocalPlayerProps {
   socket: Socket | null;
@@ -224,12 +226,22 @@ export const LocalPlayer = ({
         Math.max(0, Math.min(7.5, newPosition[1] + 1.5)),
         Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]))
       );
-      controlsRef.current.target.lerp(target, 0.1);
+      controlsRef.current.target.lerp(target, 0.08);
       controlsRef.current.update();
 
       const cam = state.camera;
-      cam.position.x = Math.max(-CAMERA_BOUNDS, Math.min(CAMERA_BOUNDS, cam.position.x));
-      cam.position.z = Math.max(-CAMERA_BOUNDS, Math.min(CAMERA_BOUNDS, cam.position.z));
+      // Clamp camera both within world bounds AND within orbit leash of player
+      // to prevent clipping through walls.
+      const px = newPosition[0];
+      const pz = newPosition[2];
+      cam.position.x = Math.max(
+        Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+      );
+      cam.position.z = Math.max(
+        Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+      );
       cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
     }
   });
@@ -239,10 +251,12 @@ export const LocalPlayer = ({
       <OrbitControls
         ref={controlsRef}
         enablePan={false}
-        maxPolarAngle={Math.PI / 2.1}
-        minPolarAngle={Math.PI / 3}
+        maxPolarAngle={Math.PI / 2.2}
+        minPolarAngle={Math.PI / 4}
         maxDistance={15}
-        minDistance={2}
+        minDistance={3}
+        enableDamping
+        dampingFactor={0.08}
         makeDefault
       />
       <group ref={playerRef} name="localPlayer" position={position} rotation={[0, rotation[1], 0]}>

@@ -12,19 +12,18 @@ import { PrinterStation } from './props/PrinterStation';
  * Collision boxes for the working area props in world space.
  * WorkingArea renders at position [0,0,0], so local coords == world coords.
  */
+// Working area: X[-7, +22], Z[-9, +18] (open floor, no enclosing walls)
 export const WORKING_AREA_COLLISION_BOXES: THREE.Box3[] = [
-  // Pillar at [-12, 4, -20]
-  new THREE.Box3(new THREE.Vector3(-12.3, 0, -20.3), new THREE.Vector3(-11.7, 8, -19.7)),
-  // Pillar at [0, 4, -20]
-  new THREE.Box3(new THREE.Vector3(-0.3, 0, -20.3), new THREE.Vector3(0.3, 8, -19.7)),
-  // Pillar at [10, 4, -20]
-  new THREE.Box3(new THREE.Vector3(9.7, 0, -20.3), new THREE.Vector3(10.3, 8, -19.7)),
-  // Pillar at [-12, 4, 0]
-  new THREE.Box3(new THREE.Vector3(-12.3, 0, -0.3), new THREE.Vector3(-11.7, 8, 0.3)),
-  // Pillar at [10, 4, 0]
-  new THREE.Box3(new THREE.Vector3(9.7, 0, -0.3), new THREE.Vector3(10.3, 8, 0.3)),
-  // Printer station at [-8, 0, -12] rotated 90deg — approx footprint
-  new THREE.Box3(new THREE.Vector3(-8.3, 0, -12.5), new THREE.Vector3(-7.7, 1, -11.5)),
+  // Beet Farm (NW corner, outside main working area)
+  new THREE.Box3(new THREE.Vector3(-21, 0, -21), new THREE.Vector3(-15, 0.1, -15)),
+  // Pillars
+  new THREE.Box3(new THREE.Vector3(-1.3, 0, -6.3), new THREE.Vector3(-0.7, 8, -5.7)),
+  new THREE.Box3(new THREE.Vector3(9.7, 0, -6.3), new THREE.Vector3(10.3, 8, -5.7)),
+  new THREE.Box3(new THREE.Vector3(19.7, 0, -6.3), new THREE.Vector3(20.3, 8, -5.7)),
+  new THREE.Box3(new THREE.Vector3(-1.3, 0, 7.7), new THREE.Vector3(-0.7, 8, 8.3)),
+  new THREE.Box3(new THREE.Vector3(19.7, 0, 7.7), new THREE.Vector3(20.3, 8, 8.3)),
+  // Printer station (world [12, 0, 12])
+  new THREE.Box3(new THREE.Vector3(11.5, 0, 11.5), new THREE.Vector3(13.5, 1, 12.5)),
 ];
 
 export const WorkingArea = () => {
@@ -38,13 +37,14 @@ export const WorkingArea = () => {
       <CeilingLights />
 
       {/* Structural column pillars */}
+      {/* Structural pillars — placed within working area X[-7,+22], Z[-9,+18] */}
       {(
         [
-          [-12, 4, -20],
-          [0,   4, -20],
-          [10,  4, -20],
-          [-12, 4,   0],
-          [10,  4,   0],
+          [-1,  4, -6],
+          [10,  4, -6],
+          [20,  4, -6],
+          [-1,  4,  8],
+          [20,  4,  8],
         ] as [number, number, number][]
       ).map(([x, y, z], i) => (
         <Box key={`pillar-${i}`} args={[0.4, 8, 0.4]} position={[x, y, z]}>
@@ -52,13 +52,13 @@ export const WorkingArea = () => {
         </Box>
       ))}
 
-      {/* Corner plants */}
-      <Plant position={[-22, 0, -22]} />
-      <Plant position={[-22, 0,   5]} />
-      <Plant position={[  8, 0, -22]} />
+      {/* Plants — corners of working area */}
+      <Plant position={[20, 0, -8]} />
+      <Plant position={[-6, 0, 17]} />
+      <Plant position={[20, 0, 17]} />
 
-      {/* Shared printer station */}
-      <PrinterStation position={[-8, 0, -12]} rotation={[0, Math.PI / 2, 0]} />
+      {/* Printer station — south side of working area */}
+      <PrinterStation position={[12, 0, 12]} rotation={[0, Math.PI / 2, 0]} />
 
       {/* Desks (dynamic from room layout) */}
       {desks.map((desk) => (
