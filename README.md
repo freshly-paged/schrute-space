@@ -1,3 +1,6 @@
+## Hosted at
+https://schrute-space-337029845362.us-central1.run.app/ for now
+
 ## Local Development
 
 ### Prerequisites
