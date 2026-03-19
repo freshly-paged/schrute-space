@@ -1,11 +1,16 @@
 import React from 'react';
 import { Box, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import { FloorPlanRect } from '../../../types';
 import { Chair } from '../shared/props/Chair';
 import { Whiteboard } from './props/Whiteboard';
 
 // Room: 14 wide × 14 deep, group at world [-16, 0, -2]
 // World extents: X[-23, -9], Z[-9, +5]
+export const FLOOR_PLAN_RECT: FloorPlanRect = {
+  label: 'Conference Room', x1: -23, z1: -9, x2: -9, z2: 5, color: '#dbeafe',
+};
+
 export const CONFERENCE_ROOM_COLLISION_BOXES: THREE.Box3[] = [
   // North wall (world z = -9)
   new THREE.Box3(new THREE.Vector3(-23, 0, -9.15), new THREE.Vector3(-9, 8, -8.85)),

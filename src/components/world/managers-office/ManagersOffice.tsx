@@ -1,6 +1,7 @@
 import React from 'react';
 import * as THREE from 'three';
 import { Box, Text } from '@react-three/drei';
+import { FloorPlanRect } from '../../../types';
 import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
 import { Chair } from '../shared/props/Chair';
@@ -8,6 +9,10 @@ import { Chair } from '../shared/props/Chair';
 // Room: 14 wide × 14 deep, group at world [-16, 0, 12]
 // World extents: X[-23, -9], Z[+5, +19]
 // North boundary (world z=+5) is the Conference Room's south wall — not re-rendered here.
+export const FLOOR_PLAN_RECT: FloorPlanRect = {
+  label: "Manager's Office", x1: -23, z1: 5, x2: -9, z2: 19, color: '#e2e8f0',
+};
+
 export const MANAGERS_OFFICE_COLLISION_BOXES: THREE.Box3[] = [
   // West wall (world x = -23)
   new THREE.Box3(new THREE.Vector3(-23.15, 0, 5), new THREE.Vector3(-22.85, 8, 19)),
@@ -78,10 +83,10 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />
 
     {/* ── Exterior signage on east glass ── */}
-    <Text position={[7.2, 5.5, -1]} fontSize={0.35} color="#222" anchorX="center" anchorY="middle" rotation={[0, -Math.PI / 2, 0]}>
+    <Text position={[7.2, 5.5, -1]} fontSize={0.35} color="#222" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
       Regional Manager
     </Text>
-    <Text position={[7.2, 4.9, -1]} fontSize={0.25} color="#555" anchorX="center" anchorY="middle" rotation={[0, -Math.PI / 2, 0]}>
+    <Text position={[7.2, 4.9, -1]} fontSize={0.25} color="#555" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
       {ownerName}
     </Text>
   </group>

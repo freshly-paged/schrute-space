@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Cylinder, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import { FloorPlanRect } from '../../../types';
 import { Chair } from '../shared/props/Chair';
 import { WaterCooler } from './props/WaterCooler';
 import { CoffeeMachine } from './props/CoffeeMachine';
@@ -9,6 +10,10 @@ import { Plant } from '../shared/props/Plant';
 
 // Room: 30 wide × 14 deep, group at world [8, 0, -16]
 // World extents: X[-7, +23], Z[-23, -9]
+export const FLOOR_PLAN_RECT: FloorPlanRect = {
+  label: 'Break Room', x1: -7, z1: -23, x2: 23, z2: -9, color: '#d1fae5',
+};
+
 export const BREAK_ROOM_COLLISION_BOXES: THREE.Box3[] = [
   // North wall
   new THREE.Box3(new THREE.Vector3(-7, 0, -23.15), new THREE.Vector3(23, 8, -22.85)),

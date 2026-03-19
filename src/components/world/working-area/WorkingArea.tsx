@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
+import { FloorPlanRect } from '../../../types';
 import { useGameStore } from '../../../store/useGameStore';
 import { DeskItem } from '../../../types';
 import { Desk } from './Desk';
@@ -13,6 +14,14 @@ import { PrinterStation } from './props/PrinterStation';
  * WorkingArea renders at position [0,0,0], so local coords == world coords.
  */
 // Working area: X[-7, +22], Z[-9, +18] (open floor, no enclosing walls)
+export const FLOOR_PLAN_RECT: FloorPlanRect = {
+  label: 'Working Area', x1: -7, z1: -9, x2: 22, z2: 18, color: '#fef9c3',
+};
+
+export const BEET_FARM_FLOOR_PLAN_RECT: FloorPlanRect = {
+  label: 'Beet Farm', x1: -22, z1: -22, x2: -10, z2: -10, color: '#fef3c7',
+};
+
 export const WORKING_AREA_COLLISION_BOXES: THREE.Box3[] = [
   // Beet Farm (NW corner, outside main working area)
   new THREE.Box3(new THREE.Vector3(-21, 0, -21), new THREE.Vector3(-15, 0.1, -15)),

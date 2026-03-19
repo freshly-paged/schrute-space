@@ -3,6 +3,10 @@ import { motion } from 'motion/react';
 import { FurnitureItem, DeskItem } from '../../types';
 import { getDeterministicColor } from '../../constants';
 import { PixelBeet } from './LandingPage';
+import { FLOOR_PLAN_RECT as BREAK_ROOM_RECT } from '../world/break-room/BreakRoom';
+import { FLOOR_PLAN_RECT as CONFERENCE_ROOM_RECT } from '../world/conference-room/ConferenceRoom';
+import { FLOOR_PLAN_RECT as MANAGERS_OFFICE_RECT } from '../world/managers-office/ManagersOffice';
+import { FLOOR_PLAN_RECT as WORKING_AREA_RECT } from '../world/working-area/WorkingArea';
 
 const SVG_SIZE = 600;
 const WORLD_SIZE = 50; // -25 to +25
@@ -26,11 +30,15 @@ function snap(val: number): number {
 }
 
 const ROOM_RECTS = [
-  { label: "Beet Farm",         x: 36,  y: 36,  w: 108, h: 108, color: '#fef3c7' },
-  { label: "Michael's Office",  x: 420, y: 36,  w: 120, h: 144, color: '#e2e8f0' },
-  { label: "Conference Room",   x: 420, y: 360, w: 120, h: 120, color: '#dbeafe' },
-  { label: "Break Room",        x: 60,  y: 420, w: 120, h: 120, color: '#d1fae5' },
-];
+  WORKING_AREA_RECT,
+  BREAK_ROOM_RECT,
+  CONFERENCE_ROOM_RECT,
+  MANAGERS_OFFICE_RECT,
+].map((r) => {
+  const [x1, y1] = worldToSvg(r.x1, r.z1);
+  const [x2, y2] = worldToSvg(r.x2, r.z2);
+  return { label: r.label, x: x1, y: y1, w: x2 - x1, h: y2 - y1, color: r.color };
+});
 
 interface DragState {
   deskId: string;
