@@ -96,7 +96,7 @@ export const ConferenceRoom = () => (
     <spotLight position={[0, 7.5, 0]} intensity={1.2} angle={0.6} penumbra={0.3} color="#fff5e0" />
 
     {/* ── Sign on glass exterior ── */}
-    <Text position={[7.2, 6.5, 0]} fontSize={0.3} color="#333" rotation={[0, -Math.PI / 2, 0]}>
+    <Text position={[7.2, 6.5, 0]} fontSize={0.3} color="#333" rotation={[0, Math.PI / 2, 0]}>
       Conference Room B
     </Text>
   </group>
