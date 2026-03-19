@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Stars, Html, KeyboardControls } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,6 +12,7 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
 import { OtherPlayer } from './components/player/OtherPlayer';
@@ -38,7 +39,8 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig } = useGameStore();
+  const [view, setView] = useState<'landing' | 'customize'>('landing');
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
@@ -62,6 +64,17 @@ export default function App() {
       }
     }
   }, [user, currentRoom]);
+
+  const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
+    setAvatarConfig(config);
+    const token = localStorage.getItem('office_auth_token');
+    await fetch('/api/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(config),
+    });
+    setView('landing');
+  }, [setAvatarConfig]);
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -119,9 +132,20 @@ export default function App() {
     );
   }
 
+  // ── Avatar customization ─────────────────────────────────────────────────
+  if (!currentRoom && view === 'customize') {
+    return (
+      <AvatarCustomizationPage
+        config={avatarConfig}
+        onSave={handleSaveAvatar}
+        onBack={() => setView('landing')}
+      />
+    );
+  }
+
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
-    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} />;
+    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} />;
   }
 
   // ── Game ─────────────────────────────────────────────────────────────────
@@ -154,6 +178,7 @@ export default function App() {
       >
         <Info className="text-white w-6 h-6" />
       </button>
+
 
       <AnimatePresence>
         {showUI && !isTimerActive && (

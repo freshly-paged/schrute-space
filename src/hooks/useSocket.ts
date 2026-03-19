@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Player, ChatMessage } from '../types';
+import { Player, ChatMessage, AvatarConfig } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
 
@@ -105,6 +105,10 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setPaperReams(count);
     });
 
+    newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
+      useGameStore.getState().setAvatarConfig(config);
+    });
+
     // Sync paper reams to server whenever the count changes
     const unsubscribeReams = useGameStore.subscribe((state, prev) => {
       if (state.paperReams !== prev.paperReams) {
@@ -125,6 +129,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     [socket]
   );
 
+  const saveAvatarConfig = useCallback(
+    (config: AvatarConfig) => {
+      socket?.emit('saveAvatarConfig', config);
+    },
+    [socket]
+  );
+
   return {
     socket,
     players,
@@ -134,5 +145,6 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     disconnectReason,
     connectionError,
     sendMessage,
+    saveAvatarConfig,
   };
 }

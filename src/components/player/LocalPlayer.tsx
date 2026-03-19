@@ -6,6 +6,7 @@ import { Socket } from 'socket.io-client';
 import { Player } from '../../types';
 import { getDeterministicColor, DESKS } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
+import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
@@ -35,7 +36,8 @@ export const LocalPlayer = ({
   const playerRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
 
-  const playerColor = useMemo(() => getDeterministicColor(playerName), [playerName]);
+  const avatarConfig = useGameStore((state) => state.avatarConfig);
+  const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
   const physics = usePlayerPhysics();
 
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
@@ -207,6 +209,8 @@ export const LocalPlayer = ({
             isMoving={isMoving}
             isGrounded={physics.isGrounded.current}
             isRolling={physics.isRolling.current}
+            skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+            pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
           />
         </group>
         <Billboard position={[0, 2.2, 0]}>

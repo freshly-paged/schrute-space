@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
-import { Player } from '../../types';
+import { Player, DEFAULT_AVATAR_CONFIG } from '../../types';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
@@ -19,11 +19,13 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
   return (
     <group position={player.position} rotation={[0, player.rotation[1], 0]}>
       <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
-        <CharacterAvatar 
-          color={player.color} 
-          isMoving={isMoving} 
-          isGrounded={player.position[1] < 0.1} 
-          isRolling={player.isRolling || false} 
+        <CharacterAvatar
+          color={player.avatarConfig?.shirtColor ?? player.color}
+          isMoving={isMoving}
+          isGrounded={player.position[1] < 0.1}
+          isRolling={player.isRolling || false}
+          skinTone={player.avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+          pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
         />
       </group>
       <Billboard position={[0, 2.2, 0]}>
