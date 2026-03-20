@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Cylinder, Text } from '@react-three/drei';
+import { Box, Cylinder } from '@react-three/drei';
 
 interface BossDeskProps {
   position: [number, number, number];
@@ -34,35 +34,9 @@ export const BossDesk = ({ position, rotation = [0, 0, 0], ownerName = '' }: Bos
     </Box>
 
     {/* "World's Best Boss" mug */}
-    <Cylinder
-      args={[0.07, 0.07, 0.14, 12]}
-      position={[-0.8, 1.08, -0.3]}
-    >
+    <Cylinder args={[0.07, 0.07, 0.14, 12]} position={[-0.8, 1.08, -0.3]}>
       <meshStandardMaterial color="#1565C0" />
     </Cylinder>
-    <Text
-      position={[-0.8, 1.28, -0.3]}
-      fontSize={0.06}
-      color="#ffffff"
-      anchorX="center"
-      anchorY="bottom"
-    >
-      {"World's\nBest Boss"}
-    </Text>
 
-    {/* Nameplate base */}
-    <Box args={[0.6, 0.05, 0.15]} position={[0, 0.985, 0.6]}>
-      <meshStandardMaterial color="#f5f5dc" />
-    </Box>
-    {/* Nameplate text */}
-    <Text
-      position={[0, 1.05, 0.62]}
-      fontSize={0.08}
-      color="#333333"
-      anchorX="center"
-      anchorY="bottom"
-    >
-      {ownerName}
-    </Text>
   </group>
 );

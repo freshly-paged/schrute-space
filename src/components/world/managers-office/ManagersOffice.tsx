@@ -1,6 +1,6 @@
 import React from 'react';
 import * as THREE from 'three';
-import { Box, Text } from '@react-three/drei';
+import { Box } from '@react-three/drei';
 import { FloorPlanRect } from '../../../types';
 import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
@@ -22,8 +22,8 @@ export const MANAGERS_OFFICE_COLLISION_BOXES: THREE.Box3[] = [
   new THREE.Box3(new THREE.Vector3(-9.15, 0, 5), new THREE.Vector3(-8.85, 8, 10)),
   // East glass — lower panel (world x = -9, z from +12 to +19)
   new THREE.Box3(new THREE.Vector3(-9.15, 0, 12), new THREE.Vector3(-8.85, 8, 19)),
-  // Boss desk (local [0,0,-2] → world [-16,0,10]; desk 2.8×1.4)
-  new THREE.Box3(new THREE.Vector3(-17.4, 0, 9.3), new THREE.Vector3(-14.6, 1.0, 10.7)),
+  // Boss desk (local [-1,0,0] rotated 90° → world [-17,0,12]; footprint 1.4 E-W × 2.8 N-S)
+  new THREE.Box3(new THREE.Vector3(-17.7, 0, 10.6), new THREE.Vector3(-16.3, 1.1, 13.4)),
   // Bookshelf (local [-5,0,-6] → world [-21,0,6]; shelf 1.2×0.3)
   new THREE.Box3(new THREE.Vector3(-21.6, 0, 5.85), new THREE.Vector3(-20.4, 2.2, 6.45)),
 ];
@@ -52,42 +52,27 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
     <Box args={[0.2, 8, 7]} position={[7, 4, 3.5]}>
       <meshPhysicalMaterial transmission={0.9} roughness={0} metalness={0} transparent opacity={0.3} color="#a8d8ea" />
     </Box>
-    {/* Door panel in gap */}
-    <Box args={[0.1, 7.5, 1.8]} position={[7, 3.75, -1]}>
-      <meshPhysicalMaterial transmission={0.9} roughness={0} metalness={0} transparent opacity={0.5} color="#a8d8ea" />
-    </Box>
 
     {/* ── Furniture ── */}
-    <BossDesk position={[0, 0, -2]} rotation={[0, Math.PI, 0]} ownerName={ownerName} />
+    {/* Desk faces east (toward glass + working area); boss sits on west side */}
+    <BossDesk position={[-1, 0, 0]} rotation={[0, Math.PI / 2, 0]} ownerName={ownerName} />
 
-    {/* Visitor chairs */}
-    <Chair position={[-1.2, 0, 1.5]} rotation={[0, Math.PI / 8, 0]} />
-    <Chair position={[1.2, 0, 1.5]} rotation={[0, -Math.PI / 8, 0]} />
+    {/* Visitor chairs on east side of desk, facing west toward boss */}
+    <Chair position={[2.5, 0, -0.8]} rotation={[0, -Math.PI / 2 + Math.PI / 8, 0]} />
+    <Chair position={[2.5, 0, 0.8]} rotation={[0, -Math.PI / 2 - Math.PI / 8, 0]} />
 
     {/* Bookshelf against west wall */}
     <Bookshelf position={[-5, 0, -6]} />
 
     {/* ── Award plaques on south wall ── */}
-    {([[-3, 'Best Boss'], [0, "Dundie '05"], [3, 'Salesman']] as [number, string][]).map(([x, label]) => (
-      <React.Fragment key={label}>
-        <Box args={[0.6, 0.4, 0.05]} position={[x, 4, 6.9]}>
-          <meshStandardMaterial color="#d4af37" />
-        </Box>
-        <Text position={[x, 4, 6.88]} fontSize={0.1} color="#5a3e00" anchorX="center" anchorY="middle" rotation={[0, Math.PI, 0]}>
-          {label}
-        </Text>
-      </React.Fragment>
+    {/* Award plaques (gold boxes on south wall) */}
+    {([-3, 0, 3] as number[]).map((x) => (
+      <Box key={x} args={[0.6, 0.4, 0.05]} position={[x, 4, 6.9]}>
+        <meshStandardMaterial color="#d4af37" />
+      </Box>
     ))}
 
     {/* ── Lighting ── */}
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />
-
-    {/* ── Exterior signage on east glass ── */}
-    <Text position={[7.2, 5.5, -1]} fontSize={0.35} color="#222" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
-      Regional Manager
-    </Text>
-    <Text position={[7.2, 4.9, -1]} fontSize={0.25} color="#555" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
-      {ownerName}
-    </Text>
   </group>
 );
