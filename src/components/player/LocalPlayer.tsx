@@ -31,11 +31,12 @@ export const LocalPlayer = ({
   playerName,
   players,
 }: LocalPlayerProps) => {
-  const [position, setPosition] = useState<[number, number, number]>([0, 0, 0]);
-  const [rotation, setRotation] = useState<[number, number, number]>([0, 0, 0]);
+  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
+  const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
   const [isMoving, setIsMoving] = useState(false);
   const [, get] = useKeyboardControls();
   const playerRef = useRef<THREE.Group>(null);
+  const rollGroupRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
@@ -107,8 +108,12 @@ export const LocalPlayer = ({
           desk.position[2] + chairDir.z * 2.5,
         ];
         const ejectedRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
-        setPosition(ejectedPos);
-        setRotation(ejectedRot);
+        positionRef.current = ejectedPos;
+        rotationRef.current = ejectedRot;
+        if (playerRef.current) {
+          playerRef.current.position.set(...ejectedPos);
+          playerRef.current.rotation.set(0, ejectedRot[1], 0);
+        }
         socket?.connected &&
           socket.emit('playerMovement', { position: ejectedPos, rotation: ejectedRot, isRolling: false, rollTimer: 0 });
       }
@@ -146,13 +151,17 @@ export const LocalPlayer = ({
         ];
         const targetRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
 
-        const currentVec = new THREE.Vector3(...position);
+        const currentVec = new THREE.Vector3(...positionRef.current);
         const targetVec = new THREE.Vector3(...targetPos);
         if (currentVec.distanceTo(targetVec) > 0.01) {
           const lerped = currentVec.lerp(targetVec, 0.1);
           const lerpedPos: [number, number, number] = [lerped.x, lerped.y, lerped.z];
-          setPosition(lerpedPos);
-          setRotation(targetRot);
+          positionRef.current = lerpedPos;
+          rotationRef.current = targetRot;
+          if (playerRef.current) {
+            playerRef.current.position.set(...lerpedPos);
+            playerRef.current.rotation.set(0, targetRot[1], 0);
+          }
           socket?.connected &&
             socket.emit('playerMovement', {
               position: lerpedPos,
@@ -171,8 +180,8 @@ export const LocalPlayer = ({
     physics.processRoll(forward, () => socket?.emit('chatMessage', 'PARKOUR!'));
     physics.tickRoll(delta);
 
-    let newPosition: [number, number, number] = [...position];
-    let newRotation: [number, number, number] = [...rotation];
+    let newPosition: [number, number, number] = [...positionRef.current];
+    let newRotation: [number, number, number] = [...rotationRef.current];
 
     newPosition[1] = physics.applyGravity(newPosition, delta, deskBoxes);
 
@@ -201,15 +210,25 @@ export const LocalPlayer = ({
     newPosition[2] = Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]));
 
     const hasMoved =
-      newPosition[0] !== position[0] ||
-      newPosition[1] !== position[1] ||
-      newPosition[2] !== position[2] ||
-      newRotation[1] !== rotation[1] ||
+      newPosition[0] !== positionRef.current[0] ||
+      newPosition[1] !== positionRef.current[1] ||
+      newPosition[2] !== positionRef.current[2] ||
+      newRotation[1] !== rotationRef.current[1] ||
       physics.isRolling.current;
 
     if (hasMoved) {
-      setPosition(newPosition);
-      setRotation(newRotation);
+      positionRef.current = newPosition;
+      rotationRef.current = newRotation;
+      if (playerRef.current) {
+        playerRef.current.position.set(...newPosition);
+        playerRef.current.rotation.set(0, newRotation[1], 0);
+      }
+      if (rollGroupRef.current) {
+        rollGroupRef.current.rotation.set(
+          physics.isRolling.current ? -Math.PI * 2 * (physics.rollTimer.current / 0.5) : 0,
+          0, 0
+        );
+      }
       socket?.connected &&
         socket.emit('playerMovement', {
           position: newPosition,
@@ -259,16 +278,8 @@ export const LocalPlayer = ({
         dampingFactor={0.08}
         makeDefault
       />
-      <group ref={playerRef} name="localPlayer" position={position} rotation={[0, rotation[1], 0]}>
-        <group
-          rotation={[
-            physics.isRolling.current
-              ? -Math.PI * 2 * (physics.rollTimer.current / 0.5)
-              : 0,
-            0,
-            0,
-          ]}
-        >
+      <group ref={playerRef} name="localPlayer">
+        <group ref={rollGroupRef}>
           <CharacterAvatar
             color={playerColor}
             isMoving={isMoving}
