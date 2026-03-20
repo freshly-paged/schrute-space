@@ -1,6 +1,6 @@
 import React from 'react';
 import * as THREE from 'three';
-import { Box } from '@react-three/drei';
+import { Box, Text } from '@react-three/drei';
 import { FloorPlanRect } from '../../../types';
 import { WallDef, wallsToBoxes } from '../../../utils/walls';
 import { BossDesk } from './props/BossDesk';
@@ -63,6 +63,16 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
         <meshStandardMaterial color="#d4af37" />
       </Box>
     ))}
+
+    {/* ── Exterior signage on east glass ── */}
+    <Text position={[7.2, 5.5, -1]} fontSize={0.35} color="#222" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
+      Regional Manager
+    </Text>
+    {ownerName ? (
+      <Text position={[7.2, 4.9, -1]} fontSize={0.25} color="#555" anchorX="center" anchorY="middle" rotation={[0, Math.PI / 2, 0]}>
+        {ownerName}
+      </Text>
+    ) : null}
 
     {/* ── Lighting ── */}
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />
