@@ -2,56 +2,51 @@ import React from 'react';
 import { Box, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { FloorPlanRect } from '../../../types';
+import { WallDef, wallsToBoxes } from '../../../utils/walls';
 import { Chair } from '../shared/props/Chair';
 import { Whiteboard } from './props/Whiteboard';
 
 // Room: 14 wide × 14 deep, group at world [-16, 0, -2]
 // World extents: X[-23, -9], Z[-9, +5]
+const GROUP_OFFSET: [number, number, number] = [-16, 0, -2];
+
 export const FLOOR_PLAN_RECT: FloorPlanRect = {
   label: 'Conference Room', x1: -23, z1: -9, x2: -9, z2: 5, color: '#dbeafe',
 };
 
+const SOLID_WALLS: WallDef[] = [
+  { args: [14, 8, 0.3], position: [0,  4, -7] }, // North
+  { args: [0.3, 8, 14], position: [-7, 4,  0] }, // West
+  { args: [14, 8, 0.3], position: [0,  4,  7] }, // South (shared with Manager's Office)
+];
+
+const GLASS_WALLS: WallDef[] = [
+  { args: [0.2, 8, 6], position: [7, 4, -4] }, // East — upper panel
+  { args: [0.2, 8, 4], position: [7, 4,  5] }, // East — lower panel
+];
+
 export const CONFERENCE_ROOM_COLLISION_BOXES: THREE.Box3[] = [
-  // North wall (world z = -9)
-  new THREE.Box3(new THREE.Vector3(-23, 0, -9.15), new THREE.Vector3(-9, 8, -8.85)),
-  // West wall (world x = -23)
-  new THREE.Box3(new THREE.Vector3(-23.15, 0, -9), new THREE.Vector3(-22.85, 8, 5)),
-  // South wall (world z = +5) — shared boundary with Manager's Office
-  new THREE.Box3(new THREE.Vector3(-23, 0, 4.85), new THREE.Vector3(-9, 8, 5.15)),
-  // East glass — upper panel (world x = -9, z from -9 to -2)
-  new THREE.Box3(new THREE.Vector3(-9.15, 0, -9), new THREE.Vector3(-8.85, 8, -3)),
-  // East glass — lower panel (world x = -9, z from +1 to +5)
-  new THREE.Box3(new THREE.Vector3(-9.15, 0, 1), new THREE.Vector3(-8.85, 8, 5)),
+  ...wallsToBoxes([...SOLID_WALLS, ...GLASS_WALLS], GROUP_OFFSET),
   // Conference table (local [0,0,0] → world [-16,0,-2]; table 10×4.5)
   new THREE.Box3(new THREE.Vector3(-21, 0, -4.25), new THREE.Vector3(-11, 1.0, 0.25)),
 ];
 
 export const ConferenceRoom = () => (
   // Group at world [-16, 0, -2]; all child positions are local to this origin
-  <group position={[-16, 0, -2]}>
-    {/* ── Enclosure walls ── */}
-    {/* North wall */}
-    <Box args={[14, 8, 0.3]} position={[0, 4, -7]}>
-      <meshStandardMaterial color="#dde3ea" />
-    </Box>
-    {/* West wall */}
-    <Box args={[0.3, 8, 14]} position={[-7, 4, 0]}>
-      <meshStandardMaterial color="#dde3ea" />
-    </Box>
-    {/* South wall */}
-    <Box args={[14, 8, 0.3]} position={[0, 4, 7]}>
-      <meshStandardMaterial color="#dde3ea" />
-    </Box>
+  <group position={GROUP_OFFSET}>
+    {/* ── Solid walls (derived from SOLID_WALLS) ── */}
+    {SOLID_WALLS.map((w, i) => (
+      <Box key={i} args={w.args} position={w.position}>
+        <meshStandardMaterial color="#dde3ea" />
+      </Box>
+    ))}
 
-    {/* ── East glass wall — two panels with ~4-unit door gap ── */}
-    {/* Upper panel (z local -7 to -1) */}
-    <Box args={[0.2, 8, 6]} position={[7, 4, -4]}>
-      <meshPhysicalMaterial transmission={0.9} roughness={0} metalness={0} transparent opacity={0.3} color="#a8d8f0" />
-    </Box>
-    {/* Lower panel (z local +3 to +7) */}
-    <Box args={[0.2, 8, 4]} position={[7, 4, 5]}>
-      <meshPhysicalMaterial transmission={0.9} roughness={0} metalness={0} transparent opacity={0.3} color="#a8d8f0" />
-    </Box>
+    {/* ── East glass wall — two panels with door gap (derived from GLASS_WALLS) ── */}
+    {GLASS_WALLS.map((w, i) => (
+      <Box key={i} args={w.args} position={w.position}>
+        <meshPhysicalMaterial transmission={0.9} roughness={0} metalness={0} transparent opacity={0.3} color="#a8d8f0" />
+      </Box>
+    ))}
 
     {/* ── Table ── */}
     <Box args={[10, 0.12, 4.5]} position={[0, 0.95, 0]}>

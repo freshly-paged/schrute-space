@@ -1,5 +1,4 @@
 import React from 'react';
-import { Box } from '@react-three/drei';
 import * as THREE from 'three';
 import { FloorPlanRect } from '../../../types';
 import { useGameStore } from '../../../store/useGameStore';
@@ -13,9 +12,9 @@ import { PrinterStation } from './props/PrinterStation';
  * Collision boxes for the working area props in world space.
  * WorkingArea renders at position [0,0,0], so local coords == world coords.
  */
-// Working area: X[-7, +22], Z[-9, +18] (open floor, no enclosing walls)
+// Working area: X[-9, +23], Z[-9, +23] (open floor, no enclosing walls)
 export const FLOOR_PLAN_RECT: FloorPlanRect = {
-  label: 'Working Area', x1: -7, z1: -9, x2: 22, z2: 18, color: '#fef9c3',
+  label: 'Working Area', x1: -9, z1: -9, x2: 23, z2: 23, color: '#fef9c3',
 };
 
 export const BEET_FARM_FLOOR_PLAN_RECT: FloorPlanRect = {
@@ -25,12 +24,6 @@ export const BEET_FARM_FLOOR_PLAN_RECT: FloorPlanRect = {
 export const WORKING_AREA_COLLISION_BOXES: THREE.Box3[] = [
   // Beet Farm (NW corner, outside main working area)
   new THREE.Box3(new THREE.Vector3(-21, 0, -21), new THREE.Vector3(-15, 0.1, -15)),
-  // Pillars
-  new THREE.Box3(new THREE.Vector3(-1.3, 0, -6.3), new THREE.Vector3(-0.7, 8, -5.7)),
-  new THREE.Box3(new THREE.Vector3(9.7, 0, -6.3), new THREE.Vector3(10.3, 8, -5.7)),
-  new THREE.Box3(new THREE.Vector3(19.7, 0, -6.3), new THREE.Vector3(20.3, 8, -5.7)),
-  new THREE.Box3(new THREE.Vector3(-1.3, 0, 7.7), new THREE.Vector3(-0.7, 8, 8.3)),
-  new THREE.Box3(new THREE.Vector3(19.7, 0, 7.7), new THREE.Vector3(20.3, 8, 8.3)),
   // Printer station (world [12, 0, 12])
   new THREE.Box3(new THREE.Vector3(11.5, 0, 11.5), new THREE.Vector3(13.5, 1, 12.5)),
 ];
@@ -44,22 +37,6 @@ export const WorkingArea = () => {
     <group>
       {/* Ceiling light fixtures */}
       <CeilingLights />
-
-      {/* Structural column pillars */}
-      {/* Structural pillars — placed within working area X[-7,+22], Z[-9,+18] */}
-      {(
-        [
-          [-1,  4, -6],
-          [10,  4, -6],
-          [20,  4, -6],
-          [-1,  4,  8],
-          [20,  4,  8],
-        ] as [number, number, number][]
-      ).map(([x, y, z], i) => (
-        <Box key={`pillar-${i}`} args={[0.4, 8, 0.4]} position={[x, y, z]}>
-          <meshStandardMaterial color="#b0b8c1" />
-        </Box>
-      ))}
 
       {/* Plants — corners of working area */}
       <Plant position={[20, 0, -8]} />

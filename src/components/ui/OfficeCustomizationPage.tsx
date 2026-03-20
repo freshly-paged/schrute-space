@@ -9,19 +9,19 @@ import { FLOOR_PLAN_RECT as MANAGERS_OFFICE_RECT } from '../world/managers-offic
 import { FLOOR_PLAN_RECT as WORKING_AREA_RECT } from '../world/working-area/WorkingArea';
 
 const SVG_SIZE = 600;
-const WORLD_SIZE = 50; // -25 to +25
+const WORLD_SIZE = 46; // -23 to +23
 
 function worldToSvg(worldX: number, worldZ: number): [number, number] {
   return [
-    ((worldX + 25) / WORLD_SIZE) * SVG_SIZE,
-    ((worldZ + 25) / WORLD_SIZE) * SVG_SIZE,
+    ((worldX + 23) / WORLD_SIZE) * SVG_SIZE,
+    ((worldZ + 23) / WORLD_SIZE) * SVG_SIZE,
   ];
 }
 
 function svgToWorld(svgX: number, svgY: number): [number, number] {
   return [
-    (svgX / SVG_SIZE) * WORLD_SIZE - 25,
-    (svgY / SVG_SIZE) * WORLD_SIZE - 25,
+    (svgX / SVG_SIZE) * WORLD_SIZE - 23,
+    (svgY / SVG_SIZE) * WORLD_SIZE - 23,
   ];
 }
 
@@ -103,8 +103,8 @@ export const OfficeCustomizationPage = ({
 
     const newWorldX = snap(dragging.current.startWorldX + deltaWorldX);
     const newWorldZ = snap(dragging.current.startWorldZ + deltaWorldZ);
-    const clampedX = Math.max(-24, Math.min(24, newWorldX));
-    const clampedZ = Math.max(-24, Math.min(24, newWorldZ));
+    const clampedX = Math.max(-22, Math.min(22, newWorldX));
+    const clampedZ = Math.max(-22, Math.min(22, newWorldZ));
 
     setLayout((prev) =>
       prev.map((f) =>

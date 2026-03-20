@@ -11,8 +11,8 @@ import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
-const BOUNDS = 24;
-const CAMERA_BOUNDS = 24;
+const BOUNDS = 22;
+const CAMERA_BOUNDS = 22;
 // Camera is clamped within this radius of the player to prevent wall-clipping
 const CAMERA_ORBIT_LEASH = 13;
 
