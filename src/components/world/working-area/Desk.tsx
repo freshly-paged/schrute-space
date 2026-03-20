@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
-import { Box, Billboard, Text } from '@react-three/drei';
+import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useGameStore } from '../../store/useGameStore';
-import { Chair } from './Chair';
+import { useGameStore } from '../../../store/useGameStore';
+import { Chair } from '../shared/props/Chair';
 
 export const Desk = ({
   id,
@@ -71,6 +71,7 @@ export const Desk = ({
       <Box args={[2, 0.1, 1]} position={[0, 0.95, 0]}>
         <meshStandardMaterial color={isOccupied ? '#6b3a3a' : isNearest ? '#a0522d' : '#8B4513'} />
       </Box>
+
       {/* Legs */}
       <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, -0.4]}>
         <meshStandardMaterial color="#333" />
@@ -84,18 +85,49 @@ export const Desk = ({
       <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, 0.4]}>
         <meshStandardMaterial color="#333" />
       </Box>
-      {/* Monitor */}
+
+      {/* Paper stack on desk surface */}
+      <Box args={[0.4, 0.02, 0.3]} position={[0.5, 1.01, 0.1]}>
+        <meshStandardMaterial color="#f5f5f0" />
+      </Box>
+
+      {/* Coffee mug */}
+      <Cylinder
+        args={[0.06, 0.06, 0.12, 8]}
+        position={[-0.55, 1.06, 0.1]}
+      >
+        <meshStandardMaterial color="#2c1810" />
+      </Cylinder>
+
+      {/* Keyboard strip */}
+      <Box args={[0.5, 0.02, 0.15]} position={[0, 1.01, 0.25]}>
+        <meshStandardMaterial color="#1a1a1a" />
+      </Box>
+
+      {/* Monitor — improved with larger bezel and glowing screen */}
       <group position={[0, 1.0, 0]}>
-        <Box args={[0.6, 0.4, 0.05]} position={[0, 0.2, -0.2]}>
-          <meshStandardMaterial color="#111" />
+        {/* Bezel */}
+        <Box args={[0.65, 0.42, 0.05]} position={[0, 0.21, -0.2]}>
+          <meshStandardMaterial color="#111111" />
         </Box>
+        {/* Inner screen with blue emissive glow */}
+        <Box args={[0.55, 0.32, 0.01]} position={[0, 0.21, -0.17]}>
+          <meshStandardMaterial
+            color="#0a1f33"
+            emissive="#1a3a5c"
+            emissiveIntensity={0.6}
+          />
+        </Box>
+        {/* Monitor stand neck */}
         <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
           <meshStandardMaterial color="#222" />
         </Box>
+        {/* Monitor stand base */}
         <Box args={[0.4, 0.02, 0.2]} position={[0, 0.01, 0.1]}>
           <meshStandardMaterial color="#222" />
         </Box>
       </group>
+
       {hasChair && <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} />}
     </group>
   );

@@ -3,6 +3,13 @@ import * as THREE from 'three';
 import { COLLISION_BOXES } from '../constants';
 import { Player } from '../types';
 
+// Pre-allocated objects to avoid per-frame GC pressure
+const _playerBox = new THREE.Box3();
+const _otherBox = new THREE.Box3();
+const _boxCenter = new THREE.Vector3();
+const _playerSize = new THREE.Vector3(0.5, 1.4, 0.5);
+const _moveScaled = new THREE.Vector3();
+
 const JUMP_FORCE = 8;
 const GRAVITY = 20;
 const ROOF_Y = 6.1;
@@ -64,8 +71,16 @@ export function usePlayerPhysics() {
   // Returns the new Y position after applying gravity and landing
   function applyGravity(position: [number, number, number], delta: number, extraBoxes: THREE.Box3[] = []): number {
     let groundY = 0;
-    const allBoxes = extraBoxes.length > 0 ? [...COLLISION_BOXES, ...extraBoxes] : COLLISION_BOXES;
-    for (const box of allBoxes) {
+    for (const box of COLLISION_BOXES) {
+      if (
+        position[0] >= box.min.x && position[0] <= box.max.x &&
+        position[2] >= box.min.z && position[2] <= box.max.z &&
+        box.max.y <= position[1] + 0.1
+      ) {
+        groundY = Math.max(groundY, box.max.y);
+      }
+    }
+    for (const box of extraBoxes) {
       if (
         position[0] >= box.min.x && position[0] <= box.max.x &&
         position[2] >= box.min.z && position[2] <= box.max.z &&
@@ -108,7 +123,8 @@ export function usePlayerPhysics() {
   ): [number, number, number] {
     if (moveVector.length() === 0) return position;
 
-    const scaled = moveVector.clone().normalize().multiplyScalar(speed);
+    _moveScaled.copy(moveVector).normalize().multiplyScalar(speed);
+    const scaled = _moveScaled;
     const newPos: [number, number, number] = [...position];
 
     const testX = [...newPos] as [number, number, number];
@@ -135,22 +151,20 @@ export function usePlayerPhysics() {
 }
 
 function hasCollision(position: [number, number, number], otherPlayers: Record<string, Player>, extraBoxes: THREE.Box3[] = []): boolean {
-  const playerBox = new THREE.Box3().setFromCenterAndSize(
-    new THREE.Vector3(position[0], position[1] + 0.8, position[2]),
-    new THREE.Vector3(0.5, 1.4, 0.5)
-  );
+  _boxCenter.set(position[0], position[1] + 0.8, position[2]);
+  _playerBox.setFromCenterAndSize(_boxCenter, _playerSize);
 
-  const allBoxes = extraBoxes.length > 0 ? [...COLLISION_BOXES, ...extraBoxes] : COLLISION_BOXES;
-  for (const box of allBoxes) {
-    if (playerBox.intersectsBox(box)) return true;
+  for (const box of COLLISION_BOXES) {
+    if (_playerBox.intersectsBox(box)) return true;
+  }
+  for (const box of extraBoxes) {
+    if (_playerBox.intersectsBox(box)) return true;
   }
 
   for (const p of Object.values(otherPlayers)) {
-    const otherBox = new THREE.Box3().setFromCenterAndSize(
-      new THREE.Vector3(p.position[0], p.position[1] + 0.8, p.position[2]),
-      new THREE.Vector3(0.5, 1.4, 0.5)
-    );
-    if (playerBox.intersectsBox(otherBox)) return true;
+    _boxCenter.set(p.position[0], p.position[1] + 0.8, p.position[2]);
+    _otherBox.setFromCenterAndSize(_boxCenter, _playerSize);
+    if (_playerBox.intersectsBox(_otherBox)) return true;
   }
 
   return false;
