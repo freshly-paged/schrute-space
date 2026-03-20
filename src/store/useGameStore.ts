@@ -60,11 +60,13 @@ export const useGameStore = create<GameState>((set) => ({
   togglePause: () => set((state) => ({ isTimerPaused: !state.isTimerPaused })),
   tickTimer: () => set((state) => {
     if (state.isTimerPaused || !state.isTimerActive) return {};
-    if (state.timeLeft <= 0) {
+
+    const newTimeLeft = state.timeLeft - 1;
+
+    if (newTimeLeft <= 0) {
       return { isTimerActive: false, isTimerPaused: false, timeLeft: 0, activeDeskId: null };
     }
 
-    const newTimeLeft = state.timeLeft - 1;
     let newPaperReams = state.paperReams;
     let newSessionPaper = state.sessionPaper;
     let newLastPaperEarnedAt = state.lastPaperEarnedAt;

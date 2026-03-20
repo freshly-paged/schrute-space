@@ -79,7 +79,7 @@ export const LocalPlayer = ({
 
   // Emit focus state to server whenever it changes
   useEffect(() => {
-    if (!socket?.connected) return;
+    if (!socket) return;
     socket.emit('playerFocusUpdate', {
       isFocused: isTimerActive,
       focusProgress,
