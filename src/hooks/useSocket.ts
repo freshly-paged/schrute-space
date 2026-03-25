@@ -23,10 +23,8 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   useEffect(() => {
     if (!user || !currentRoom) return;
 
-    const token = localStorage.getItem('office_auth_token');
     const newSocket = io({
       withCredentials: true,
-      auth: { token },
       reconnectionAttempts: 5,
       timeout: 10000,
     });
