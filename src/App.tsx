@@ -71,8 +71,7 @@ export default function App() {
   // Load player stats from DB when on landing page
   useEffect(() => {
     if (!user || currentRoom) return;
-    const token = localStorage.getItem('office_auth_token');
-    fetch('/api/player', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    fetch('/api/player', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         if (typeof data.paperReams === 'number') setPaperReams(data.paperReams);
@@ -83,20 +82,20 @@ export default function App() {
 
   const handleSaveOfficeLayout = useCallback(async (layout: FurnitureItem[]) => {
     setRoomLayout(layout);
-    const token = localStorage.getItem('office_auth_token');
     await fetch('/api/room-layout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ roomId: currentRoom, layout }),
     });
   }, [currentRoom, setRoomLayout]);
 
   const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
     setAvatarConfig(config);
-    const token = localStorage.getItem('office_auth_token');
     await fetch('/api/avatar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(config),
     });
     setView('landing');

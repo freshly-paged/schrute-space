@@ -7,10 +7,6 @@ import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import session from "express-session";
-import cookieParser from "cookie-parser";
-import { OAuth2Client } from "google-auth-library";
-import jwt from "jsonwebtoken";
 import pg from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -147,12 +143,23 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const APP_URL = process.env.APP_URL;
-const JWT_SECRET = process.env.SESSION_SECRET || "schrute-jwt-secret";
 
-const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
+// Extract user from IAP-injected headers (X-Goog-Authenticated-User-Email).
+// Falls back to DEV_USER_EMAIL for local development without IAP.
+function getIAPUser(headers: Record<string, any>): { email: string; name: string } | null {
+  const iapEmail = headers['x-goog-authenticated-user-email'];
+  if (iapEmail && typeof iapEmail === 'string') {
+    const email = iapEmail.includes(':') ? iapEmail.split(':')[1] : iapEmail;
+    const name = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+    return { email, name };
+  }
+  const devEmail = process.env.DEV_USER_EMAIL;
+  if (devEmail) {
+    const name = devEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+    return { email: devEmail, name };
+  }
+  return null;
+}
 
 async function startServer() {
   await initDb();
@@ -166,44 +173,11 @@ async function startServer() {
     },
   });
 
-  const sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET || "office-secret-key",
-    resave: true,
-    saveUninitialized: true,
-    proxy: true,
-    cookie: {
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
+  // Attach IAP-authenticated user to every request
+  app.use((req: any, _res: any, next: any) => {
+    req.user = getIAPUser(req.headers);
+    next();
   });
-
-  app.use(cookieParser());
-  app.use(sessionMiddleware);
-  
-  // JWT Authentication Middleware
-  const authenticateToken = (req: any, res: any, next: any) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (token) {
-      jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-        if (!err) {
-          req.user = user;
-        }
-        next();
-      });
-    } else if (req.session?.user) {
-      req.user = req.session.user;
-      next();
-    } else {
-      next();
-    }
-  };
-
-  app.use(authenticateToken);
-  io.engine.use(sessionMiddleware);
 
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 
@@ -211,133 +185,8 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
-  app.get("/api/auth/google/url", (req, res) => {
-    const origin = (req.query.origin as string) || APP_URL;
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !origin) {
-      console.error("OAuth configuration missing:", { GOOGLE_CLIENT_ID: !!GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: !!GOOGLE_CLIENT_SECRET, origin: !!origin });
-      return res.status(500).json({ error: "OAuth not configured" });
-    }
-    
-    // Normalize origin: remove trailing slash
-    const normalizedOrigin = origin.replace(/\/$/, "");
-    const redirectUri = `${normalizedOrigin}/auth/google/callback`;
-    
-    // Use 'state' to pass the redirectUri back to ourselves
-    const state = Buffer.from(JSON.stringify({ redirectUri })).toString('base64');
-
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "openid email profile",
-      access_type: "offline",
-      prompt: "consent",
-      state: state,
-    }).toString()}`;
-    res.json({ url });
-  });
-
-  app.get("/auth/google/callback", async (req, res) => {
-    const { code, state } = req.query;
-    if (!code || typeof code !== "string") return res.status(400).send("No code provided");
-
-    try {
-      let redirectUri = `${APP_URL?.replace(/\/$/, "")}/auth/google/callback`;
-      
-      if (state && typeof state === "string") {
-        try {
-          const decodedState = JSON.parse(Buffer.from(state, 'base64').toString());
-          if (decodedState.redirectUri) {
-            redirectUri = decodedState.redirectUri;
-          }
-        } catch (e) {
-          console.error("Failed to parse state:", e);
-        }
-      }
-      
-      console.log("Exchanging code for tokens with redirectUri:", redirectUri);
-
-      const { tokens } = await client.getToken({
-        code,
-        redirect_uri: redirectUri,
-      });
-      client.setCredentials(tokens);
-
-      const ticket = await client.verifyIdToken({
-        idToken: tokens.id_token!,
-        audience: GOOGLE_CLIENT_ID,
-      });
-      const payload = ticket.getPayload();
-
-      if (payload && payload.email) {
-        const user = {
-          email: payload.email,
-          name: payload.name || payload.email.split("@")[0],
-          picture: payload.picture,
-        };
-        
-        (req.session as any).user = user;
-        
-        // Generate JWT
-        const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
-        
-        console.log("User authenticated:", payload.email);
-
-        req.session.save((err) => {
-          if (err) {
-            console.error("Session save error:", err);
-            return res.status(500).send("Failed to save session");
-          }
-          
-          res.send(`
-            <html>
-              <body>
-                <script>
-                  console.log("Auth success, setting storage signal");
-                  localStorage.setItem('office_auth_token', '${token}');
-                  localStorage.setItem('office_auth_success', Date.now().toString());
-                  
-                  if (window.opener) {
-                    console.log("Sending message to opener");
-                    window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', token: '${token}' }, '*');
-                  }
-                  
-                  setTimeout(() => {
-                    console.log("Closing popup");
-                    window.close();
-                  }, 500);
-                </script>
-                <div style="text-align: center; padding-top: 50px; font-family: sans-serif;">
-                  <h2>Authentication Successful!</h2>
-                  <p>This window will close automatically.</p>
-                </div>
-              </body>
-            </html>
-          `);
-        });
-      } else {
-        res.status(400).send("Failed to get user info");
-      }
-    } catch (error) {
-      console.error("OAuth Error:", error);
-      res.status(500).send("Authentication failed");
-    }
-  });
-
-  app.get("/api/auth/debug", (req, res) => {
-    res.json({
-      hasSession: !!req.session,
-      hasSessionUser: !!(req.session as any).user,
-      hasReqUser: !!(req as any).user,
-      user: (req as any).user || (req.session as any).user || null,
-      cookie: req.headers.cookie || "no cookie header",
-      authHeader: req.headers.authorization || "no auth header",
-      sessionID: req.sessionID,
-    });
-  });
-
   app.get("/api/auth/me", (req, res) => {
-    res.json((req as any).user || (req.session as any).user || null);
+    res.json((req as any).user || null);
   });
 
   app.get("/api/player", async (req, res) => {
@@ -373,12 +222,8 @@ async function startServer() {
     res.json({ ok: true });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) console.error("Logout error:", err);
-      res.clearCookie("connect.sid");
-      res.json({ success: true });
-    });
+  app.post("/api/auth/logout", (_req, res) => {
+    res.json({ success: true });
   });
 
   // Player state grouped by room
@@ -405,19 +250,7 @@ const getDeterministicColor = (name: string) => {
 
 io.on("connection", (socket) => {
     console.log("New socket connection attempt:", socket.id);
-    const token = socket.handshake.auth?.token;
-    let user = (socket.request as any).session?.user;
-
-    if (token) {
-      try {
-        user = jwt.verify(token, JWT_SECRET);
-        console.log("Socket authenticated via JWT:", user.email);
-      } catch (e) {
-        console.error("Socket JWT verification failed:", e);
-      }
-    } else if (user) {
-      console.log("Socket authenticated via session:", user.email);
-    }
+    const user = getIAPUser((socket.request as any).headers);
 
     if (!user) {
       console.log("Unauthorized connection attempt");
