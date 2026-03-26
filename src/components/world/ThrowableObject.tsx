@@ -43,8 +43,8 @@ export function ThrowableObject({
     <group ref={groupRef}>
       {children}
 
-      {/* Object name — always visible */}
-      {label && (
+      {/* Object name — visible when nearby (idle) or while held */}
+      {label && (isNear || phase === 'held') && (
         <Billboard position={[0, 0.75, 0]}>
           <Text
             fontSize={0.2}
