@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem } from '../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
   // Paper Clicker State
@@ -34,6 +34,8 @@ interface GameState {
   setAvatarConfig: (config: AvatarConfig) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;
+  roomInfo: RoomInfo | null;
+  setRoomInfo: (info: RoomInfo | null) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -111,4 +113,6 @@ export const useGameStore = create<GameState>((set) => ({
   },
   roomLayout: [],
   setRoomLayout: (layout) => set({ roomLayout: layout }),
+  roomInfo: null,
+  setRoomInfo: (info) => set({ roomInfo: info }),
 }));

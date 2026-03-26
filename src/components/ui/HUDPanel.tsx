@@ -1,5 +1,6 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, LogOut, Layout } from 'lucide-react';
+import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Trophy, Settings, Shield } from 'lucide-react';
+import { RoomRole } from '../../types';
 
 interface HUDPanelProps {
   playerCount: number;
@@ -8,6 +9,9 @@ interface HUDPanelProps {
   paperReams: number;
   onExitRoom: () => void;
   onCustomizeOffice: () => void;
+  myRole?: RoomRole | null;
+  onOpenLeaderboard?: () => void;
+  onOpenAdminPanel?: () => void;
 }
 
 export const HUDPanel = ({
@@ -17,6 +21,9 @@ export const HUDPanel = ({
   paperReams,
   onExitRoom,
   onCustomizeOffice,
+  myRole,
+  onOpenLeaderboard,
+  onOpenAdminPanel,
 }: HUDPanelProps) => (
   <div className="flex flex-col gap-4">
     <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl max-w-xs">
@@ -53,9 +60,31 @@ export const HUDPanel = ({
             Room: <span className="text-indigo-400">{currentRoom}</span>
           </span>
         </div>
+        {myRole && (
+          <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span>Role: <span className="text-white font-bold">{myRole}</span></span>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 pt-6 border-t border-white/10 flex flex-col gap-2">
+        <button
+          onClick={onOpenLeaderboard}
+          className="w-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+        >
+          <Trophy className="w-3 h-3" />
+          Leaderboard
+        </button>
+        {(myRole === 'admin' || myRole === 'manager') && (
+          <button
+            onClick={onOpenAdminPanel}
+            className="w-full bg-slate-500/20 hover:bg-slate-500/40 border border-slate-500/50 text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+          >
+            <Settings className="w-3 h-3" />
+            Manage Office
+          </button>
+        )}
         <button
           onClick={onCustomizeOffice}
           className="w-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"

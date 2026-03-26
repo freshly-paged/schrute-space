@@ -57,3 +57,27 @@ export interface ChatMessage {
   text: string;
   time: number;
 }
+
+export type RoomRole = 'admin' | 'manager' | 'worker';
+
+export interface RoomMember {
+  email: string;
+  name: string | null;
+  role: RoomRole;
+  isOnline?: boolean;
+}
+
+export interface RoomInfo {
+  roomId: string;
+  maxWorkers: number;
+  myRole: RoomRole | null;
+  memberCount: number;
+  members: RoomMember[];
+}
+
+export interface MyRoom {
+  roomId: string;
+  role: RoomRole;
+  maxWorkers: number;
+  onlineCount: number;
+}

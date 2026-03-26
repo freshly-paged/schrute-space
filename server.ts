@@ -26,9 +26,28 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS room_layouts (
       room_id TEXT PRIMARY KEY,
       layout  JSONB NOT NULL DEFAULT '[]'
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      room_id     TEXT PRIMARY KEY,
+      max_workers INTEGER NOT NULL DEFAULT 20,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS room_members (
+      room_id   TEXT NOT NULL REFERENCES rooms(room_id) ON DELETE CASCADE,
+      email     TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+      role      TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'worker')),
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (room_id, email)
     )
   `);
 }
@@ -143,6 +162,77 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
   return updated;
 }
 
+// ── Room Management ───────────────────────────────────────────────────────────
+
+type RoomRole = 'admin' | 'manager' | 'worker';
+
+async function ensureRoom(roomId: string): Promise<boolean> {
+  const result = await pool.query(
+    `INSERT INTO rooms (room_id) VALUES ($1) ON CONFLICT (room_id) DO NOTHING RETURNING room_id`,
+    [roomId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+async function getMemberRole(roomId: string, email: string): Promise<RoomRole | null> {
+  const { rows } = await pool.query(
+    'SELECT role FROM room_members WHERE room_id = $1 AND email = $2',
+    [roomId, email]
+  );
+  return (rows[0]?.role as RoomRole) ?? null;
+}
+
+async function upsertMember(roomId: string, email: string, role: RoomRole): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_members (room_id, email, role) VALUES ($1, $2, $3)
+     ON CONFLICT (room_id, email) DO UPDATE SET role = EXCLUDED.role`,
+    [roomId, email, role]
+  );
+}
+
+async function removeMember(roomId: string, email: string): Promise<void> {
+  await pool.query(
+    'DELETE FROM room_members WHERE room_id = $1 AND email = $2',
+    [roomId, email]
+  );
+}
+
+async function getRoomMembers(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.email, u.display_name as name, rm.role, rm.joined_at as "joinedAt"
+     FROM room_members rm
+     LEFT JOIN users u ON u.email = rm.email
+     WHERE rm.room_id = $1
+     ORDER BY rm.joined_at ASC`,
+    [roomId]
+  );
+  return rows;
+}
+
+async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.email, u.display_name as name, rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
+     FROM room_members rm
+     LEFT JOIN users u ON u.email = rm.email
+     WHERE rm.room_id = $1
+     ORDER BY u.paper_reams DESC NULLS LAST`,
+    [roomId]
+  );
+  return rows;
+}
+
+async function getMyRooms(email: string): Promise<Array<{ roomId: string; role: string; maxWorkers: number }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.room_id as "roomId", rm.role, r.max_workers as "maxWorkers"
+     FROM room_members rm
+     JOIN rooms r ON r.room_id = rm.room_id
+     WHERE rm.email = $1
+     ORDER BY rm.joined_at ASC`,
+    [email]
+  );
+  return rows;
+}
+
 // ── Config ───────────────────────────────────────────────────────────────────
 
 // Extract user from IAP-injected headers (X-Goog-Authenticated-User-Email).
@@ -186,11 +276,8 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
-  app.get("/api/auth/me", async (req, res) => {
-    const iapUser = (req as any).user;
-    if (!iapUser?.email) return res.json(null);
-    const storedName = await getUserName(iapUser.email);
-    return res.json({ ...iapUser, name: storedName ?? iapUser.name });
+  app.get("/api/auth/me", (req, res) => {
+    res.json((req as any).user || null);
   });
 
   app.get("/api/player", async (req, res) => {
@@ -224,6 +311,169 @@ async function startServer() {
     await saveRoomLayout(roomId, layout as FurnitureItem[]);
     io.to(roomId).emit("roomLayoutUpdated", layout);
     res.json({ ok: true });
+  });
+
+  app.get("/api/my-rooms", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const myRooms = await getMyRooms(user.email);
+      const withOnline = myRooms.map(r => ({
+        ...r,
+        onlineCount: Object.keys(rooms[r.roomId] ?? {}).length
+      }));
+      res.json(withOnline);
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/room/:roomId/leaderboard", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const leaderboard = await getRoomLeaderboard(req.params.roomId);
+      res.json(leaderboard);
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/room/:roomId/members", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    try {
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(
+        Object.values(rooms[roomId] ?? {}).map((p: any) => p.email)
+      );
+      const onlineVisitors = Object.values(rooms[roomId] ?? {})
+        .filter((p: any) => !members.some(m => m.email === p.email))
+        .map((p: any) => ({ email: p.email, name: p.name, role: null, isOnline: true }));
+      res.json({
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) })),
+        visitors: onlineVisitors
+      });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/room/:roomId/members", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    const { email, role = 'worker' } = req.body ?? {};
+    if (!email || typeof email !== 'string' || !['worker', 'manager'].includes(role)) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (!requesterRole || requesterRole === 'worker') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (role === 'manager' && requesterRole !== 'admin') {
+        return res.status(403).json({ error: "Only admins can assign managers" });
+      }
+      const [membersResult, roomRow] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM room_members WHERE room_id = $1', [roomId]),
+        pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [roomId])
+      ]);
+      const currentCount = parseInt(membersResult.rows[0].count);
+      const maxWorkers = roomRow.rows[0]?.max_workers ?? 20;
+      if (currentCount >= maxWorkers) {
+        return res.status(409).json({ error: "Room is at capacity" });
+      }
+      // Ensure user row exists before adding to room_members
+      await pool.query(
+        `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
+        [email]
+      );
+      await upsertMember(roomId, email, role as RoomRole);
+      // If the new member is currently online, give them a desk and notify them
+      const onlineEntry = Object.entries(rooms[roomId] ?? {})
+        .find(([, p]: [string, any]) => p.email === email);
+      if (onlineEntry) {
+        const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name);
+        io.to(roomId).emit("roomLayoutUpdated", layout);
+        io.to(onlineEntry[0]).emit("roleChanged", { newRole: role });
+      }
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
+      io.to(roomId).emit("roomMembersUpdated", {
+        roomId,
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/room/:roomId/members/:memberEmail", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId, memberEmail } = req.params;
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (!requesterRole || requesterRole === 'worker') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const targetRole = await getMemberRole(roomId, memberEmail);
+      if (targetRole === 'admin') {
+        return res.status(403).json({ error: "Cannot remove admin" });
+      }
+      if (!targetRole) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      // Remove their desk from layout
+      const layout = await getRoomLayout(roomId);
+      const filtered = layout.filter(
+        f => !(f.type === 'desk' && (f as DeskItem).config.ownerEmail === memberEmail)
+      );
+      if (filtered.length !== layout.length) {
+        await saveRoomLayout(roomId, filtered);
+        io.to(roomId).emit("roomLayoutUpdated", filtered);
+      }
+      await removeMember(roomId, memberEmail);
+      // Notify the removed member's socket if online
+      const removedEntry = Object.entries(rooms[roomId] ?? {})
+        .find(([, p]: [string, any]) => p.email === memberEmail);
+      if (removedEntry) {
+        io.to(removedEntry[0]).emit("roleChanged", { newRole: null });
+      }
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
+      io.to(roomId).emit("roomMembersUpdated", {
+        roomId,
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/room/:roomId", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    const { maxWorkers } = req.body ?? {};
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (requesterRole !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (typeof maxWorkers !== 'number' || maxWorkers < 1 || maxWorkers > 100) {
+        return res.status(400).json({ error: "maxWorkers must be 1-100" });
+      }
+      await pool.query('UPDATE rooms SET max_workers = $1 WHERE room_id = $2', [maxWorkers, roomId]);
+      io.to(roomId).emit("roomMembersUpdated", { roomId, maxWorkers });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.post("/api/auth/logout", (_req, res) => {
@@ -274,14 +524,30 @@ io.on("connection", (socket) => {
     }
     activeUsers.set(user.email, socket.id);
 
-    socket.on("joinRoom", (data: { roomId: string }) => {
+    socket.on("joinRoom", async (data: { roomId: string }) => {
       const { roomId } = data;
       const room = roomId || "default";
       socket.join(room);
-      
+
       if (!rooms[room]) {
         rooms[room] = {};
       }
+
+      // Ensure user row exists and update display name
+      await pool.query(
+        `INSERT INTO users (email, display_name) VALUES ($1, $2)
+         ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name`,
+        [user.email, user.name]
+      );
+
+      // Ensure room exists; first joiner becomes admin
+      const isNewRoom = await ensureRoom(room);
+      if (isNewRoom) {
+        await upsertMember(room, user.email, 'admin');
+      }
+
+      const role = await getMemberRole(room, user.email);
+      const isMember = role !== null;
 
       // Initialize player using authenticated user info
       const name = user.name;
@@ -313,17 +579,44 @@ io.on("connection", (socket) => {
           socket.to(room).emit("newPlayer", rooms[room][socket.id]);
         }
       });
-      // Ensure player has a desk and send the full room layout
-      ensurePlayerDesk(room, user.email, user.name).then((layout) => {
-        socket.emit("roomLayoutLoaded", layout);
-        // Broadcast updated layout to others in the room
-        socket.to(room).emit("roomLayoutUpdated", layout);
-      }).catch((err) => {
-        console.error("Error ensuring player desk:", err);
-        socket.emit("roomLayoutLoaded", []);
-      });
-      
-      console.log(`User ${socket.id} joined room: ${room}`);
+
+      // Desk: only for members (admin/manager/worker)
+      if (isMember) {
+        ensurePlayerDesk(room, user.email, user.name).then((layout) => {
+          socket.emit("roomLayoutLoaded", layout);
+          socket.to(room).emit("roomLayoutUpdated", layout);
+        }).catch((err) => {
+          console.error("Error ensuring player desk:", err);
+          socket.emit("roomLayoutLoaded", []);
+        });
+      } else {
+        // Visitor: send current layout read-only, no desk created
+        getRoomLayout(room).then((layout) => {
+          socket.emit("roomLayoutLoaded", layout);
+        });
+      }
+
+      // Send room info to joining socket
+      try {
+        const [members, roomRow] = await Promise.all([
+          getRoomMembers(room),
+          pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [room])
+        ]);
+        const onlineEmails = new Set(
+          Object.values(rooms[room]).map((p: any) => p.email)
+        );
+        socket.emit("roomInfoLoaded", {
+          roomId: room,
+          maxWorkers: roomRow.rows[0]?.max_workers ?? 20,
+          myRole: role,
+          memberCount: members.length,
+          members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+        });
+      } catch (err) {
+        console.error("Error loading room info:", err);
+      }
+
+      console.log(`User ${socket.id} joined room: ${room} (role: ${role ?? 'visitor'})`);
     });
 
     socket.on("savePaperReams", (count: number) => {

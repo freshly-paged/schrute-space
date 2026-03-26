@@ -15,6 +15,8 @@ import { PomodoroUI } from './components/ui/PomodoroUI';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
+import { RoomLeaderboard } from './components/ui/RoomLeaderboard';
+import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -42,8 +44,10 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
@@ -55,6 +59,8 @@ export default function App() {
   const handleExitRoom = () => {
     localStorage.removeItem('last_room');
     setCurrentRoom(null);
+    setShowLeaderboard(false);
+    setShowAdminPanel(false);
     window.location.search = '';
   };
 
@@ -198,6 +204,9 @@ export default function App() {
               paperReams={paperReams}
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
+              myRole={roomInfo?.myRole ?? null}
+              onOpenLeaderboard={() => setShowLeaderboard(v => !v)}
+              onOpenAdminPanel={() => setShowAdminPanel(v => !v)}
             />
           </motion.div>
         )}
@@ -226,6 +235,18 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showLeaderboard && currentRoom && (
+        <div className="absolute top-6 right-[22rem] z-10">
+          <RoomLeaderboard roomId={currentRoom} onClose={() => setShowLeaderboard(false)} />
+        </div>
+      )}
+
+      {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
+        <div className="absolute top-48 left-6 z-10">
+          <RoomAdminPanel roomId={currentRoom} onClose={() => setShowAdminPanel(false)} />
+        </div>
+      )}
 
       <KeyboardControls map={keyboardMap}>
         <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 2, 5], fov: 50 }}>

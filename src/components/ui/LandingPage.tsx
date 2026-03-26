@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG } from '../../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, MyRoom } from '../../types';
 import { AvatarPreview } from './AvatarPreview';
 
 export const PixelBeet = () => (
@@ -22,6 +22,14 @@ interface LandingPageProps {
 
 export const LandingPage = ({ onJoin, userName, onLogout, onCustomize, avatarConfig, paperReams }: LandingPageProps) => {
   const [roomInput, setRoomInput] = useState('');
+  const [myRooms, setMyRooms] = useState<MyRoom[]>([]);
+
+  useEffect(() => {
+    fetch('/api/my-rooms', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setMyRooms(d); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#3d2b1f] flex flex-col items-center justify-center p-4 font-pixel text-white overflow-hidden">
@@ -92,6 +100,36 @@ export const LandingPage = ({ onJoin, userName, onLogout, onCustomize, avatarCon
                 </ul>
               </div>
             </div>
+
+            {myRooms.length > 0 && (
+              <div className="bg-[#cbd5e1] p-4 pixel-border mb-2">
+                <h2 className="text-xs mb-3 text-indigo-900">MY OFFICES:</h2>
+                <div className="flex flex-col gap-2">
+                  {myRooms.map(room => (
+                    <button
+                      key={room.roomId}
+                      type="button"
+                      onClick={() => onJoin(room.roomId)}
+                      className="flex items-center justify-between w-full bg-white pixel-border px-3 py-2 hover:bg-indigo-50 transition-colors text-left"
+                    >
+                      <span className="text-[10px] font-bold text-indigo-900 uppercase">{room.roomId}</span>
+                      <div className="flex items-center gap-2">
+                        {room.onlineCount > 0 && (
+                          <span className="text-[8px] text-emerald-600">{room.onlineCount} online</span>
+                        )}
+                        <span className={`text-[8px] px-2 py-0.5 pixel-border ${
+                          room.role === 'admin' ? 'bg-amber-200 text-amber-900' :
+                          room.role === 'manager' ? 'bg-indigo-200 text-indigo-900' :
+                          'bg-slate-200 text-slate-700'
+                        }`}>
+                          {room.role.toUpperCase()}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <form
               onSubmit={(e) => {
