@@ -125,8 +125,9 @@ async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<
 }
 
 function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
-  const columns = [-11.5, -9.0, -6.5, -4.0, -1.5];
-  const rows = [-16.5, -14.0, -11.5, -9.0, -6.5, -4.0, -2.5];
+  // Working area: X[-9, +23], Z[-9, +23]. Use a safe inner grid with margin from walls.
+  const columns = [0, 3.5, 7, 10.5, 14, 17.5, 21];
+  const rows = [-6, -3, 0, 3, 6, 9, 12, 15, 18];
   for (const z of rows) {
     for (const x of columns) {
       const occupied = existingDesks.some((d) => {
@@ -137,8 +138,8 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
       if (!occupied) return [x, 0, z];
     }
   }
-  // Fallback: random position in the sales floor area
-  return [Math.random() * 12 - 12, 0, Math.random() * 16 - 18];
+  // Fallback: random within working area inner bounds
+  return [Math.random() * 28 - 6, 0, Math.random() * 28 - 6];
 }
 
 async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
@@ -540,9 +541,10 @@ io.on("connection", (socket) => {
         [user.email, user.name]
       );
 
-      // Ensure room exists; first joiner becomes admin
-      const isNewRoom = await ensureRoom(room);
-      if (isNewRoom) {
+      // Ensure room exists; first joiner (or first joiner with no existing members) becomes admin
+      await ensureRoom(room);
+      const existingMembers = await getRoomMembers(room);
+      if (existingMembers.length === 0) {
         await upsertMember(room, user.email, 'admin');
       }
 
