@@ -101,19 +101,16 @@ export function useThrowable({
       else if (!near && store.nearThrowableId === id) store.setNearThrowable(null);
 
     } else if (phaseRef.current === 'held') {
-      const camDir = new THREE.Vector3();
-      rfState.camera.getWorldDirection(camDir);
-      camDir.y = 0;
-      camDir.normalize();
-      const right = new THREE.Vector3()
-        .crossVectors(new THREE.Vector3(0, 1, 0), camDir)
-        .normalize();
+      // Use the player mesh's own rotation (set by LocalPlayer, which tracks camera
+      // direction when holding) so the object stays glued to the player regardless
+      // of how the camera orbits.
+      const facingY = playerGroup ? playerGroup.rotation.y : 0;
+      const facingDir = new THREE.Vector3(Math.sin(facingY), 0, Math.cos(facingY));
       posRef.current
         .copy(playerPos)
-        .addScaledVector(camDir, 0.7)
-        .addScaledVector(right, -0.35)
+        .addScaledVector(facingDir, 0.6)
         .setY(playerPos.y + 0.9);
-      groupRef.current.rotation.set(0, Math.atan2(camDir.x, camDir.z), 0);
+      groupRef.current.rotation.set(0, facingY, 0);
 
     } else if (phaseRef.current === 'thrown') {
       velRef.current.y -= GRAVITY * delta;
