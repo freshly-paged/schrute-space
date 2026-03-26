@@ -40,6 +40,7 @@ export const LocalPlayer = ({
   const controlsRef = useRef<any>(null);
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
+  const prevInteractRef = useRef(false);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -131,8 +132,30 @@ export const LocalPlayer = ({
 
     setIsMoving(forward || backward || left || right);
 
+    // Edge-triggered interact (single keypress, not held)
+    const interactEdge = interact && !prevInteractRef.current;
+    prevInteractRef.current = interact;
+
+    // Throwable object interactions take priority over desk interactions
+    let interactConsumed = false;
+    if (interactEdge) {
+      const { heldObjectId, nearThrowableId, pickUpObject, throwObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
+        // Throw in the camera's forward direction with a fixed upward arc
+        const camDir = new THREE.Vector3();
+        state.camera.getWorldDirection(camDir);
+        camDir.y = 0;
+        camDir.normalize();
+        throwObject([camDir.x * 10, 5, camDir.z * 10]);
+        interactConsumed = true;
+      } else if (nearThrowableId !== null) {
+        pickUpObject(nearThrowableId);
+        interactConsumed = true;
+      }
+    }
+
     // Desk interaction — block if desk is occupied by another player
-    if (interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
+    if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');
     }
 

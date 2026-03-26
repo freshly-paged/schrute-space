@@ -4,6 +4,7 @@ import { WorkingArea } from './working-area/WorkingArea';
 import { BreakRoom } from './break-room/BreakRoom';
 import { ConferenceRoom } from './conference-room/ConferenceRoom';
 import { ManagersOffice } from './managers-office/ManagersOffice';
+import { DundieAward } from './managers-office/props/DundieAward';
 
 export const OfficeEnvironment = () => (
   <group>
@@ -35,5 +36,6 @@ export const OfficeEnvironment = () => (
     <BreakRoom />
     <ConferenceRoom />
     <ManagersOffice />
+    <DundieAward />
   </group>
 );
