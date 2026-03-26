@@ -770,6 +770,11 @@ io.on("connection", (socket) => {
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
+    // Log the exact error from express.static so we know why files are failing
+    app.use((err: any, req: any, res: any, _next: any) => {
+      console.error(`[static error] ${req.method} ${req.url} → code=${err.code} status=${err.status} msg=${err.message}`);
+      res.status(err.status || 500).send(err.message || 'Internal Server Error');
+    });
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
