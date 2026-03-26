@@ -39,10 +39,45 @@ export interface DeskItem extends FurnitureItem {
   config: { ownerEmail: string; ownerName: string; model?: string; [key: string]: unknown };
 }
 
+/** Describes a room's footprint for the 2D floor-plan editor.
+ *  Export one of these as `FLOOR_PLAN_RECT` from each room component so the
+ *  customization page automatically stays in sync with the 3D layout. */
+export interface FloorPlanRect {
+  label: string;
+  /** World-space X/Z min/max (same coordinate system as Three.js positions). */
+  x1: number; z1: number;
+  x2: number; z2: number;
+  color: string;
+}
+
 export interface ChatMessage {
   id: string;
   playerId: string;
   playerName: string;
   text: string;
   time: number;
+}
+
+export type RoomRole = 'admin' | 'manager' | 'worker';
+
+export interface RoomMember {
+  email: string;
+  name: string | null;
+  role: RoomRole;
+  isOnline?: boolean;
+}
+
+export interface RoomInfo {
+  roomId: string;
+  maxWorkers: number;
+  myRole: RoomRole | null;
+  memberCount: number;
+  members: RoomMember[];
+}
+
+export interface MyRoom {
+  roomId: string;
+  role: RoomRole;
+  maxWorkers: number;
+  onlineCount: number;
 }

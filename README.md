@@ -1,3 +1,6 @@
+## Hosted at
+https://schrute-space.com (with restricted access).
+
 ## Local Development
 
 ### Prerequisites
@@ -19,7 +22,7 @@
    Required values in `.env.local`:
    - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
    - `SESSION_SECRET` — any random string
-   - `APP_URL` — `http://localhost:3000`
+   - `APP_URL` — `http://localhost:8080`
    - `GEMINI_API_KEY` — Google Gemini API key
    - `DATABASE_URL` — `postgresql://postgres:password@localhost:5432/schrute_space`
 
@@ -38,7 +41,7 @@
    ```bash
    npm run dev
    ```
-   App runs at `http://localhost:3000`.
+   App runs at `http://localhost:8080`.
 
 
 ### Stopping / restarting the database

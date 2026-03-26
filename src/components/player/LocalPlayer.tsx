@@ -4,15 +4,17 @@ import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-thre
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
-import { getDeterministicColor } from '../../constants';
+import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
-const BOUNDS = 24;
-const CAMERA_BOUNDS = 24.5;
+const BOUNDS = 22;
+const CAMERA_BOUNDS = 22;
+// Camera is clamped within this radius of the player to prevent wall-clipping
+const CAMERA_ORBIT_LEASH = 13;
 
 interface LocalPlayerProps {
   socket: Socket | null;
@@ -29,14 +31,20 @@ export const LocalPlayer = ({
   playerName,
   players,
 }: LocalPlayerProps) => {
-  const [position, setPosition] = useState<[number, number, number]>([0, 0, 0]);
-  const [rotation, setRotation] = useState<[number, number, number]>([0, 0, 0]);
+  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
+  const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
   const [isMoving, setIsMoving] = useState(false);
   const [, get] = useKeyboardControls();
   const playerRef = useRef<THREE.Group>(null);
+  const rollGroupRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
+  const prevInteractRef = useRef(false);
+  const prevComputerRef = useRef(false);
+  const prevDropRef = useRef(false);
+  const cameraRayRef = useRef(new THREE.Ray());
+  const cameraHitRef = useRef(new THREE.Vector3());
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -47,6 +55,7 @@ export const LocalPlayer = ({
   const startTimer = useGameStore((state) => state.startTimer);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
+  const isInspecting = useGameStore((state) => state.inspectedObject !== null);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
@@ -77,7 +86,7 @@ export const LocalPlayer = ({
 
   // Emit focus state to server whenever it changes
   useEffect(() => {
-    if (!socket?.connected) return;
+    if (!socket) return;
     socket.emit('playerFocusUpdate', {
       isFocused: isTimerActive,
       focusProgress,
@@ -105,8 +114,12 @@ export const LocalPlayer = ({
           desk.position[2] + chairDir.z * 2.5,
         ];
         const ejectedRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
-        setPosition(ejectedPos);
-        setRotation(ejectedRot);
+        positionRef.current = ejectedPos;
+        rotationRef.current = ejectedRot;
+        if (playerRef.current) {
+          playerRef.current.position.set(...ejectedPos);
+          playerRef.current.rotation.set(0, ejectedRot[1], 0);
+        }
         socket?.connected &&
           socket.emit('playerMovement', { position: ejectedPos, rotation: ejectedRot, isRolling: false, rollTimer: 0 });
       }
@@ -117,15 +130,66 @@ export const LocalPlayer = ({
     const rawKeys = get();
 
     const keys =
-      isChatFocused || isTimerActive
-        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
+      isChatFocused || isTimerActive || isInspecting
+        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, computer: false, drop: false }
         : rawKeys;
-    const { forward, backward, left, right, jump, interact } = keys;
+    const { forward, backward, left, right, jump, interact, computer, drop } = keys;
 
     setIsMoving(forward || backward || left || right);
 
-    // Desk interaction — block if desk is occupied by another player
-    if (interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
+    // Edge-triggered interact / drop (single keypress, not held)
+    const interactEdge = interact && !prevInteractRef.current;
+    prevInteractRef.current = interact;
+    const computerEdge = computer && !prevComputerRef.current;
+    prevComputerRef.current = computer;
+    const dropEdge = drop && !prevDropRef.current;
+    prevDropRef.current = drop;
+
+    // Throwable object interactions take priority over desk interactions
+    let interactConsumed = false;
+    if (interactEdge) {
+      const { heldObjectId, nearThrowableId, pickUpObject, dropObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
+        // Put down at player feet
+        dropObject();
+        interactConsumed = true;
+      } else if (nearThrowableId !== null) {
+        pickUpObject(nearThrowableId);
+        interactConsumed = true;
+      }
+    }
+
+    // Throw in the camera's forward direction with a fixed upward arc
+    if (dropEdge) {
+      const { heldObjectId, throwObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
+        const camDir = new THREE.Vector3();
+        state.camera.getWorldDirection(camDir);
+        camDir.y = 0;
+        camDir.normalize();
+        throwObject([camDir.x * 10, 5, camDir.z * 10]);
+      }
+    }
+
+    // Whiteboard interaction — open leaderboard
+    if (!interactConsumed && interactEdge) {
+      const { nearWhiteboard, setShowLeaderboard } = useGameStore.getState();
+      if (nearWhiteboard) {
+        setShowLeaderboard(true);
+        interactConsumed = true;
+      }
+    }
+
+    // Computer (F) — open interface at own desk
+    if (computerEdge && nearestDeskId) {
+      const { user, setShowComputerInterface } = useGameStore.getState();
+      if (user && nearestDeskId === `desk-${user.email}`) {
+        setShowComputerInterface(true);
+      }
+    }
+
+    // Desk focus (E) — unchanged, works at any desk including own
+    if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');
     }
 
@@ -144,13 +208,17 @@ export const LocalPlayer = ({
         ];
         const targetRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
 
-        const currentVec = new THREE.Vector3(...position);
+        const currentVec = new THREE.Vector3(...positionRef.current);
         const targetVec = new THREE.Vector3(...targetPos);
         if (currentVec.distanceTo(targetVec) > 0.01) {
           const lerped = currentVec.lerp(targetVec, 0.1);
           const lerpedPos: [number, number, number] = [lerped.x, lerped.y, lerped.z];
-          setPosition(lerpedPos);
-          setRotation(targetRot);
+          positionRef.current = lerpedPos;
+          rotationRef.current = targetRot;
+          if (playerRef.current) {
+            playerRef.current.position.set(...lerpedPos);
+            playerRef.current.rotation.set(0, targetRot[1], 0);
+          }
           socket?.connected &&
             socket.emit('playerMovement', {
               position: lerpedPos,
@@ -169,8 +237,8 @@ export const LocalPlayer = ({
     physics.processRoll(forward, () => socket?.emit('chatMessage', 'PARKOUR!'));
     physics.tickRoll(delta);
 
-    let newPosition: [number, number, number] = [...position];
-    let newRotation: [number, number, number] = [...rotation];
+    let newPosition: [number, number, number] = [...positionRef.current];
+    let newRotation: [number, number, number] = [...rotationRef.current];
 
     newPosition[1] = physics.applyGravity(newPosition, delta, deskBoxes);
 
@@ -199,15 +267,25 @@ export const LocalPlayer = ({
     newPosition[2] = Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]));
 
     const hasMoved =
-      newPosition[0] !== position[0] ||
-      newPosition[1] !== position[1] ||
-      newPosition[2] !== position[2] ||
-      newRotation[1] !== rotation[1] ||
+      newPosition[0] !== positionRef.current[0] ||
+      newPosition[1] !== positionRef.current[1] ||
+      newPosition[2] !== positionRef.current[2] ||
+      newRotation[1] !== rotationRef.current[1] ||
       physics.isRolling.current;
 
     if (hasMoved) {
-      setPosition(newPosition);
-      setRotation(newRotation);
+      positionRef.current = newPosition;
+      rotationRef.current = newRotation;
+      if (playerRef.current) {
+        playerRef.current.position.set(...newPosition);
+        playerRef.current.rotation.set(0, newRotation[1], 0);
+      }
+      if (rollGroupRef.current) {
+        rollGroupRef.current.rotation.set(
+          physics.isRolling.current ? -Math.PI * 2 * (physics.rollTimer.current / 0.5) : 0,
+          0, 0
+        );
+      }
       socket?.connected &&
         socket.emit('playerMovement', {
           position: newPosition,
@@ -224,13 +302,46 @@ export const LocalPlayer = ({
         Math.max(0, Math.min(7.5, newPosition[1] + 1.5)),
         Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]))
       );
-      controlsRef.current.target.lerp(target, 0.1);
+      controlsRef.current.target.lerp(target, 0.08);
       controlsRef.current.update();
 
       const cam = state.camera;
-      cam.position.x = Math.max(-CAMERA_BOUNDS, Math.min(CAMERA_BOUNDS, cam.position.x));
-      cam.position.z = Math.max(-CAMERA_BOUNDS, Math.min(CAMERA_BOUNDS, cam.position.z));
+      // Clamp camera both within world bounds AND within orbit leash of player
+      // to prevent clipping through walls.
+      const px = newPosition[0];
+      const pz = newPosition[2];
+      cam.position.x = Math.max(
+        Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+      );
+      cam.position.z = Math.max(
+        Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+      );
       cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+
+      // Camera wall-clip prevention: ray-cast from orbit target toward the camera.
+      // If any wall box sits between them, pull the camera in to just in front of it.
+      const orbitTarget = controlsRef.current.target;
+      cameraRayRef.current.origin.copy(orbitTarget);
+      cameraRayRef.current.direction
+        .subVectors(cam.position, orbitTarget)
+        .normalize();
+      const desiredDist = cam.position.distanceTo(orbitTarget);
+      let nearestDist = desiredDist;
+
+      for (const box of COLLISION_BOXES) {
+        if (cameraRayRef.current.intersectBox(box, cameraHitRef.current)) {
+          const d = orbitTarget.distanceTo(cameraHitRef.current);
+          if (d < nearestDist) nearestDist = d;
+        }
+      }
+
+      if (nearestDist < desiredDist) {
+        cam.position
+          .copy(orbitTarget)
+          .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
+      }
     }
   });
 
@@ -239,22 +350,16 @@ export const LocalPlayer = ({
       <OrbitControls
         ref={controlsRef}
         enablePan={false}
-        maxPolarAngle={Math.PI / 2.1}
-        minPolarAngle={Math.PI / 3}
+        maxPolarAngle={Math.PI / 2.2}
+        minPolarAngle={Math.PI / 4}
         maxDistance={15}
-        minDistance={2}
+        minDistance={3}
+        enableDamping
+        dampingFactor={0.08}
         makeDefault
       />
-      <group ref={playerRef} name="localPlayer" position={position} rotation={[0, rotation[1], 0]}>
-        <group
-          rotation={[
-            physics.isRolling.current
-              ? -Math.PI * 2 * (physics.rollTimer.current / 0.5)
-              : 0,
-            0,
-            0,
-          ]}
-        >
+      <group ref={playerRef} name="localPlayer">
+        <group ref={rollGroupRef}>
           <CharacterAvatar
             color={playerColor}
             isMoving={isMoving}

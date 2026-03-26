@@ -1,7 +1,22 @@
 import { create } from 'zustand';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem } from '../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
+  // Throwable object system
+  nearThrowableId: string | null;       // ID of the throwable the player is close enough to pick up
+  heldObjectId: string | null;          // ID of the object the player is currently holding
+  throwVelocity: [number, number, number]; // launch velocity set by LocalPlayer on throw
+  setNearThrowable: (id: string | null) => void;
+  pickUpObject: (id: string) => void;
+  throwObject: (velocity: [number, number, number]) => void;
+  dropObject: () => void;
+  droppingObjectId: string | null;
+
+  // Inspect mode
+  inspectedObject: { id: string; label: string; description: string; assetKey: string } | null;
+  openInspect: (data: { id: string; label: string; description: string; assetKey: string }) => void;
+  closeInspect: () => void;
+
   // Paper Clicker State
   paperReams: number;
   addPaper: (amount: number) => void;
@@ -25,18 +40,43 @@ interface GameState {
   activeDeskId: string | null;
   isChatFocused: boolean;
   occupiedDeskIds: string[];
-  user: { id: string, email: string, name: string, picture: string } | null;
+  user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
   setOccupiedDeskIds: (ids: string[]) => void;
-  setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
+  setUser: (user: { email: string; name: string; picture?: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;
+  roomInfo: RoomInfo | null;
+  setRoomInfo: (info: RoomInfo | null) => void;
+
+  nearWhiteboard: boolean;
+  setNearWhiteboard: (near: boolean) => void;
+  showLeaderboard: boolean;
+  setShowLeaderboard: (show: boolean) => void;
+
+  showAdminPanel: boolean;
+  setShowAdminPanel: (show: boolean) => void;
+  showComputerInterface: boolean;
+  setShowComputerInterface: (show: boolean) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
+  nearThrowableId: null,
+  heldObjectId: null,
+  throwVelocity: [0, 0, 0],
+  droppingObjectId: null,
+  setNearThrowable: (id) => set({ nearThrowableId: id }),
+  pickUpObject: (id) => set({ heldObjectId: id, nearThrowableId: null }),
+  throwObject: (velocity) => set({ heldObjectId: null, throwVelocity: velocity, droppingObjectId: null }),
+  dropObject: () => set((s) => ({ heldObjectId: null, droppingObjectId: s.heldObjectId })),
+
+  inspectedObject: null,
+  openInspect: (data) => set({ inspectedObject: data, nearThrowableId: null }),
+  closeInspect: () => set({ inspectedObject: null }),
+
   paperReams: 0,
   addPaper: (amount) => set((state) => ({ paperReams: state.paperReams + amount })),
   setPaperReams: (count) => set({ paperReams: count }),
@@ -60,11 +100,13 @@ export const useGameStore = create<GameState>((set) => ({
   togglePause: () => set((state) => ({ isTimerPaused: !state.isTimerPaused })),
   tickTimer: () => set((state) => {
     if (state.isTimerPaused || !state.isTimerActive) return {};
-    if (state.timeLeft <= 0) {
+
+    const newTimeLeft = state.timeLeft - 1;
+
+    if (newTimeLeft <= 0) {
       return { isTimerActive: false, isTimerPaused: false, timeLeft: 0, activeDeskId: null };
     }
 
-    const newTimeLeft = state.timeLeft - 1;
     let newPaperReams = state.paperReams;
     let newSessionPaper = state.sessionPaper;
     let newLastPaperEarnedAt = state.lastPaperEarnedAt;
@@ -109,4 +151,16 @@ export const useGameStore = create<GameState>((set) => ({
   },
   roomLayout: [],
   setRoomLayout: (layout) => set({ roomLayout: layout }),
+  roomInfo: null,
+  setRoomInfo: (info) => set({ roomInfo: info }),
+
+  nearWhiteboard: false,
+  setNearWhiteboard: (near) => set({ nearWhiteboard: near }),
+  showLeaderboard: false,
+  setShowLeaderboard: (show) => set({ showLeaderboard: show }),
+
+  showAdminPanel: false,
+  setShowAdminPanel: (show) => set({ showAdminPanel: show }),
+  showComputerInterface: false,
+  setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 }));
