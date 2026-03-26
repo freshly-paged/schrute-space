@@ -5,6 +5,7 @@ import { BreakRoom } from './break-room/BreakRoom';
 import { ConferenceRoom } from './conference-room/ConferenceRoom';
 import { ManagersOffice } from './managers-office/ManagersOffice';
 import { DundieAward } from './managers-office/props/DundieAward';
+import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 
 export const OfficeEnvironment = () => (
   <group>
@@ -37,5 +38,6 @@ export const OfficeEnvironment = () => (
     <ConferenceRoom />
     <ManagersOffice />
     <DundieAward />
+    <DwightBobblehead />
   </group>
 );
