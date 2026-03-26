@@ -34,7 +34,7 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
         .catch(() => {});
     };
     doFetch();
-    const interval = setInterval(doFetch, 60_000);
+    const interval = setInterval(doFetch, 5 * 60_000);
     return () => clearInterval(interval);
   }, [roomId]);
 
