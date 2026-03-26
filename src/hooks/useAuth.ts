@@ -14,8 +14,14 @@ export function useAuth() {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       const data = await res.json();
+      if (data?.email) {
+        console.log('[auth] authenticated as', data.email);
+      } else {
+        console.log('[auth] not authenticated');
+      }
       setUser(data || null);
-    } catch {
+    } catch (err) {
+      console.error('[auth] /api/auth/me fetch failed:', err);
       // network error — keep current state
     } finally {
       setAuthLoading(false);
@@ -27,6 +33,7 @@ export function useAuth() {
   }, [checkAuth]);
 
   const logout = async () => {
+    console.log('[auth] logging out');
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     setUser(null);
     // Clear IAP session cookie
