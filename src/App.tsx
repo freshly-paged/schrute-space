@@ -28,6 +28,7 @@ const KEYBOARD_MAP = [
   { name: 'right', keys: ['ArrowRight', 'KeyD'] },
   { name: 'jump', keys: ['Space'] },
   { name: 'interact', keys: ['KeyE'] },
+  { name: 'drop', keys: ['KeyG'] },
 ];
 
 function getRoomFromURL(): string | null {

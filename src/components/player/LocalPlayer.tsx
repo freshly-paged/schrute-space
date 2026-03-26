@@ -41,6 +41,7 @@ export const LocalPlayer = ({
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
   const prevInteractRef = useRef(false);
+  const prevDropRef = useRef(false);
   const cameraRayRef = useRef(new THREE.Ray());
   const cameraHitRef = useRef(new THREE.Vector3());
 
@@ -129,31 +130,41 @@ export const LocalPlayer = ({
 
     const keys =
       isChatFocused || isTimerActive || isInspecting
-        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
+        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, drop: false }
         : rawKeys;
-    const { forward, backward, left, right, jump, interact } = keys;
+    const { forward, backward, left, right, jump, interact, drop } = keys;
 
     setIsMoving(forward || backward || left || right);
 
-    // Edge-triggered interact (single keypress, not held)
+    // Edge-triggered interact / drop (single keypress, not held)
     const interactEdge = interact && !prevInteractRef.current;
     prevInteractRef.current = interact;
+    const dropEdge = drop && !prevDropRef.current;
+    prevDropRef.current = drop;
 
     // Throwable object interactions take priority over desk interactions
     let interactConsumed = false;
     if (interactEdge) {
-      const { heldObjectId, nearThrowableId, pickUpObject, throwObject } = useGameStore.getState();
+      const { heldObjectId, nearThrowableId, pickUpObject, dropObject } = useGameStore.getState();
       if (heldObjectId !== null) {
-        // Throw in the camera's forward direction with a fixed upward arc
+        // Put down at player feet
+        dropObject();
+        interactConsumed = true;
+      } else if (nearThrowableId !== null) {
+        pickUpObject(nearThrowableId);
+        interactConsumed = true;
+      }
+    }
+
+    // Throw in the camera's forward direction with a fixed upward arc
+    if (dropEdge) {
+      const { heldObjectId, throwObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
         const camDir = new THREE.Vector3();
         state.camera.getWorldDirection(camDir);
         camDir.y = 0;
         camDir.normalize();
         throwObject([camDir.x * 10, 5, camDir.z * 10]);
-        interactConsumed = true;
-      } else if (nearThrowableId !== null) {
-        pickUpObject(nearThrowableId);
-        interactConsumed = true;
       }
     }
 

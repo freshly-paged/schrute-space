@@ -25,10 +25,11 @@ import * as THREE from 'three';
 import { useGameStore } from '../store/useGameStore';
 import { COLLISION_BOXES } from '../constants';
 
-const GRAVITY = 12;   // units/s²
-const FLOOR_Y = 0.15;
-const CEIL_Y  = 7.5;
-const BOUNCE  = 0.35; // velocity retained after each wall/ceiling bounce
+const GRAVITY      = 12;   // units/s²
+const FLOOR_Y      = 0.15;
+const CEIL_Y       = 7.5;
+const BOUNCE       = 0.35; // velocity retained after each wall/ceiling bounce
+const PLAY_BOUNDS  = 22;   // matches LocalPlayer BOUNDS — hard perimeter safety net
 
 export type ThrowablePhase = 'idle' | 'held' | 'thrown';
 
@@ -76,8 +77,14 @@ export function useThrowable({
     setPhase(next);
   }, []);
 
-  // Track the previous heldObjectId to detect the moment this object is thrown
+  // Track the previous heldObjectId to detect the moment this object is thrown/dropped
   const prevHeldIdRef = useRef<string | null>(null);
+
+  // Pre-allocated vectors for swept collision — avoids per-frame GC
+  const sweepRayRef  = useRef(new THREE.Ray());
+  const sweepHitRef  = useRef(new THREE.Vector3());
+  const sweepDirRef  = useRef(new THREE.Vector3());
+  const prevPosRef   = useRef(new THREE.Vector3());
 
   // [F] to inspect — only fires when this object is idle and the player is nearby
   useEffect(() => {
@@ -108,8 +115,17 @@ export function useThrowable({
     if (heldObjectId === id && phaseRef.current === 'idle') {
       transitionTo('held');
     } else if (prevHeldIdRef.current === id && heldObjectId !== id && phaseRef.current === 'held') {
-      velRef.current.set(throwVelocity[0], throwVelocity[1], throwVelocity[2]);
-      transitionTo('thrown');
+      if (store.droppingObjectId === id) {
+        // Put down: place at player feet, no physics
+        posRef.current.copy(playerPos).setY(FLOOR_Y);
+        restPosRef.current.copy(posRef.current);
+        restRotRef.current.set(0, groupRef.current.rotation.y, 0);
+        store.setNearThrowable(null); // clear so prompt reappears after a step away
+        transitionTo('idle');
+      } else {
+        velRef.current.set(throwVelocity[0], throwVelocity[1], throwVelocity[2]);
+        transitionTo('thrown');
+      }
     }
     prevHeldIdRef.current = heldObjectId;
 
@@ -136,29 +152,52 @@ export function useThrowable({
       groupRef.current.rotation.set(0, facingY, 0);
 
     } else if (phaseRef.current === 'thrown') {
+      prevPosRef.current.copy(posRef.current);
+
       velRef.current.y -= GRAVITY * delta;
       posRef.current.addScaledVector(velRef.current, delta);
       groupRef.current.rotation.y += 10 * delta;
       groupRef.current.rotation.x += 6 * delta;
 
-      // ── Wall / ceiling collision ────────────────────────────────────────
-      // For each wall box that contains the object's position, resolve on the
-      // minimum-penetration axis: push the point outside and reflect+damp
-      // the velocity component along that axis.
+      // ── Swept collision (handles thin walls / tunneling) ────────────────
+      // Cast a ray from the previous position to the new one. If it crosses
+      // any wall box, reflect and damp the velocity at the crossing point.
+      sweepDirRef.current.subVectors(posRef.current, prevPosRef.current);
+      const sweepLen = sweepDirRef.current.length();
+      if (sweepLen > 0.001) {
+        sweepRayRef.current.origin.copy(prevPosRef.current);
+        sweepRayRef.current.direction.copy(sweepDirRef.current).divideScalar(sweepLen);
+
+        for (const box of COLLISION_BOXES) {
+          if (!sweepRayRef.current.intersectBox(box, sweepHitRef.current)) continue;
+          if (sweepHitRef.current.distanceTo(prevPosRef.current) > sweepLen) continue;
+
+          // Determine which face was hit to get the surface normal
+          const eps = 0.02;
+          const h = sweepHitRef.current;
+          let nx = 0, ny = 0, nz = 0;
+          if      (h.x <= box.min.x + eps) nx = -1;
+          else if (h.x >= box.max.x - eps) nx =  1;
+          else if (h.y <= box.min.y + eps) ny = -1;
+          else if (h.y >= box.max.y - eps) ny =  1;
+          else if (h.z <= box.min.z + eps) nz = -1;
+          else                             nz =  1;
+
+          // Push back to just outside the wall, reflect+damp velocity
+          posRef.current.copy(h);
+          if (nx !== 0) { posRef.current.x += nx * 0.05; velRef.current.x = Math.sign(nx) * Math.abs(velRef.current.x) * BOUNCE; }
+          if (ny !== 0) { posRef.current.y += ny * 0.05; velRef.current.y = Math.sign(ny) * Math.abs(velRef.current.y) * BOUNCE; }
+          if (nz !== 0) { posRef.current.z += nz * 0.05; velRef.current.z = Math.sign(nz) * Math.abs(velRef.current.z) * BOUNCE; }
+        }
+      }
+
+      // ── Penetration fallback (slow-moving objects already inside a box) ─
       for (const box of COLLISION_BOXES) {
         if (!box.containsPoint(posRef.current)) continue;
-
-        const dxMax = box.max.x - posRef.current.x;
-        const dxMin = posRef.current.x - box.min.x;
-        const dyMax = box.max.y - posRef.current.y;
-        const dyMin = posRef.current.y - box.min.y;
-        const dzMax = box.max.z - posRef.current.z;
-        const dzMin = posRef.current.z - box.min.z;
-
-        const minX = Math.min(dxMax, dxMin);
-        const minY = Math.min(dyMax, dyMin);
-        const minZ = Math.min(dzMax, dzMin);
-
+        const dxMax = box.max.x - posRef.current.x, dxMin = posRef.current.x - box.min.x;
+        const dyMax = box.max.y - posRef.current.y, dyMin = posRef.current.y - box.min.y;
+        const dzMax = box.max.z - posRef.current.z, dzMin = posRef.current.z - box.min.z;
+        const minX = Math.min(dxMax, dxMin), minY = Math.min(dyMax, dyMin), minZ = Math.min(dzMax, dzMin);
         if (minX <= minY && minX <= minZ) {
           if (dxMax < dxMin) { posRef.current.x = box.max.x; velRef.current.x =  Math.abs(velRef.current.x) * BOUNCE; }
           else               { posRef.current.x = box.min.x; velRef.current.x = -Math.abs(velRef.current.x) * BOUNCE; }
@@ -170,6 +209,12 @@ export function useThrowable({
           else               { posRef.current.z = box.min.z; velRef.current.z = -Math.abs(velRef.current.z) * BOUNCE; }
         }
       }
+
+      // ── Hard perimeter clamp — final safety net ─────────────────────────
+      if (posRef.current.x < -PLAY_BOUNDS) { posRef.current.x = -PLAY_BOUNDS; velRef.current.x =  Math.abs(velRef.current.x) * BOUNCE; }
+      if (posRef.current.x >  PLAY_BOUNDS) { posRef.current.x =  PLAY_BOUNDS; velRef.current.x = -Math.abs(velRef.current.x) * BOUNCE; }
+      if (posRef.current.z < -PLAY_BOUNDS) { posRef.current.z = -PLAY_BOUNDS; velRef.current.z =  Math.abs(velRef.current.z) * BOUNCE; }
+      if (posRef.current.z >  PLAY_BOUNDS) { posRef.current.z =  PLAY_BOUNDS; velRef.current.z = -Math.abs(velRef.current.z) * BOUNCE; }
 
       // Ceiling
       if (posRef.current.y >= CEIL_Y) {

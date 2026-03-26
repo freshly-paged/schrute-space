@@ -9,6 +9,8 @@ interface GameState {
   setNearThrowable: (id: string | null) => void;
   pickUpObject: (id: string) => void;
   throwObject: (velocity: [number, number, number]) => void;
+  dropObject: () => void;
+  droppingObjectId: string | null;
 
   // Inspect mode
   inspectedObject: { id: string; label: string; description: string; assetKey: string } | null;
@@ -53,9 +55,11 @@ export const useGameStore = create<GameState>((set) => ({
   nearThrowableId: null,
   heldObjectId: null,
   throwVelocity: [0, 0, 0],
+  droppingObjectId: null,
   setNearThrowable: (id) => set({ nearThrowableId: id }),
   pickUpObject: (id) => set({ heldObjectId: id, nearThrowableId: null }),
-  throwObject: (velocity) => set({ heldObjectId: null, throwVelocity: velocity }),
+  throwObject: (velocity) => set({ heldObjectId: null, throwVelocity: velocity, droppingObjectId: null }),
+  dropObject: () => set((s) => ({ heldObjectId: null, droppingObjectId: s.heldObjectId })),
 
   inspectedObject: null,
   openInspect: (data) => set({ inspectedObject: data, nearThrowableId: null }),

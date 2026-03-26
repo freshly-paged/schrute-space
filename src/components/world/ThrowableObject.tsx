@@ -85,7 +85,7 @@ export function ThrowableObject({
             outlineWidth={0.01}
             outlineColor="black"
           >
-            [E] Throw
+            [E] Put Down    [G] Throw
           </Text>
         </Billboard>
       )}
