@@ -16,7 +16,7 @@ function DundieModel() {
 
 export function DundieAward() {
   return (
-    <ThrowableObject id="dundie" restPosition={REST_POSITION} restRotation={REST_ROTATION}>
+    <ThrowableObject id="dundie" label="Dundie Award" restPosition={REST_POSITION} restRotation={REST_ROTATION}>
       <Suspense fallback={null}>
         <DundieModel />
       </Suspense>

@@ -23,9 +23,12 @@ import { useRef, useState, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../store/useGameStore';
+import { COLLISION_BOXES } from '../constants';
 
-const GRAVITY = 12;  // units/s²
+const GRAVITY = 12;   // units/s²
 const FLOOR_Y = 0.15;
+const CEIL_Y  = 7.5;
+const BOUNCE  = 0.35; // velocity retained after each wall/ceiling bounce
 
 export type ThrowablePhase = 'idle' | 'held' | 'thrown';
 
@@ -118,6 +121,43 @@ export function useThrowable({
       groupRef.current.rotation.y += 10 * delta;
       groupRef.current.rotation.x += 6 * delta;
 
+      // ── Wall / ceiling collision ────────────────────────────────────────
+      // For each wall box that contains the object's position, resolve on the
+      // minimum-penetration axis: push the point outside and reflect+damp
+      // the velocity component along that axis.
+      for (const box of COLLISION_BOXES) {
+        if (!box.containsPoint(posRef.current)) continue;
+
+        const dxMax = box.max.x - posRef.current.x;
+        const dxMin = posRef.current.x - box.min.x;
+        const dyMax = box.max.y - posRef.current.y;
+        const dyMin = posRef.current.y - box.min.y;
+        const dzMax = box.max.z - posRef.current.z;
+        const dzMin = posRef.current.z - box.min.z;
+
+        const minX = Math.min(dxMax, dxMin);
+        const minY = Math.min(dyMax, dyMin);
+        const minZ = Math.min(dzMax, dzMin);
+
+        if (minX <= minY && minX <= minZ) {
+          if (dxMax < dxMin) { posRef.current.x = box.max.x; velRef.current.x =  Math.abs(velRef.current.x) * BOUNCE; }
+          else               { posRef.current.x = box.min.x; velRef.current.x = -Math.abs(velRef.current.x) * BOUNCE; }
+        } else if (minY <= minX && minY <= minZ) {
+          if (dyMax < dyMin) { posRef.current.y = box.max.y; velRef.current.y =  Math.abs(velRef.current.y) * BOUNCE; }
+          else               { posRef.current.y = box.min.y; velRef.current.y = -Math.abs(velRef.current.y) * BOUNCE; }
+        } else {
+          if (dzMax < dzMin) { posRef.current.z = box.max.z; velRef.current.z =  Math.abs(velRef.current.z) * BOUNCE; }
+          else               { posRef.current.z = box.min.z; velRef.current.z = -Math.abs(velRef.current.z) * BOUNCE; }
+        }
+      }
+
+      // Ceiling
+      if (posRef.current.y >= CEIL_Y) {
+        posRef.current.y = CEIL_Y;
+        velRef.current.y = -Math.abs(velRef.current.y) * BOUNCE;
+      }
+
+      // ── Floor landing ───────────────────────────────────────────────────
       if (posRef.current.y <= FLOOR_Y) {
         posRef.current.y = FLOOR_Y;
         restPosRef.current.copy(posRef.current);

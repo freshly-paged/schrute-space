@@ -18,6 +18,7 @@ import { useThrowable } from '../../hooks/useThrowable';
 
 interface ThrowableObjectProps {
   id: string;
+  label?: string;
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
@@ -26,6 +27,7 @@ interface ThrowableObjectProps {
 
 export function ThrowableObject({
   id,
+  label,
   restPosition,
   restRotation,
   proximityRadius,
@@ -37,14 +39,31 @@ export function ThrowableObject({
     <group ref={groupRef}>
       {children}
 
-      {phase === 'idle' && isNear && (
+      {/* Object name — always visible */}
+      {label && (
         <Billboard position={[0, 0.75, 0]}>
           <Text
-            fontSize={0.22}
+            fontSize={0.2}
             color="white"
             anchorX="center"
             anchorY="middle"
             outlineWidth={0.012}
+            outlineColor="black"
+          >
+            {label}
+          </Text>
+        </Billboard>
+      )}
+
+      {/* Interaction prompt — shown below the label when in range or held */}
+      {phase === 'idle' && isNear && (
+        <Billboard position={[0, 0.5, 0]}>
+          <Text
+            fontSize={0.18}
+            color="#aaaaaa"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.01}
             outlineColor="black"
           >
             [E] Pick Up
@@ -53,13 +72,13 @@ export function ThrowableObject({
       )}
 
       {phase === 'held' && (
-        <Billboard position={[0, 0.75, 0]}>
+        <Billboard position={[0, 0.5, 0]}>
           <Text
-            fontSize={0.22}
+            fontSize={0.18}
             color="#FFD700"
             anchorX="center"
             anchorY="middle"
-            outlineWidth={0.012}
+            outlineWidth={0.01}
             outlineColor="black"
           >
             [E] Throw
