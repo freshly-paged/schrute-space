@@ -53,6 +53,7 @@ export const LocalPlayer = ({
   const startTimer = useGameStore((state) => state.startTimer);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
+  const isInspecting = useGameStore((state) => state.inspectedObject !== null);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
@@ -127,7 +128,7 @@ export const LocalPlayer = ({
     const rawKeys = get();
 
     const keys =
-      isChatFocused || isTimerActive
+      isChatFocused || isTimerActive || isInspecting
         ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
         : rawKeys;
     const { forward, backward, left, right, jump, interact } = keys;

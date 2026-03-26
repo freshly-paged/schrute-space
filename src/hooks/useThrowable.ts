@@ -19,7 +19,7 @@
  * re-renders for UI prompts.
  */
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../store/useGameStore';
@@ -34,6 +34,9 @@ export type ThrowablePhase = 'idle' | 'held' | 'thrown';
 
 interface UseThrowableOptions {
   id: string;
+  label?: string;
+  description?: string;
+  assetKey?: string;
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
@@ -47,6 +50,9 @@ interface UseThrowableResult {
 
 export function useThrowable({
   id,
+  label = id,
+  description = '',
+  assetKey = '',
   restPosition,
   restRotation = [0, 0, 0],
   proximityRadius = 2.5,
@@ -72,6 +78,20 @@ export function useThrowable({
 
   // Track the previous heldObjectId to detect the moment this object is thrown
   const prevHeldIdRef = useRef<string | null>(null);
+
+  // [F] to inspect — only fires when this object is idle and the player is nearby
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyF') return;
+      const store = useGameStore.getState();
+      if (store.nearThrowableId !== id) return;
+      if (phaseRef.current !== 'idle') return;
+      if (store.isChatFocused || store.isTimerActive || store.inspectedObject !== null) return;
+      store.openInspect({ id, label, description, assetKey });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [id, label, description, assetKey]);
 
   useFrame((rfState, delta) => {
     if (!groupRef.current) return;

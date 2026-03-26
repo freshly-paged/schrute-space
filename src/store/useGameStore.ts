@@ -10,6 +10,11 @@ interface GameState {
   pickUpObject: (id: string) => void;
   throwObject: (velocity: [number, number, number]) => void;
 
+  // Inspect mode
+  inspectedObject: { id: string; label: string; description: string; assetKey: string } | null;
+  openInspect: (data: { id: string; label: string; description: string; assetKey: string }) => void;
+  closeInspect: () => void;
+
   // Paper Clicker State
   paperReams: number;
   addPaper: (amount: number) => void;
@@ -51,6 +56,10 @@ export const useGameStore = create<GameState>((set) => ({
   setNearThrowable: (id) => set({ nearThrowableId: id }),
   pickUpObject: (id) => set({ heldObjectId: id, nearThrowableId: null }),
   throwObject: (velocity) => set({ heldObjectId: null, throwVelocity: velocity }),
+
+  inspectedObject: null,
+  openInspect: (data) => set({ inspectedObject: data, nearThrowableId: null }),
+  closeInspect: () => set({ inspectedObject: null }),
 
   paperReams: 0,
   addPaper: (amount) => set((state) => ({ paperReams: state.paperReams + amount })),

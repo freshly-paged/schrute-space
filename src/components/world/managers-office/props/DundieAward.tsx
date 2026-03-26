@@ -16,7 +16,14 @@ function DundieModel() {
 
 export function DundieAward() {
   return (
-    <ThrowableObject id="dundie" label="Dundie Award" restPosition={REST_POSITION} restRotation={REST_ROTATION}>
+    <ThrowableObject
+      id="dundie"
+      label="Dundie Award"
+      description="Presented annually to the most exceptional employee of the Scranton branch. This year's winner was selected by Michael Scott himself after extensive deliberation, a short musical number, and one dramatic pause."
+      assetKey="dundie"
+      restPosition={REST_POSITION}
+      restRotation={REST_ROTATION}
+    >
       <Suspense fallback={null}>
         <DundieModel />
       </Suspense>

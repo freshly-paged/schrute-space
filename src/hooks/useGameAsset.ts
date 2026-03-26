@@ -23,6 +23,9 @@ const ASSETS = {
 
 export type AssetKey = keyof typeof ASSETS;
 
+/** Path map — use this to look up a GLB path by key outside of R3F contexts. */
+export const ASSET_PATHS: Record<AssetKey, string> = ASSETS;
+
 export function useGameAsset(key: AssetKey) {
   return useGLTF(ASSETS[key]);
 }

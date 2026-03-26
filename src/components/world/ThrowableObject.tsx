@@ -19,6 +19,8 @@ import { useThrowable } from '../../hooks/useThrowable';
 interface ThrowableObjectProps {
   id: string;
   label?: string;
+  description?: string;
+  assetKey?: string;
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
@@ -28,12 +30,14 @@ interface ThrowableObjectProps {
 export function ThrowableObject({
   id,
   label,
+  description,
+  assetKey,
   restPosition,
   restRotation,
   proximityRadius,
   children,
 }: ThrowableObjectProps) {
-  const { groupRef, phase, isNear } = useThrowable({ id, restPosition, restRotation, proximityRadius });
+  const { groupRef, phase, isNear } = useThrowable({ id, label, description, assetKey, restPosition, restRotation, proximityRadius });
 
   return (
     <group ref={groupRef}>
@@ -66,7 +70,7 @@ export function ThrowableObject({
             outlineWidth={0.01}
             outlineColor="black"
           >
-            [E] Pick Up
+            [E] Pick Up    [F] Inspect
           </Text>
         </Billboard>
       )}
