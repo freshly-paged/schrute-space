@@ -14,12 +14,6 @@ export function useAuth() {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       const data = await res.json();
-      if (data?.needsProfileFetch && !sessionStorage.getItem('profileFetchAttempted')) {
-        sessionStorage.setItem('profileFetchAttempted', '1');
-        window.location.href = `/api/auth/fetch-profile?return=${encodeURIComponent(window.location.href)}`;
-        return;
-      }
-
       setUser(data || null);
     } catch {
       // network error — keep current state
