@@ -572,6 +572,16 @@ io.on("connection", (socket) => {
         room: room
       };
 
+      // Remove stale entries for the same email before sending currentPlayers.
+      // The old socket's disconnect event fires asynchronously (after DB awaits above),
+      // so this prevents the reconnecting player from seeing their own ghost avatar.
+      for (const socketId of Object.keys(rooms[room])) {
+        if (rooms[room][socketId].email === user.email && socketId !== socket.id) {
+          delete rooms[room][socketId];
+          socket.to(room).emit("playerDisconnected", socketId);
+        }
+      }
+
       // Send current players in this room to the new player
       socket.emit("currentPlayers", rooms[room]);
 
