@@ -4,7 +4,7 @@ import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-thre
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
-import { getDeterministicColor } from '../../constants';
+import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
@@ -41,6 +41,8 @@ export const LocalPlayer = ({
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
   const prevInteractRef = useRef(false);
+  const cameraRayRef = useRef(new THREE.Ray());
+  const cameraHitRef = useRef(new THREE.Vector3());
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -285,6 +287,29 @@ export const LocalPlayer = ({
         Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
       );
       cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+
+      // Camera wall-clip prevention: ray-cast from orbit target toward the camera.
+      // If any wall box sits between them, pull the camera in to just in front of it.
+      const orbitTarget = controlsRef.current.target;
+      cameraRayRef.current.origin.copy(orbitTarget);
+      cameraRayRef.current.direction
+        .subVectors(cam.position, orbitTarget)
+        .normalize();
+      const desiredDist = cam.position.distanceTo(orbitTarget);
+      let nearestDist = desiredDist;
+
+      for (const box of COLLISION_BOXES) {
+        if (cameraRayRef.current.intersectBox(box, cameraHitRef.current)) {
+          const d = orbitTarget.distanceTo(cameraHitRef.current);
+          if (d < nearestDist) nearestDist = d;
+        }
+      }
+
+      if (nearestDist < desiredDist) {
+        cam.position
+          .copy(orbitTarget)
+          .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
+      }
     }
   });
 
