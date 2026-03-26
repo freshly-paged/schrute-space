@@ -26,9 +26,6 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
   await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT
-  `);
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS room_layouts (
       room_id TEXT PRIMARY KEY,
       layout  JSONB NOT NULL DEFAULT '[]'
@@ -68,18 +65,6 @@ async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
   return config as AvatarConfig;
 }
 
-async function getUserName(email: string): Promise<string | null> {
-  const { rows } = await pool.query('SELECT name FROM users WHERE email = $1', [email]);
-  return rows[0]?.name ?? null;
-}
-
-async function saveUserName(email: string, name: string): Promise<void> {
-  await pool.query(
-    `INSERT INTO users (email, name) VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name`,
-    [email, name]
-  );
-}
 
 async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
   await pool.query(
@@ -201,23 +186,6 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
-  app.get("/api/auth/fetch-profile", (req, res) => {
-    const iapUser = (req as any).user || (req.session as any).user;
-    if (!iapUser?.email) return res.status(401).send("Not authenticated");
-    if (!GOOGLE_CLIENT_ID || !APP_URL) return res.status(500).send("OAuth not configured");
-    const returnUrl = typeof req.query.return === 'string' ? req.query.return : '/';
-    const redirectUri = `${APP_URL.replace(/\/$/, "")}/auth/google/callback`;
-    const state = Buffer.from(JSON.stringify({ redirectUri, returnUrl, profileFetch: true })).toString('base64');
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "openid email profile",
-      state,
-    }).toString()}`;
-    res.redirect(url);
-  });
-
   app.get("/api/auth/google/url", (req, res) => {
     const origin = (req.query.origin as string) || APP_URL;
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !origin) {
@@ -332,14 +300,8 @@ async function startServer() {
     });
   });
 
-  app.get("/api/auth/me", async (req, res) => {
-    const iapUser = (req as any).user || (req.session as any).user;
-    if (!iapUser?.email) return res.json(null);
-    const storedName = await getUserName(iapUser.email);
-    if (!storedName && !process.env.DEV_USER_EMAIL) {
-      return res.json({ ...iapUser, needsProfileFetch: true });
-    }
-    return res.json({ ...iapUser, name: storedName ?? iapUser.name });
+  app.get("/api/auth/me", (req, res) => {
+    res.json((req as any).user || null);
   });
 
   app.get("/api/player", async (req, res) => {
