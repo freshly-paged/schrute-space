@@ -8,6 +8,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { WORKING_AREA_BOUNDS, DESK_SPAWN_MARGIN, DESK_SPAWN_SPACING } from "./src/officeLayout.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,21 +126,29 @@ async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<
 }
 
 function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
-  // Working area: X[-9, +23], Z[-9, +23]. Use a safe inner grid with margin from walls.
-  const columns = [0, 3.5, 7, 10.5, 14, 17.5, 21];
-  const rows = [-6, -3, 0, 3, 6, 9, 12, 15, 18];
+  const { x1, z1, x2, z2 } = WORKING_AREA_BOUNDS;
+  const xMin = x1 + DESK_SPAWN_MARGIN;
+  const xMax = x2 - DESK_SPAWN_MARGIN;
+  const zMin = z1 + DESK_SPAWN_MARGIN;
+  const zMax = z2 - DESK_SPAWN_MARGIN;
+
+  const columns: number[] = [];
+  for (let x = xMin; x <= xMax; x += DESK_SPAWN_SPACING) columns.push(x);
+  const rows: number[] = [];
+  for (let z = zMin; z <= zMax; z += DESK_SPAWN_SPACING) rows.push(z);
+
   for (const z of rows) {
     for (const x of columns) {
       const occupied = existingDesks.some((d) => {
         const dx = d.position[0] - x;
         const dz = d.position[2] - z;
-        return Math.sqrt(dx * dx + dz * dz) < 2.5;
+        return Math.sqrt(dx * dx + dz * dz) < DESK_SPAWN_SPACING;
       });
       if (!occupied) return [x, 0, z];
     }
   }
-  // Fallback: random within working area inner bounds
-  return [Math.random() * 28 - 6, 0, Math.random() * 28 - 6];
+  // Fallback: random within inner bounds
+  return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
 async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {

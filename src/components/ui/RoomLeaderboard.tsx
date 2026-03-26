@@ -42,7 +42,7 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
 
   useEffect(() => {
     fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 60_000);
+    const interval = setInterval(fetchLeaderboard, 5 * 60_000);
     return () => clearInterval(interval);
   }, [roomId]);
 

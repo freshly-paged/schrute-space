@@ -7,14 +7,11 @@ import { Desk } from './Desk';
 import { CeilingLights } from './props/CeilingLights';
 import { Plant } from '../shared/props/Plant';
 import { PrinterStation } from './props/PrinterStation';
+import { WORKING_AREA_BOUNDS } from '../../../officeLayout';
 
-/**
- * Collision boxes for the working area props in world space.
- * WorkingArea renders at position [0,0,0], so local coords == world coords.
- */
-// Working area: X[-9, +23], Z[-9, +23] (open floor, no enclosing walls)
+// Working area occupies the open floor; bounds are defined in officeLayout.ts
 export const FLOOR_PLAN_RECT: FloorPlanRect = {
-  label: 'Working Area', x1: -9, z1: -9, x2: 23, z2: 23, color: '#fef9c3',
+  label: 'Working Area', ...WORKING_AREA_BOUNDS, color: '#fef9c3',
 };
 
 export const BEET_FARM_FLOOR_PLAN_RECT: FloorPlanRect = {
