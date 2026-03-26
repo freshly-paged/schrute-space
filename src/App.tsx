@@ -46,9 +46,8 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
@@ -207,7 +206,6 @@ export default function App() {
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
-              onOpenLeaderboard={() => setShowLeaderboard(v => !v)}
               onOpenAdminPanel={() => setShowAdminPanel(v => !v)}
             />
           </motion.div>

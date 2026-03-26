@@ -168,6 +168,15 @@ export const LocalPlayer = ({
       }
     }
 
+    // Whiteboard interaction — open leaderboard
+    if (!interactConsumed && interactEdge) {
+      const { nearWhiteboard, setShowLeaderboard } = useGameStore.getState();
+      if (nearWhiteboard) {
+        setShowLeaderboard(true);
+        interactConsumed = true;
+      }
+    }
+
     // Desk interaction — block if desk is occupied by another player
     if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');

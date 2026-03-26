@@ -51,6 +51,11 @@ interface GameState {
   setRoomLayout: (layout: FurnitureItem[]) => void;
   roomInfo: RoomInfo | null;
   setRoomInfo: (info: RoomInfo | null) => void;
+
+  nearWhiteboard: boolean;
+  setNearWhiteboard: (near: boolean) => void;
+  showLeaderboard: boolean;
+  setShowLeaderboard: (show: boolean) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -143,4 +148,9 @@ export const useGameStore = create<GameState>((set) => ({
   setRoomLayout: (layout) => set({ roomLayout: layout }),
   roomInfo: null,
   setRoomInfo: (info) => set({ roomInfo: info }),
+
+  nearWhiteboard: false,
+  setNearWhiteboard: (near) => set({ nearWhiteboard: near }),
+  showLeaderboard: false,
+  setShowLeaderboard: (show) => set({ showLeaderboard: show }),
 }));
