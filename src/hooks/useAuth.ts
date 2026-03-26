@@ -14,12 +14,6 @@ export function useAuth() {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       const data = await res.json();
-      if (data?.needsProfileFetch && !sessionStorage.getItem('profileFetchAttempted')) {
-        sessionStorage.setItem('profileFetchAttempted', '1');
-        window.location.href = `/api/auth/fetch-profile?return=${encodeURIComponent(window.location.href)}`;
-        return;
-      }
-
       setUser(data || null);
     } catch {
       // network error — keep current state
@@ -39,8 +33,5 @@ export function useAuth() {
     window.location.href = '/_gcp_iap/clear_login_cookie';
   };
 
-  // Auth is handled by IAP — login is a no-op
-  const login = () => {};
-
-  return { user, authLoading, login, logout };
+  return { user, authLoading, logout };
 }
