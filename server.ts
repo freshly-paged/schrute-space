@@ -201,10 +201,6 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
-<<<<<<< Updated upstream
-  app.get("/api/auth/me", (req, res) => {
-    res.json((req as any).user || null);
-=======
   app.get("/api/auth/fetch-profile", (req, res) => {
     const iapUser = (req as any).user || (req.session as any).user;
     if (!iapUser?.email) return res.status(401).send("Not authenticated");
@@ -344,7 +340,6 @@ async function startServer() {
       return res.json({ ...iapUser, needsProfileFetch: true });
     }
     return res.json({ ...iapUser, name: storedName ?? iapUser.name });
->>>>>>> Stashed changes
   });
 
   app.get("/api/player", async (req, res) => {
