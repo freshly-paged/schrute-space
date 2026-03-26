@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, useGLTF, Bounds, Center } from '@react-three/drei';
+import { OrbitControls, useGLTF, Bounds, Center, useBounds } from '@react-three/drei';
 import { useGameStore } from '../../store/useGameStore';
 import { ASSET_PATHS, AssetKey } from '../../hooks/useGameAsset';
 
@@ -9,6 +9,14 @@ import { ASSET_PATHS, AssetKey } from '../../hooks/useGameAsset';
 function InspectModel({ assetKey }: { assetKey: string }) {
   const path = ASSET_PATHS[assetKey as AssetKey];
   const { scene } = useGLTF(path);
+  const bounds = useBounds();
+
+  // Re-fit after model geometry is available — handles the case where the GLB
+  // wasn't already cached and Bounds measured an empty scene on first render.
+  useEffect(() => {
+    bounds.refresh().fit();
+  }, [scene, bounds]);
+
   return <primitive object={scene.clone()} />;
 }
 
