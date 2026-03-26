@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Cylinder } from '@react-three/drei';
+import { DundieAward } from './DundieAward';
 
 interface BossDeskProps {
   position: [number, number, number];
@@ -37,6 +38,9 @@ export const BossDesk = ({ position, rotation = [0, 0, 0], ownerName = '' }: Bos
     <Cylinder args={[0.07, 0.07, 0.14, 12]} position={[-0.8, 1.08, -0.3]}>
       <meshStandardMaterial color="#1565C0" />
     </Cylinder>
+
+    {/* Dundie Award — displayed proudly on the desk */}
+    <DundieAward position={[0.6, 1.01, 0.2]} rotation={[0, Math.PI / 6, 0]} scale={0.15} />
 
   </group>
 );
