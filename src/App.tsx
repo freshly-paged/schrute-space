@@ -15,6 +15,7 @@ import { PomodoroUI } from './components/ui/PomodoroUI';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
+import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -27,6 +28,7 @@ const KEYBOARD_MAP = [
   { name: 'right', keys: ['ArrowRight', 'KeyD'] },
   { name: 'jump', keys: ['Space'] },
   { name: 'interact', keys: ['KeyE'] },
+  { name: 'drop', keys: ['KeyG'] },
 ];
 
 function getRoomFromURL(): string | null {
@@ -210,6 +212,7 @@ export default function App() {
 
       <PomodoroUI />
       <PaperBurst />
+      <InspectOverlay />
 
       <button
         onClick={() => setShowUI((v) => !v)}

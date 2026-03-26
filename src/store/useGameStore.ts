@@ -2,6 +2,21 @@ import { create } from 'zustand';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem } from '../types';
 
 interface GameState {
+  // Throwable object system
+  nearThrowableId: string | null;       // ID of the throwable the player is close enough to pick up
+  heldObjectId: string | null;          // ID of the object the player is currently holding
+  throwVelocity: [number, number, number]; // launch velocity set by LocalPlayer on throw
+  setNearThrowable: (id: string | null) => void;
+  pickUpObject: (id: string) => void;
+  throwObject: (velocity: [number, number, number]) => void;
+  dropObject: () => void;
+  droppingObjectId: string | null;
+
+  // Inspect mode
+  inspectedObject: { id: string; label: string; description: string; assetKey: string } | null;
+  openInspect: (data: { id: string; label: string; description: string; assetKey: string }) => void;
+  closeInspect: () => void;
+
   // Paper Clicker State
   paperReams: number;
   addPaper: (amount: number) => void;
@@ -37,6 +52,19 @@ interface GameState {
 }
 
 export const useGameStore = create<GameState>((set) => ({
+  nearThrowableId: null,
+  heldObjectId: null,
+  throwVelocity: [0, 0, 0],
+  droppingObjectId: null,
+  setNearThrowable: (id) => set({ nearThrowableId: id }),
+  pickUpObject: (id) => set({ heldObjectId: id, nearThrowableId: null }),
+  throwObject: (velocity) => set({ heldObjectId: null, throwVelocity: velocity, droppingObjectId: null }),
+  dropObject: () => set((s) => ({ heldObjectId: null, droppingObjectId: s.heldObjectId })),
+
+  inspectedObject: null,
+  openInspect: (data) => set({ inspectedObject: data, nearThrowableId: null }),
+  closeInspect: () => set({ inspectedObject: null }),
+
   paperReams: 0,
   addPaper: (amount) => set((state) => ({ paperReams: state.paperReams + amount })),
   setPaperReams: (count) => set({ paperReams: count }),

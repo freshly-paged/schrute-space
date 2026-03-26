@@ -4,7 +4,7 @@ import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-thre
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
-import { getDeterministicColor } from '../../constants';
+import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
@@ -40,6 +40,10 @@ export const LocalPlayer = ({
   const controlsRef = useRef<any>(null);
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
+  const prevInteractRef = useRef(false);
+  const prevDropRef = useRef(false);
+  const cameraRayRef = useRef(new THREE.Ray());
+  const cameraHitRef = useRef(new THREE.Vector3());
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -50,6 +54,7 @@ export const LocalPlayer = ({
   const startTimer = useGameStore((state) => state.startTimer);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
+  const isInspecting = useGameStore((state) => state.inspectedObject !== null);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
@@ -124,15 +129,47 @@ export const LocalPlayer = ({
     const rawKeys = get();
 
     const keys =
-      isChatFocused || isTimerActive
-        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false }
+      isChatFocused || isTimerActive || isInspecting
+        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, drop: false }
         : rawKeys;
-    const { forward, backward, left, right, jump, interact } = keys;
+    const { forward, backward, left, right, jump, interact, drop } = keys;
 
     setIsMoving(forward || backward || left || right);
 
+    // Edge-triggered interact / drop (single keypress, not held)
+    const interactEdge = interact && !prevInteractRef.current;
+    prevInteractRef.current = interact;
+    const dropEdge = drop && !prevDropRef.current;
+    prevDropRef.current = drop;
+
+    // Throwable object interactions take priority over desk interactions
+    let interactConsumed = false;
+    if (interactEdge) {
+      const { heldObjectId, nearThrowableId, pickUpObject, dropObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
+        // Put down at player feet
+        dropObject();
+        interactConsumed = true;
+      } else if (nearThrowableId !== null) {
+        pickUpObject(nearThrowableId);
+        interactConsumed = true;
+      }
+    }
+
+    // Throw in the camera's forward direction with a fixed upward arc
+    if (dropEdge) {
+      const { heldObjectId, throwObject } = useGameStore.getState();
+      if (heldObjectId !== null) {
+        const camDir = new THREE.Vector3();
+        state.camera.getWorldDirection(camDir);
+        camDir.y = 0;
+        camDir.normalize();
+        throwObject([camDir.x * 10, 5, camDir.z * 10]);
+      }
+    }
+
     // Desk interaction — block if desk is occupied by another player
-    if (interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
+    if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');
     }
 
@@ -262,6 +299,29 @@ export const LocalPlayer = ({
         Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
       );
       cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+
+      // Camera wall-clip prevention: ray-cast from orbit target toward the camera.
+      // If any wall box sits between them, pull the camera in to just in front of it.
+      const orbitTarget = controlsRef.current.target;
+      cameraRayRef.current.origin.copy(orbitTarget);
+      cameraRayRef.current.direction
+        .subVectors(cam.position, orbitTarget)
+        .normalize();
+      const desiredDist = cam.position.distanceTo(orbitTarget);
+      let nearestDist = desiredDist;
+
+      for (const box of COLLISION_BOXES) {
+        if (cameraRayRef.current.intersectBox(box, cameraHitRef.current)) {
+          const d = orbitTarget.distanceTo(cameraHitRef.current);
+          if (d < nearestDist) nearestDist = d;
+        }
+      }
+
+      if (nearestDist < desiredDist) {
+        cam.position
+          .copy(orbitTarget)
+          .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
+      }
     }
   });
 
