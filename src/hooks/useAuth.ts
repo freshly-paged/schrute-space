@@ -33,8 +33,5 @@ export function useAuth() {
     window.location.href = '/_gcp_iap/clear_login_cookie';
   };
 
-  // Auth is handled by IAP — login is a no-op
-  const login = () => {};
-
-  return { user, authLoading, login, logout };
+  return { user, authLoading, logout };
 }
