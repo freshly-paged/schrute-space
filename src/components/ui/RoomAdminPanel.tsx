@@ -116,9 +116,9 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
     name ?? email.split('@')[0];
 
   return (
-    <div className="bg-[#f0f0f0] pixel-border font-pixel text-black w-80 max-h-[80vh] overflow-y-auto">
+    <div className="bg-[#f0f0f0] pixel-border font-pixel text-black w-[640px] max-h-[85vh] overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b-4 border-black bg-[#cbd5e1]">
+      <div className="flex items-center justify-between px-6 py-5 border-b-4 border-black bg-[#cbd5e1]">
         <div className="flex items-center gap-2">
           <Settings className="w-4 h-4" />
           <h2 className="text-xs uppercase font-bold">Office Management</h2>

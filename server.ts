@@ -757,10 +757,17 @@ io.on("connection", (socket) => {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, "dist");
+    const publicPath = path.join(__dirname, "public");
     console.log(`Serving static files from: ${distPath}`);
     console.log(`dist/index.html exists: ${fs.existsSync(path.join(distPath, "index.html"))}`);
+    console.log(`dist/assets/dwight_bobblehead.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dwight_bobblehead.glb"))}`);
+    console.log(`dist/assets/dundie.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dundie.glb"))}`);
+    // Serve dist/ first (hashed JS/CSS bundles), then fall back to public/ for
+    // assets that Vite copies as-is (GLB files). This ensures large binary assets
+    // are reachable even if the dist/ copy was incomplete during build.
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.use(express.static(publicPath));
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

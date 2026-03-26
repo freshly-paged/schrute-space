@@ -51,6 +51,7 @@ export const WorkingArea = () => {
           position={desk.position}
           rotation={desk.rotation}
           ownerName={String(desk.config.ownerName)}
+          ownerEmail={desk.config.ownerEmail}
         />
       ))}
     </group>

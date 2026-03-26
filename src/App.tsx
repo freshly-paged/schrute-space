@@ -17,6 +17,7 @@ import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
 import { RoomLeaderboard } from './components/ui/RoomLeaderboard';
 import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
+import { ComputerInterface } from './components/ui/ComputerInterface';
 import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
@@ -30,6 +31,7 @@ const KEYBOARD_MAP = [
   { name: 'right', keys: ['ArrowRight', 'KeyD'] },
   { name: 'jump', keys: ['Space'] },
   { name: 'interact', keys: ['KeyE'] },
+  { name: 'computer', keys: ['KeyF'] },
   { name: 'drop', keys: ['KeyG'] },
 ];
 
@@ -46,9 +48,8 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
@@ -62,6 +63,7 @@ export default function App() {
     setCurrentRoom(null);
     setShowLeaderboard(false);
     setShowAdminPanel(false);
+    setShowComputerInterface(false);
     window.location.search = '';
   };
 
@@ -206,7 +208,6 @@ export default function App() {
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
-              onOpenAdminPanel={() => setShowAdminPanel(v => !v)}
             />
           </motion.div>
         )}
@@ -243,8 +244,15 @@ export default function App() {
         </div>
       )}
 
+      {showComputerInterface && currentRoom && (
+        <ComputerInterface
+          onClose={() => setShowComputerInterface(false)}
+          onOpenAdminPanel={() => { setShowComputerInterface(false); setShowAdminPanel(true); }}
+        />
+      )}
+
       {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
-        <div className="absolute top-48 left-6 z-10">
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
           <RoomAdminPanel roomId={currentRoom} onClose={() => setShowAdminPanel(false)} />
         </div>
       )}

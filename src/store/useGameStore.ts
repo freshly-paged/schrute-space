@@ -56,6 +56,11 @@ interface GameState {
   setNearWhiteboard: (near: boolean) => void;
   showLeaderboard: boolean;
   setShowLeaderboard: (show: boolean) => void;
+
+  showAdminPanel: boolean;
+  setShowAdminPanel: (show: boolean) => void;
+  showComputerInterface: boolean;
+  setShowComputerInterface: (show: boolean) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -153,4 +158,9 @@ export const useGameStore = create<GameState>((set) => ({
   setNearWhiteboard: (near) => set({ nearWhiteboard: near }),
   showLeaderboard: false,
   setShowLeaderboard: (show) => set({ showLeaderboard: show }),
+
+  showAdminPanel: false,
+  setShowAdminPanel: (show) => set({ showAdminPanel: show }),
+  showComputerInterface: false,
+  setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 }));

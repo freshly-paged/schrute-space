@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Settings, Shield } from 'lucide-react';
+import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Shield } from 'lucide-react';
 import { RoomRole } from '../../types';
 
 interface HUDPanelProps {
@@ -10,7 +10,6 @@ interface HUDPanelProps {
   onExitRoom: () => void;
   onCustomizeOffice: () => void;
   myRole?: RoomRole | null;
-  onOpenAdminPanel?: () => void;
 }
 
 export const HUDPanel = ({
@@ -21,7 +20,6 @@ export const HUDPanel = ({
   onExitRoom,
   onCustomizeOffice,
   myRole,
-  onOpenAdminPanel,
 }: HUDPanelProps) => (
   <div className="flex flex-col gap-4">
     <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl max-w-xs">
@@ -67,15 +65,6 @@ export const HUDPanel = ({
       </div>
 
       <div className="mt-6 pt-6 border-t border-white/10 flex flex-col gap-2">
-        {(myRole === 'admin' || myRole === 'manager') && (
-          <button
-            onClick={onOpenAdminPanel}
-            className="w-full bg-slate-500/20 hover:bg-slate-500/40 border border-slate-500/50 text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
-          >
-            <Settings className="w-3 h-3" />
-            Manage Office
-          </button>
-        )}
         <button
           onClick={onCustomizeOffice}
           className="w-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
@@ -105,6 +94,7 @@ export const HUDPanel = ({
           ['Space x2', 'Dbl Jump'],
           ['W x2', 'Roll'],
           ['E', 'Focus'],
+          ['F', 'Computer'],
         ].map(([key, label]) => (
           <div key={key} className="flex items-center gap-2 text-white/80 text-[10px]">
             <kbd className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10">{key}</kbd>
