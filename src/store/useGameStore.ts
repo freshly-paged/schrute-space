@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem } from '../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
   // Throwable object system
@@ -40,15 +40,27 @@ interface GameState {
   activeDeskId: string | null;
   isChatFocused: boolean;
   occupiedDeskIds: string[];
-  user: { id: string, email: string, name: string, picture: string } | null;
+  user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
   setOccupiedDeskIds: (ids: string[]) => void;
-  setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
+  setUser: (user: { email: string; name: string; picture?: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;
+  roomInfo: RoomInfo | null;
+  setRoomInfo: (info: RoomInfo | null) => void;
+
+  nearWhiteboard: boolean;
+  setNearWhiteboard: (near: boolean) => void;
+  showLeaderboard: boolean;
+  setShowLeaderboard: (show: boolean) => void;
+
+  showAdminPanel: boolean;
+  setShowAdminPanel: (show: boolean) => void;
+  showComputerInterface: boolean;
+  setShowComputerInterface: (show: boolean) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -139,4 +151,16 @@ export const useGameStore = create<GameState>((set) => ({
   },
   roomLayout: [],
   setRoomLayout: (layout) => set({ roomLayout: layout }),
+  roomInfo: null,
+  setRoomInfo: (info) => set({ roomInfo: info }),
+
+  nearWhiteboard: false,
+  setNearWhiteboard: (near) => set({ nearWhiteboard: near }),
+  showLeaderboard: false,
+  setShowLeaderboard: (show) => set({ showLeaderboard: show }),
+
+  showAdminPanel: false,
+  setShowAdminPanel: (show) => set({ showAdminPanel: show }),
+  showComputerInterface: false,
+  setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 }));

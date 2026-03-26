@@ -11,12 +11,14 @@ export const Desk = ({
   rotation = [0, 0, 0],
   hasChair = true,
   ownerName,
+  ownerEmail,
 }: {
   id: string;
   position: [number, number, number];
   rotation?: [number, number, number];
   hasChair?: boolean;
   ownerName?: string;
+  ownerEmail?: string;
 }) => {
   const setNearestDeskId = useGameStore((state) => state.setNearestDeskId);
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
@@ -24,6 +26,11 @@ export const Desk = ({
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const isOccupied = occupiedDeskIds.includes(id);
   const deskRef = useRef<THREE.Group>(null);
+  const userEmail = useGameStore((state) => state.user?.email);
+  const myRole = useGameStore((state) => state.roomInfo?.myRole);
+
+  const isOwnDesk = !!ownerEmail && ownerEmail === userEmail;
+  const isOwnAdminDesk = isOwnDesk && (myRole === 'admin' || myRole === 'manager');
 
   useFrame((state) => {
     if (!deskRef.current) return;
@@ -64,6 +71,17 @@ export const Desk = ({
           >
             {isOccupied ? 'Desk Occupied' : 'Press [E] to Start Focus'}
           </Text>
+          {!isOccupied && isOwnDesk && (
+            <Text
+              fontSize={0.17}
+              color="#fde68a"
+              outlineColor="black"
+              outlineWidth={0.02}
+              position={[0, -0.28, 0]}
+            >
+              Press [F] to Use Computer
+            </Text>
+          )}
         </Billboard>
       )}
 

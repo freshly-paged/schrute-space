@@ -1,5 +1,6 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, LogOut, Layout } from 'lucide-react';
+import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Shield } from 'lucide-react';
+import { RoomRole } from '../../types';
 
 interface HUDPanelProps {
   playerCount: number;
@@ -8,6 +9,7 @@ interface HUDPanelProps {
   paperReams: number;
   onExitRoom: () => void;
   onCustomizeOffice: () => void;
+  myRole?: RoomRole | null;
 }
 
 export const HUDPanel = ({
@@ -17,6 +19,7 @@ export const HUDPanel = ({
   paperReams,
   onExitRoom,
   onCustomizeOffice,
+  myRole,
 }: HUDPanelProps) => (
   <div className="flex flex-col gap-4">
     <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl max-w-xs">
@@ -53,6 +56,12 @@ export const HUDPanel = ({
             Room: <span className="text-indigo-400">{currentRoom}</span>
           </span>
         </div>
+        {myRole && (
+          <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span>Role: <span className="text-white font-bold">{myRole}</span></span>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 pt-6 border-t border-white/10 flex flex-col gap-2">
@@ -85,6 +94,7 @@ export const HUDPanel = ({
           ['Space x2', 'Dbl Jump'],
           ['W x2', 'Roll'],
           ['E', 'Focus'],
+          ['F', 'Computer'],
         ].map(([key, label]) => (
           <div key={key} className="flex items-center gap-2 text-white/80 text-[10px]">
             <kbd className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10">{key}</kbd>

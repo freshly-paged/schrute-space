@@ -8,6 +8,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { WORKING_AREA_BOUNDS, DESK_SPAWN_MARGIN, DESK_SPAWN_SPACING } from "./src/officeLayout.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,9 +27,28 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS room_layouts (
       room_id TEXT PRIMARY KEY,
       layout  JSONB NOT NULL DEFAULT '[]'
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      room_id     TEXT PRIMARY KEY,
+      max_workers INTEGER NOT NULL DEFAULT 20,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS room_members (
+      room_id   TEXT NOT NULL REFERENCES rooms(room_id) ON DELETE CASCADE,
+      email     TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+      role      TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'worker')),
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (room_id, email)
     )
   `);
 }
@@ -106,20 +126,29 @@ async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<
 }
 
 function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
-  const columns = [-11.5, -9.0, -6.5, -4.0, -1.5];
-  const rows = [-16.5, -14.0, -11.5, -9.0, -6.5, -4.0, -2.5];
+  const { x1, z1, x2, z2 } = WORKING_AREA_BOUNDS;
+  const xMin = x1 + DESK_SPAWN_MARGIN;
+  const xMax = x2 - DESK_SPAWN_MARGIN;
+  const zMin = z1 + DESK_SPAWN_MARGIN;
+  const zMax = z2 - DESK_SPAWN_MARGIN;
+
+  const columns: number[] = [];
+  for (let x = xMin; x <= xMax; x += DESK_SPAWN_SPACING) columns.push(x);
+  const rows: number[] = [];
+  for (let z = zMin; z <= zMax; z += DESK_SPAWN_SPACING) rows.push(z);
+
   for (const z of rows) {
     for (const x of columns) {
       const occupied = existingDesks.some((d) => {
         const dx = d.position[0] - x;
         const dz = d.position[2] - z;
-        return Math.sqrt(dx * dx + dz * dz) < 2.5;
+        return Math.sqrt(dx * dx + dz * dz) < DESK_SPAWN_SPACING;
       });
       if (!occupied) return [x, 0, z];
     }
   }
-  // Fallback: random position in the sales floor area
-  return [Math.random() * 12 - 12, 0, Math.random() * 16 - 18];
+  // Fallback: random within inner bounds
+  return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
 async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
@@ -141,6 +170,77 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
   const updated = [...layout, newDesk];
   await saveRoomLayout(roomId, updated);
   return updated;
+}
+
+// ── Room Management ───────────────────────────────────────────────────────────
+
+type RoomRole = 'admin' | 'manager' | 'worker';
+
+async function ensureRoom(roomId: string): Promise<boolean> {
+  const result = await pool.query(
+    `INSERT INTO rooms (room_id) VALUES ($1) ON CONFLICT (room_id) DO NOTHING RETURNING room_id`,
+    [roomId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+async function getMemberRole(roomId: string, email: string): Promise<RoomRole | null> {
+  const { rows } = await pool.query(
+    'SELECT role FROM room_members WHERE room_id = $1 AND email = $2',
+    [roomId, email]
+  );
+  return (rows[0]?.role as RoomRole) ?? null;
+}
+
+async function upsertMember(roomId: string, email: string, role: RoomRole): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_members (room_id, email, role) VALUES ($1, $2, $3)
+     ON CONFLICT (room_id, email) DO UPDATE SET role = EXCLUDED.role`,
+    [roomId, email, role]
+  );
+}
+
+async function removeMember(roomId: string, email: string): Promise<void> {
+  await pool.query(
+    'DELETE FROM room_members WHERE room_id = $1 AND email = $2',
+    [roomId, email]
+  );
+}
+
+async function getRoomMembers(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.email, u.display_name as name, rm.role, rm.joined_at as "joinedAt"
+     FROM room_members rm
+     LEFT JOIN users u ON u.email = rm.email
+     WHERE rm.room_id = $1
+     ORDER BY rm.joined_at ASC`,
+    [roomId]
+  );
+  return rows;
+}
+
+async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.email, u.display_name as name, rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
+     FROM room_members rm
+     LEFT JOIN users u ON u.email = rm.email
+     WHERE rm.room_id = $1
+     ORDER BY u.paper_reams DESC NULLS LAST`,
+    [roomId]
+  );
+  return rows;
+}
+
+async function getMyRooms(email: string): Promise<Array<{ roomId: string; role: string; maxWorkers: number }>> {
+  const { rows } = await pool.query(
+    `SELECT rm.room_id as "roomId", rm.role, r.max_workers as "maxWorkers"
+     FROM room_members rm
+     JOIN rooms r ON r.room_id = rm.room_id
+     WHERE rm.email = $1
+     ORDER BY rm.joined_at ASC`,
+    [email]
+  );
+  return rows;
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -186,120 +286,6 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
-  app.get("/api/auth/google/url", (req, res) => {
-    const origin = (req.query.origin as string) || APP_URL;
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !origin) {
-      console.error("OAuth configuration missing:", { GOOGLE_CLIENT_ID: !!GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: !!GOOGLE_CLIENT_SECRET, origin: !!origin });
-      return res.status(500).json({ error: "OAuth not configured" });
-    }
-    
-    // Normalize origin: remove trailing slash
-    const normalizedOrigin = origin.replace(/\/$/, "");
-    const redirectUri = `${normalizedOrigin}/auth/google/callback`;
-    
-    // Use 'state' to pass the redirectUri back to ourselves
-    const state = Buffer.from(JSON.stringify({ redirectUri })).toString('base64');
-
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "openid email profile",
-      access_type: "offline",
-      prompt: "consent",
-      state: state,
-    }).toString()}`;
-    res.json({ url });
-  });
-
-  app.get("/auth/google/callback", async (req, res) => {
-    const { code, state } = req.query;
-    if (!code || typeof code !== "string") return res.status(400).send("No code provided");
-
-    try {
-      let redirectUri = `${APP_URL?.replace(/\/$/, "")}/auth/google/callback`;
-      let stateData: Record<string, any> = {};
-
-      if (state && typeof state === "string") {
-        try {
-          stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-          if (stateData.redirectUri) redirectUri = stateData.redirectUri;
-        } catch (e) {
-          console.error("Failed to parse state:", e);
-        }
-      }
-      
-      console.log("Exchanging code for tokens with redirectUri:", redirectUri);
-
-      const { tokens } = await client.getToken({
-        code,
-        redirect_uri: redirectUri,
-      });
-      client.setCredentials(tokens);
-
-      const ticket = await client.verifyIdToken({
-        idToken: tokens.id_token!,
-        audience: GOOGLE_CLIENT_ID,
-      });
-      const payload = ticket.getPayload();
-
-      if (payload && payload.email) {
-        const realName = payload.name || payload.email.split("@")[0];
-
-        // Profile-fetch-only flow (triggered by /api/auth/fetch-profile)
-        if (stateData?.profileFetch) {
-          await saveUserName(payload.email, realName);
-          return res.redirect(stateData.returnUrl || '/');
-        }
-
-        // Legacy popup-based auth flow
-        const user = {
-          email: payload.email,
-          name: realName,
-          picture: payload.picture,
-        };
-        (req.session as any).user = user;
-        const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
-        console.log("User authenticated:", payload.email);
-
-        req.session.save((err) => {
-          if (err) {
-            console.error("Session save error:", err);
-            return res.status(500).send("Failed to save session");
-          }
-          res.send(`
-            <html><body><script>
-              localStorage.setItem('office_auth_token', '${token}');
-              localStorage.setItem('office_auth_success', Date.now().toString());
-              if (window.opener) window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', token: '${token}' }, '*');
-              setTimeout(() => window.close(), 500);
-            </script>
-            <div style="text-align:center;padding-top:50px;font-family:sans-serif;">
-              <h2>Authentication Successful!</h2><p>This window will close automatically.</p>
-            </div></body></html>
-          `);
-        });
-      } else {
-        res.status(400).send("Failed to get user info");
-      }
-    } catch (error) {
-      console.error("OAuth Error:", error);
-      res.status(500).send("Authentication failed");
-    }
-  });
-
-  app.get("/api/auth/debug", (req, res) => {
-    res.json({
-      hasSession: !!req.session,
-      hasSessionUser: !!(req.session as any).user,
-      hasReqUser: !!(req as any).user,
-      user: (req as any).user || (req.session as any).user || null,
-      cookie: req.headers.cookie || "no cookie header",
-      authHeader: req.headers.authorization || "no auth header",
-      sessionID: req.sessionID,
-    });
-  });
-
   app.get("/api/auth/me", (req, res) => {
     res.json((req as any).user || null);
   });
@@ -335,6 +321,169 @@ async function startServer() {
     await saveRoomLayout(roomId, layout as FurnitureItem[]);
     io.to(roomId).emit("roomLayoutUpdated", layout);
     res.json({ ok: true });
+  });
+
+  app.get("/api/my-rooms", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const myRooms = await getMyRooms(user.email);
+      const withOnline = myRooms.map(r => ({
+        ...r,
+        onlineCount: Object.keys(rooms[r.roomId] ?? {}).length
+      }));
+      res.json(withOnline);
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/room/:roomId/leaderboard", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const leaderboard = await getRoomLeaderboard(req.params.roomId);
+      res.json(leaderboard);
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/room/:roomId/members", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    try {
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(
+        Object.values(rooms[roomId] ?? {}).map((p: any) => p.email)
+      );
+      const onlineVisitors = Object.values(rooms[roomId] ?? {})
+        .filter((p: any) => !members.some(m => m.email === p.email))
+        .map((p: any) => ({ email: p.email, name: p.name, role: null, isOnline: true }));
+      res.json({
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) })),
+        visitors: onlineVisitors
+      });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/room/:roomId/members", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    const { email, role = 'worker' } = req.body ?? {};
+    if (!email || typeof email !== 'string' || !['worker', 'manager'].includes(role)) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (!requesterRole || requesterRole === 'worker') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (role === 'manager' && requesterRole !== 'admin') {
+        return res.status(403).json({ error: "Only admins can assign managers" });
+      }
+      const [membersResult, roomRow] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM room_members WHERE room_id = $1', [roomId]),
+        pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [roomId])
+      ]);
+      const currentCount = parseInt(membersResult.rows[0].count);
+      const maxWorkers = roomRow.rows[0]?.max_workers ?? 20;
+      if (currentCount >= maxWorkers) {
+        return res.status(409).json({ error: "Room is at capacity" });
+      }
+      // Ensure user row exists before adding to room_members
+      await pool.query(
+        `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
+        [email]
+      );
+      await upsertMember(roomId, email, role as RoomRole);
+      // If the new member is currently online, give them a desk and notify them
+      const onlineEntry = Object.entries(rooms[roomId] ?? {})
+        .find(([, p]: [string, any]) => p.email === email);
+      if (onlineEntry) {
+        const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name);
+        io.to(roomId).emit("roomLayoutUpdated", layout);
+        io.to(onlineEntry[0]).emit("roleChanged", { newRole: role });
+      }
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
+      io.to(roomId).emit("roomMembersUpdated", {
+        roomId,
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/room/:roomId/members/:memberEmail", async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId, memberEmail } = req.params;
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (!requesterRole || requesterRole === 'worker') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const targetRole = await getMemberRole(roomId, memberEmail);
+      if (targetRole === 'admin') {
+        return res.status(403).json({ error: "Cannot remove admin" });
+      }
+      if (!targetRole) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      // Remove their desk from layout
+      const layout = await getRoomLayout(roomId);
+      const filtered = layout.filter(
+        f => !(f.type === 'desk' && (f as DeskItem).config.ownerEmail === memberEmail)
+      );
+      if (filtered.length !== layout.length) {
+        await saveRoomLayout(roomId, filtered);
+        io.to(roomId).emit("roomLayoutUpdated", filtered);
+      }
+      await removeMember(roomId, memberEmail);
+      // Notify the removed member's socket if online
+      const removedEntry = Object.entries(rooms[roomId] ?? {})
+        .find(([, p]: [string, any]) => p.email === memberEmail);
+      if (removedEntry) {
+        io.to(removedEntry[0]).emit("roleChanged", { newRole: null });
+      }
+      const members = await getRoomMembers(roomId);
+      const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
+      io.to(roomId).emit("roomMembersUpdated", {
+        roomId,
+        members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+      });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/room/:roomId", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const { roomId } = req.params;
+    const { maxWorkers } = req.body ?? {};
+    try {
+      const requesterRole = await getMemberRole(roomId, user.email);
+      if (requesterRole !== 'admin') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (typeof maxWorkers !== 'number' || maxWorkers < 1 || maxWorkers > 100) {
+        return res.status(400).json({ error: "maxWorkers must be 1-100" });
+      }
+      await pool.query('UPDATE rooms SET max_workers = $1 WHERE room_id = $2', [maxWorkers, roomId]);
+      io.to(roomId).emit("roomMembersUpdated", { roomId, maxWorkers });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   app.post("/api/auth/logout", (_req, res) => {
@@ -385,14 +534,31 @@ io.on("connection", (socket) => {
     }
     activeUsers.set(user.email, socket.id);
 
-    socket.on("joinRoom", (data: { roomId: string }) => {
+    socket.on("joinRoom", async (data: { roomId: string }) => {
       const { roomId } = data;
       const room = roomId || "default";
       socket.join(room);
-      
+
       if (!rooms[room]) {
         rooms[room] = {};
       }
+
+      // Ensure user row exists and update display name
+      await pool.query(
+        `INSERT INTO users (email, display_name) VALUES ($1, $2)
+         ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name`,
+        [user.email, user.name]
+      );
+
+      // Ensure room exists; first joiner (or first joiner with no existing members) becomes admin
+      await ensureRoom(room);
+      const existingMembers = await getRoomMembers(room);
+      if (existingMembers.length === 0) {
+        await upsertMember(room, user.email, 'admin');
+      }
+
+      const role = await getMemberRole(room, user.email);
+      const isMember = role !== null;
 
       // Initialize player using authenticated user info
       const name = user.name;
@@ -405,6 +571,16 @@ io.on("connection", (socket) => {
         name: name,
         room: room
       };
+
+      // Remove stale entries for the same email before sending currentPlayers.
+      // The old socket's disconnect event fires asynchronously (after DB awaits above),
+      // so this prevents the reconnecting player from seeing their own ghost avatar.
+      for (const socketId of Object.keys(rooms[room])) {
+        if (rooms[room][socketId].email === user.email && socketId !== socket.id) {
+          delete rooms[room][socketId];
+          socket.to(room).emit("playerDisconnected", socketId);
+        }
+      }
 
       // Send current players in this room to the new player
       socket.emit("currentPlayers", rooms[room]);
@@ -424,17 +600,44 @@ io.on("connection", (socket) => {
           socket.to(room).emit("newPlayer", rooms[room][socket.id]);
         }
       });
-      // Ensure player has a desk and send the full room layout
-      ensurePlayerDesk(room, user.email, user.name).then((layout) => {
-        socket.emit("roomLayoutLoaded", layout);
-        // Broadcast updated layout to others in the room
-        socket.to(room).emit("roomLayoutUpdated", layout);
-      }).catch((err) => {
-        console.error("Error ensuring player desk:", err);
-        socket.emit("roomLayoutLoaded", []);
-      });
-      
-      console.log(`User ${socket.id} joined room: ${room}`);
+
+      // Desk: only for members (admin/manager/worker)
+      if (isMember) {
+        ensurePlayerDesk(room, user.email, user.name).then((layout) => {
+          socket.emit("roomLayoutLoaded", layout);
+          socket.to(room).emit("roomLayoutUpdated", layout);
+        }).catch((err) => {
+          console.error("Error ensuring player desk:", err);
+          socket.emit("roomLayoutLoaded", []);
+        });
+      } else {
+        // Visitor: send current layout read-only, no desk created
+        getRoomLayout(room).then((layout) => {
+          socket.emit("roomLayoutLoaded", layout);
+        });
+      }
+
+      // Send room info to joining socket
+      try {
+        const [members, roomRow] = await Promise.all([
+          getRoomMembers(room),
+          pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [room])
+        ]);
+        const onlineEmails = new Set(
+          Object.values(rooms[room]).map((p: any) => p.email)
+        );
+        socket.emit("roomInfoLoaded", {
+          roomId: room,
+          maxWorkers: roomRow.rows[0]?.max_workers ?? 20,
+          myRole: role,
+          memberCount: members.length,
+          members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
+        });
+      } catch (err) {
+        console.error("Error loading room info:", err);
+      }
+
+      console.log(`User ${socket.id} joined room: ${room} (role: ${role ?? 'visitor'})`);
     });
 
     socket.on("savePaperReams", (count: number) => {
@@ -554,10 +757,17 @@ io.on("connection", (socket) => {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, "dist");
+    const publicPath = path.join(__dirname, "public");
     console.log(`Serving static files from: ${distPath}`);
     console.log(`dist/index.html exists: ${fs.existsSync(path.join(distPath, "index.html"))}`);
+    console.log(`dist/assets/dwight_bobblehead.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dwight_bobblehead.glb"))}`);
+    console.log(`dist/assets/dundie.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dundie.glb"))}`);
+    // Serve dist/ first (hashed JS/CSS bundles), then fall back to public/ for
+    // assets that Vite copies as-is (GLB files). This ensures large binary assets
+    // are reachable even if the dist/ copy was incomplete during build.
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.use(express.static(publicPath));
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

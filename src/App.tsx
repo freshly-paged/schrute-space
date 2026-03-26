@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Stars, Html, KeyboardControls } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
-import { Monitor, Coffee, Info } from 'lucide-react';
+import { Monitor, Info } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
@@ -15,6 +15,9 @@ import { PomodoroUI } from './components/ui/PomodoroUI';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
+import { RoomLeaderboard } from './components/ui/RoomLeaderboard';
+import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
+import { ComputerInterface } from './components/ui/ComputerInterface';
 import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
@@ -28,6 +31,7 @@ const KEYBOARD_MAP = [
   { name: 'right', keys: ['ArrowRight', 'KeyD'] },
   { name: 'jump', keys: ['Space'] },
   { name: 'interact', keys: ['KeyE'] },
+  { name: 'computer', keys: ['KeyF'] },
   { name: 'drop', keys: ['KeyG'] },
 ];
 
@@ -37,26 +41,35 @@ function getRoomFromURL(): string | null {
 }
 
 export default function App() {
-  const { user, authLoading, login, logout } = useAuth();
+  const { user, authLoading, logout } = useAuth();
   const [currentRoom, setCurrentRoom] = useState<string | null>(getRoomFromURL);
   const [showUI, setShowUI] = useState(true);
 
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, setUser } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+
+  useEffect(() => {
+    setUser(user ?? null);
+  }, [user]);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
+    console.log(`[app] joining room=${room}`);
     localStorage.setItem('last_room', room);
     window.location.search = `?room=${room}`;
   };
 
   const handleExitRoom = () => {
+    console.log(`[app] exiting room=${currentRoom}`);
     localStorage.removeItem('last_room');
     setCurrentRoom(null);
+    setShowLeaderboard(false);
+    setShowAdminPanel(false);
+    setShowComputerInterface(false);
     window.location.search = '';
   };
 
@@ -133,26 +146,21 @@ export default function App() {
     );
   }
 
-  // ── Not authenticated ────────────────────────────────────────────────────
+  // ── Not authenticated (IAP misconfigured or session missing) ────────────
   if (!user) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-50 p-6">
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-10 rounded-3xl shadow-2xl max-w-md text-center">
-          <div className="bg-indigo-500 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
-            <Coffee className="text-white w-10 h-10" />
+          <div className="bg-red-500/20 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+            <Monitor className="text-red-400 w-10 h-10" />
           </div>
-          <h2 className="text-white text-3xl font-black mb-4 tracking-tighter italic">
-            Schrute Space
-          </h2>
-          <p className="text-slate-300 mb-8">
-            Join the Scranton branch. Authenticate with your Gmail to enter the office.
-          </p>
+          <h2 className="text-white text-2xl font-bold mb-4">Authentication Required</h2>
+          <p className="text-slate-300 mb-8">Access is managed by Identity-Aware Proxy. Please ensure you are signed in.</p>
           <button
-            onClick={login}
-            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-xl transition-all"
           >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Sign in with Google
+            Retry
           </button>
         </div>
       </div>
@@ -205,6 +213,7 @@ export default function App() {
               paperReams={paperReams}
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
+              myRole={roomInfo?.myRole ?? null}
             />
           </motion.div>
         )}
@@ -234,6 +243,25 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showLeaderboard && currentRoom && (
+        <div className="absolute top-6 right-[22rem] z-10">
+          <RoomLeaderboard roomId={currentRoom} onClose={() => setShowLeaderboard(false)} />
+        </div>
+      )}
+
+      {showComputerInterface && currentRoom && (
+        <ComputerInterface
+          onClose={() => setShowComputerInterface(false)}
+          onOpenAdminPanel={() => { setShowComputerInterface(false); setShowAdminPanel(true); }}
+        />
+      )}
+
+      {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
+          <RoomAdminPanel roomId={currentRoom} onClose={() => setShowAdminPanel(false)} />
+        </div>
+      )}
 
       <KeyboardControls map={keyboardMap}>
         <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 2, 5], fov: 50 }}>

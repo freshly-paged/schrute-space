@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Player, ChatMessage, AvatarConfig, FurnitureItem } from '../types';
+import { Player, ChatMessage, AvatarConfig, FurnitureItem, RoomInfo, RoomRole, RoomMember } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
 
@@ -23,6 +23,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   useEffect(() => {
     if (!user || !currentRoom) return;
 
+    console.log(`[socket] connecting for user=${user.email} room=${currentRoom}`);
     const newSocket = io({
       withCredentials: true,
       reconnectionAttempts: 5,
@@ -33,16 +34,34 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('connect', () => {
       setIsConnected(true);
       setConnectionError(null);
-      console.log('Connected to server successfully');
+      console.log(`[socket] connected id=${newSocket.id}, joining room=${currentRoom}`);
       newSocket.emit('joinRoom', { roomId: currentRoom });
     });
 
+    newSocket.on('disconnect', (reason) => {
+      setIsConnected(false);
+      console.log(`[socket] disconnected reason=${reason}`);
+    });
+
+    newSocket.on('reconnect', (attempt: number) => {
+      console.log(`[socket] reconnected after ${attempt} attempt(s)`);
+    });
+
+    newSocket.on('reconnect_error', (err: Error) => {
+      console.error('[socket] reconnect error:', err.message);
+    });
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('[socket] all reconnection attempts failed');
+    });
+
     newSocket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
+      console.error('[socket] connection error:', err.message);
       setConnectionError(`Connection failed: ${err.message}`);
     });
 
     newSocket.on('forceDisconnect', (reason: string) => {
+      console.warn('[socket] force-disconnected by server:', reason);
       setDisconnectReason(reason);
       newSocket.disconnect();
     });
@@ -50,11 +69,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('currentPlayers', (serverPlayers: Record<string, Player>) => {
       const others = { ...serverPlayers };
       delete others[newSocket.id!];
+      console.log(`[socket] currentPlayers: ${Object.keys(others).length} other player(s) in room`);
       setPlayers(others);
       syncOccupiedDesks(others);
     });
 
     newSocket.on('newPlayer', (player: Player) => {
+      console.log(`[socket] newPlayer: ${player.name} (${player.id})`);
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
         syncOccupiedDesks(next);
@@ -91,6 +112,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     });
 
     newSocket.on('playerDisconnected', (id: string) => {
+      console.log(`[socket] playerDisconnected: ${id}`);
       setPlayers((prev) => {
         const next = { ...prev };
         delete next[id];
@@ -100,19 +122,48 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     });
 
     newSocket.on('paperReamsLoaded', (count: number) => {
+      console.log(`[socket] paperReamsLoaded: ${count}`);
       useGameStore.getState().setPaperReams(count);
     });
 
     newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
+      console.log('[socket] avatarConfigLoaded');
       useGameStore.getState().setAvatarConfig(config);
     });
 
     newSocket.on('roomLayoutLoaded', (layout: FurnitureItem[]) => {
+      console.log(`[socket] roomLayoutLoaded: ${layout.length} item(s)`);
       useGameStore.getState().setRoomLayout(layout);
     });
 
     newSocket.on('roomLayoutUpdated', (layout: FurnitureItem[]) => {
+      console.log(`[socket] roomLayoutUpdated: ${layout.length} item(s)`);
       useGameStore.getState().setRoomLayout(layout);
+    });
+
+    newSocket.on('roomInfoLoaded', (info: RoomInfo) => {
+      console.log(`[socket] roomInfoLoaded: role=${info.myRole ?? 'visitor'} members=${info.memberCount}`);
+      useGameStore.getState().setRoomInfo(info);
+    });
+
+    newSocket.on('roomMembersUpdated', (payload: { roomId: string; members?: RoomMember[]; maxWorkers?: number }) => {
+      console.log('[socket] roomMembersUpdated', payload.members ? `members=${payload.members.length}` : '', payload.maxWorkers !== undefined ? `maxWorkers=${payload.maxWorkers}` : '');
+      const current = useGameStore.getState().roomInfo;
+      if (!current) return;
+      useGameStore.getState().setRoomInfo({
+        ...current,
+        ...(payload.members !== undefined && {
+          memberCount: payload.members.length,
+          members: payload.members,
+        }),
+        ...(payload.maxWorkers !== undefined && { maxWorkers: payload.maxWorkers }),
+      });
+    });
+
+    newSocket.on('roleChanged', ({ newRole }: { newRole: RoomRole | null }) => {
+      console.log(`[socket] roleChanged: newRole=${newRole ?? 'none'}`);
+      const current = useGameStore.getState().roomInfo;
+      if (current) useGameStore.getState().setRoomInfo({ ...current, myRole: newRole });
     });
 
     // Sync paper reams to server whenever the count changes
@@ -123,7 +174,9 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     });
 
     return () => {
+      console.log(`[socket] cleaning up, disconnecting from room=${currentRoom}`);
       unsubscribeReams();
+      useGameStore.getState().setRoomInfo(null);
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

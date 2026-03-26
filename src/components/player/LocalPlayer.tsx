@@ -41,6 +41,7 @@ export const LocalPlayer = ({
   const lastActiveDeskIdRef = useRef<string | null>(null);
   const wasTimerActiveRef = useRef(false);
   const prevInteractRef = useRef(false);
+  const prevComputerRef = useRef(false);
   const prevDropRef = useRef(false);
   const cameraRayRef = useRef(new THREE.Ray());
   const cameraHitRef = useRef(new THREE.Vector3());
@@ -130,15 +131,17 @@ export const LocalPlayer = ({
 
     const keys =
       isChatFocused || isTimerActive || isInspecting
-        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, drop: false }
+        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, computer: false, drop: false }
         : rawKeys;
-    const { forward, backward, left, right, jump, interact, drop } = keys;
+    const { forward, backward, left, right, jump, interact, computer, drop } = keys;
 
     setIsMoving(forward || backward || left || right);
 
     // Edge-triggered interact / drop (single keypress, not held)
     const interactEdge = interact && !prevInteractRef.current;
     prevInteractRef.current = interact;
+    const computerEdge = computer && !prevComputerRef.current;
+    prevComputerRef.current = computer;
     const dropEdge = drop && !prevDropRef.current;
     prevDropRef.current = drop;
 
@@ -168,7 +171,24 @@ export const LocalPlayer = ({
       }
     }
 
-    // Desk interaction — block if desk is occupied by another player
+    // Whiteboard interaction — open leaderboard
+    if (!interactConsumed && interactEdge) {
+      const { nearWhiteboard, setShowLeaderboard } = useGameStore.getState();
+      if (nearWhiteboard) {
+        setShowLeaderboard(true);
+        interactConsumed = true;
+      }
+    }
+
+    // Computer (F) — open interface at own desk
+    if (computerEdge && nearestDeskId) {
+      const { user, setShowComputerInterface } = useGameStore.getState();
+      if (user && nearestDeskId === `desk-${user.email}`) {
+        setShowComputerInterface(true);
+      }
+    }
+
+    // Desk focus (E) — unchanged, works at any desk including own
     if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
       startTimer('focus');
     }

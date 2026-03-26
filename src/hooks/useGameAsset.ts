@@ -34,7 +34,8 @@ export function useGameAsset(key: AssetKey) {
 // Preload all assets at module load time so they're ready before the scene
 // needs them. Call this once from App.tsx or main.tsx if desired.
 export function preloadAllAssets() {
-  for (const path of Object.values(ASSETS)) {
-    useGLTF.preload(path);
+  for (const [key, assetPath] of Object.entries(ASSETS)) {
+    console.log(`[assets] preloading ${key} from ${assetPath}`);
+    useGLTF.preload(assetPath);
   }
 }
