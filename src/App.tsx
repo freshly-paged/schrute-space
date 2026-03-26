@@ -48,17 +48,23 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, setUser } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+
+  useEffect(() => {
+    setUser(user ?? null);
+  }, [user]);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
+    console.log(`[app] joining room=${room}`);
     localStorage.setItem('last_room', room);
     window.location.search = `?room=${room}`;
   };
 
   const handleExitRoom = () => {
+    console.log(`[app] exiting room=${currentRoom}`);
     localStorage.removeItem('last_room');
     setCurrentRoom(null);
     setShowLeaderboard(false);

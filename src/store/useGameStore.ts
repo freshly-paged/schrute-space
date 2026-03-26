@@ -40,12 +40,12 @@ interface GameState {
   activeDeskId: string | null;
   isChatFocused: boolean;
   occupiedDeskIds: string[];
-  user: { id: string, email: string, name: string, picture: string } | null;
+  user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
   setOccupiedDeskIds: (ids: string[]) => void;
-  setUser: (user: { id: string, email: string, name: string, picture: string } | null) => void;
+  setUser: (user: { email: string; name: string; picture?: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;

@@ -34,10 +34,18 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
     fetch(`/api/room/${roomId}/leaderboard`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) setEntries(data);
+        if (Array.isArray(data)) {
+          console.log(`[leaderboard] loaded ${data.length} entries for room=${roomId}`);
+          setEntries(data);
+        } else {
+          console.warn('[leaderboard] unexpected response:', data);
+        }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error(`[leaderboard] fetch failed for room=${roomId}:`, err);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {

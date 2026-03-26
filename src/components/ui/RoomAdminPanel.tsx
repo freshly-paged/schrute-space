@@ -39,10 +39,13 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
     fetch(`/api/room/${roomId}/members`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (data.members) setMembers(data.members);
+        if (data.members) {
+          console.log(`[admin] members loaded: ${data.members.length} member(s), ${data.visitors?.length ?? 0} visitor(s) for room=${roomId}`);
+          setMembers(data.members);
+        }
         if (data.visitors) setVisitors(data.visitors);
       })
-      .catch(() => {});
+      .catch((err) => console.error(`[admin] fetchMembers failed for room=${roomId}:`, err));
   };
 
   useEffect(() => {
@@ -55,6 +58,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
   }, [roomInfo?.maxWorkers]);
 
   const addMember = async (email: string, role: RoomRole = 'worker') => {
+    console.log(`[admin] adding member email=${email} role=${role} to room=${roomId}`);
     setError(null);
     setLoading(true);
     try {
@@ -66,9 +70,11 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to add member');
+      console.log(`[admin] member added: ${email}`);
       setAddEmail('');
       fetchMembers();
     } catch (e: any) {
+      console.error(`[admin] addMember failed:`, e.message);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -76,6 +82,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
   };
 
   const removeMember = async (email: string) => {
+    console.log(`[admin] removing member email=${email} from room=${roomId}`);
     setError(null);
     setLoading(true);
     try {
@@ -85,8 +92,10 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to remove member');
+      console.log(`[admin] member removed: ${email}`);
       fetchMembers();
     } catch (e: any) {
+      console.error(`[admin] removeMember failed:`, e.message);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -94,6 +103,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
   };
 
   const saveMaxWorkers = async () => {
+    console.log(`[admin] saving maxWorkers=${maxWorkers} for room=${roomId}`);
     setError(null);
     setLoading(true);
     try {
@@ -105,7 +115,9 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to update');
+      console.log(`[admin] maxWorkers updated to ${maxWorkers}`);
     } catch (e: any) {
+      console.error(`[admin] saveMaxWorkers failed:`, e.message);
       setError(e.message);
     } finally {
       setLoading(false);

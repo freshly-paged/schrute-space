@@ -27,8 +27,15 @@ export const LandingPage = ({ onJoin, userName, onLogout, onCustomize, avatarCon
   useEffect(() => {
     fetch('/api/my-rooms', { credentials: 'include' })
       .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setMyRooms(d); })
-      .catch(() => {});
+      .then(d => {
+        if (Array.isArray(d)) {
+          console.log(`[landing] my-rooms loaded: ${d.length} room(s)`);
+          setMyRooms(d);
+        } else {
+          console.warn('[landing] my-rooms unexpected response:', d);
+        }
+      })
+      .catch((err) => console.error('[landing] my-rooms fetch failed:', err));
   }, []);
 
   return (
