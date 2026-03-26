@@ -26,6 +26,9 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS room_layouts (
       room_id TEXT PRIMARY KEY,
       layout  JSONB NOT NULL DEFAULT '[]'
@@ -63,6 +66,19 @@ async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
   const config = rows[0]?.avatar_config;
   if (!config || Object.keys(config).length === 0) return null;
   return config as AvatarConfig;
+}
+
+async function getUserName(email: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT name FROM users WHERE email = $1', [email]);
+  return rows[0]?.name ?? null;
+}
+
+async function saveUserName(email: string, name: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (email, name) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name`,
+    [email, name]
+  );
 }
 
 async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
@@ -185,8 +201,150 @@ async function startServer() {
   const activeUsers = new Map<string, string>(); // email -> socketId
 
   // Auth Routes
+<<<<<<< Updated upstream
   app.get("/api/auth/me", (req, res) => {
     res.json((req as any).user || null);
+=======
+  app.get("/api/auth/fetch-profile", (req, res) => {
+    const iapUser = (req as any).user || (req.session as any).user;
+    if (!iapUser?.email) return res.status(401).send("Not authenticated");
+    if (!GOOGLE_CLIENT_ID || !APP_URL) return res.status(500).send("OAuth not configured");
+    const returnUrl = typeof req.query.return === 'string' ? req.query.return : '/';
+    const redirectUri = `${APP_URL.replace(/\/$/, "")}/auth/google/callback`;
+    const state = Buffer.from(JSON.stringify({ redirectUri, returnUrl, profileFetch: true })).toString('base64');
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      state,
+    }).toString()}`;
+    res.redirect(url);
+  });
+
+  app.get("/api/auth/google/url", (req, res) => {
+    const origin = (req.query.origin as string) || APP_URL;
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !origin) {
+      console.error("OAuth configuration missing:", { GOOGLE_CLIENT_ID: !!GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET: !!GOOGLE_CLIENT_SECRET, origin: !!origin });
+      return res.status(500).json({ error: "OAuth not configured" });
+    }
+    
+    // Normalize origin: remove trailing slash
+    const normalizedOrigin = origin.replace(/\/$/, "");
+    const redirectUri = `${normalizedOrigin}/auth/google/callback`;
+    
+    // Use 'state' to pass the redirectUri back to ourselves
+    const state = Buffer.from(JSON.stringify({ redirectUri })).toString('base64');
+
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      access_type: "offline",
+      prompt: "consent",
+      state: state,
+    }).toString()}`;
+    res.json({ url });
+  });
+
+  app.get("/auth/google/callback", async (req, res) => {
+    const { code, state } = req.query;
+    if (!code || typeof code !== "string") return res.status(400).send("No code provided");
+
+    try {
+      let redirectUri = `${APP_URL?.replace(/\/$/, "")}/auth/google/callback`;
+      let stateData: Record<string, any> = {};
+
+      if (state && typeof state === "string") {
+        try {
+          stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+          if (stateData.redirectUri) redirectUri = stateData.redirectUri;
+        } catch (e) {
+          console.error("Failed to parse state:", e);
+        }
+      }
+      
+      console.log("Exchanging code for tokens with redirectUri:", redirectUri);
+
+      const { tokens } = await client.getToken({
+        code,
+        redirect_uri: redirectUri,
+      });
+      client.setCredentials(tokens);
+
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token!,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+
+      if (payload && payload.email) {
+        const realName = payload.name || payload.email.split("@")[0];
+
+        // Profile-fetch-only flow (triggered by /api/auth/fetch-profile)
+        if (stateData?.profileFetch) {
+          await saveUserName(payload.email, realName);
+          return res.redirect(stateData.returnUrl || '/');
+        }
+
+        // Legacy popup-based auth flow
+        const user = {
+          email: payload.email,
+          name: realName,
+          picture: payload.picture,
+        };
+        (req.session as any).user = user;
+        const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
+        console.log("User authenticated:", payload.email);
+
+        req.session.save((err) => {
+          if (err) {
+            console.error("Session save error:", err);
+            return res.status(500).send("Failed to save session");
+          }
+          res.send(`
+            <html><body><script>
+              localStorage.setItem('office_auth_token', '${token}');
+              localStorage.setItem('office_auth_success', Date.now().toString());
+              if (window.opener) window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', token: '${token}' }, '*');
+              setTimeout(() => window.close(), 500);
+            </script>
+            <div style="text-align:center;padding-top:50px;font-family:sans-serif;">
+              <h2>Authentication Successful!</h2><p>This window will close automatically.</p>
+            </div></body></html>
+          `);
+        });
+      } else {
+        res.status(400).send("Failed to get user info");
+      }
+    } catch (error) {
+      console.error("OAuth Error:", error);
+      res.status(500).send("Authentication failed");
+    }
+  });
+
+  app.get("/api/auth/debug", (req, res) => {
+    res.json({
+      hasSession: !!req.session,
+      hasSessionUser: !!(req.session as any).user,
+      hasReqUser: !!(req as any).user,
+      user: (req as any).user || (req.session as any).user || null,
+      cookie: req.headers.cookie || "no cookie header",
+      authHeader: req.headers.authorization || "no auth header",
+      sessionID: req.sessionID,
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    const iapUser = (req as any).user || (req.session as any).user;
+    if (!iapUser?.email) return res.json(null);
+    const storedName = await getUserName(iapUser.email);
+    if (!storedName && !process.env.DEV_USER_EMAIL) {
+      return res.json({ ...iapUser, needsProfileFetch: true });
+    }
+    return res.json({ ...iapUser, name: storedName ?? iapUser.name });
+>>>>>>> Stashed changes
   });
 
   app.get("/api/player", async (req, res) => {
