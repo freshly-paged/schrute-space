@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { Player, ChatMessage, AvatarConfig, FurnitureItem, RoomInfo, RoomRole, RoomMember } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
+import { MS_BODY_THROWABLE_ID } from '../propIds';
 
 export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -14,6 +15,19 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       .filter((p) => p.activeDeskId)
       .map((p) => p.activeDeskId as string);
     useGameStore.getState().setOccupiedDeskIds(ids);
+  };
+
+  const syncRemoteWornThrowableIds = (playerMap: Record<string, Player>) => {
+    const worn: string[] = [];
+    for (const p of Object.values(playerMap)) {
+      if (p.wornPropId) worn.push(p.wornPropId);
+    }
+    useGameStore.getState().setRemoteWornThrowableIds(worn);
+  };
+
+  const syncFromPlayerMap = (playerMap: Record<string, Player>) => {
+    syncOccupiedDesks(playerMap);
+    syncRemoteWornThrowableIds(playerMap);
   };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [lastLocalMessage, setLastLocalMessage] = useState<{ text: string; time: number } | null>(null);
@@ -71,14 +85,14 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       delete others[newSocket.id!];
       console.log(`[socket] currentPlayers: ${Object.keys(others).length} other player(s) in room`);
       setPlayers(others);
-      syncOccupiedDesks(others);
+      syncFromPlayerMap(others);
     });
 
     newSocket.on('newPlayer', (player: Player) => {
       console.log(`[socket] newPlayer: ${player.name} (${player.id})`);
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
@@ -86,7 +100,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('playerMoved', (player: Player) => {
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
@@ -116,10 +130,21 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       setPlayers((prev) => {
         const next = { ...prev };
         delete next[id];
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
+
+    newSocket.on(
+      'throwableRestSync',
+      (data: { throwableId: string; position: number[]; rotation: number[] }) => {
+        if (!data || data.throwableId !== MS_BODY_THROWABLE_ID) return;
+        const { position, rotation } = data;
+        if (!Array.isArray(position) || position.length !== 3) return;
+        if (!Array.isArray(rotation) || rotation.length !== 3) return;
+        useGameStore.getState().setThrowableRest(data.throwableId, position as [number, number, number], rotation as [number, number, number]);
+      }
+    );
 
     newSocket.on('paperReamsLoaded', (count: number) => {
       console.log(`[socket] paperReamsLoaded: ${count}`);
@@ -177,6 +202,8 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       console.log(`[socket] cleaning up, disconnecting from room=${currentRoom}`);
       unsubscribeReams();
       useGameStore.getState().setRoomInfo(null);
+      useGameStore.getState().setRemoteWornThrowableIds([]);
+      useGameStore.getState().clearWornProp();
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

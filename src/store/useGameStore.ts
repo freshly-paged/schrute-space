@@ -61,6 +61,25 @@ interface GameState {
   setShowAdminPanel: (show: boolean) => void;
   showComputerInterface: boolean;
   setShowComputerInterface: (show: boolean) => void;
+
+  /** Local-only: throwable prop id currently worn on the avatar (upper body). */
+  wornPropId: string | null;
+  wearHeldProp: (id: string) => void;
+  clearWornProp: () => void;
+
+  /** Prop ids worn by *other* players — hides world copies of those throwables. */
+  remoteWornThrowableIds: string[];
+  setRemoteWornThrowableIds: (ids: string[]) => void;
+
+  /** Last known rest pose for a throwable (synced when someone drops / removes wear). */
+  throwableRest: Partial<
+    Record<string, { position: [number, number, number]; rotation: [number, number, number] }>
+  >;
+  setThrowableRest: (
+    id: string,
+    position: [number, number, number],
+    rotation: [number, number, number]
+  ) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -163,4 +182,17 @@ export const useGameStore = create<GameState>((set) => ({
   setShowAdminPanel: (show) => set({ showAdminPanel: show }),
   showComputerInterface: false,
   setShowComputerInterface: (show) => set({ showComputerInterface: show }),
+
+  wornPropId: null,
+  wearHeldProp: (id) => set({ wornPropId: id, heldObjectId: null, nearThrowableId: null }),
+  clearWornProp: () => set({ wornPropId: null }),
+
+  remoteWornThrowableIds: [],
+  setRemoteWornThrowableIds: (ids) => set({ remoteWornThrowableIds: ids }),
+
+  throwableRest: {},
+  setThrowableRest: (id, position, rotation) =>
+    set((s) => ({
+      throwableRest: { ...s.throwableRest, [id]: { position, rotation } },
+    })),
 }));

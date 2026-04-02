@@ -8,6 +8,7 @@ import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
+import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
@@ -59,6 +60,7 @@ export const LocalPlayer = ({
   const timeLeft = useGameStore((state) => state.timeLeft);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
+  const wornPropId = useGameStore((state) => state.wornPropId);
 
   // Build AABB collision boxes for each desk based on its current position/rotation
   const deskBoxes = useMemo(() =>
@@ -148,10 +150,39 @@ export const LocalPlayer = ({
     // Throwable object interactions take priority over desk interactions
     let interactConsumed = false;
     if (interactEdge) {
-      const { heldObjectId, nearThrowableId, pickUpObject, dropObject } = useGameStore.getState();
-      if (heldObjectId !== null) {
-        // Put down at player feet
-        dropObject();
+      const {
+        heldObjectId,
+        nearThrowableId,
+        pickUpObject,
+        dropObject,
+        wearHeldProp,
+        clearWornProp,
+        wornPropId: wornId,
+      } = useGameStore.getState();
+
+      if (wornId === MS_BODY_THROWABLE_ID) {
+        const feet: [number, number, number] = [positionRef.current[0], 0.15, positionRef.current[2]];
+        const rot: [number, number, number] = [0, rotationRef.current[1], 0];
+        clearWornProp();
+        socket?.emit('playerWornProp', { propId: null });
+        socket?.emit('throwableRestSync', {
+          throwableId: MS_BODY_THROWABLE_ID,
+          position: feet,
+          rotation: rot,
+        });
+        interactConsumed = true;
+      } else if (heldObjectId !== null) {
+        if (heldObjectId === MS_BODY_THROWABLE_ID) {
+          wearHeldProp(MS_BODY_THROWABLE_ID);
+          socket?.emit('playerWornProp', { propId: MS_BODY_THROWABLE_ID });
+          socket?.connected &&
+            socket.emit(
+              'chatMessage',
+              'Am I a hero？I really can\'t say, but yes.'
+            );
+        } else {
+          dropObject();
+        }
         interactConsumed = true;
       } else if (nearThrowableId !== null) {
         pickUpObject(nearThrowableId);
@@ -159,15 +190,26 @@ export const LocalPlayer = ({
       }
     }
 
-    // Throw in the camera's forward direction with a fixed upward arc
+    // Throw in the camera's forward direction with a fixed upward arc (wearables put down with G instead)
     if (dropEdge) {
-      const { heldObjectId, throwObject } = useGameStore.getState();
+      const { heldObjectId, throwObject, dropObject } = useGameStore.getState();
       if (heldObjectId !== null) {
-        const camDir = new THREE.Vector3();
-        state.camera.getWorldDirection(camDir);
-        camDir.y = 0;
-        camDir.normalize();
-        throwObject([camDir.x * 10, 5, camDir.z * 10]);
+        if (heldObjectId === MS_BODY_THROWABLE_ID) {
+          dropObject();
+          const feet: [number, number, number] = [positionRef.current[0], 0.15, positionRef.current[2]];
+          const rot: [number, number, number] = [0, rotationRef.current[1], 0];
+          socket?.emit('throwableRestSync', {
+            throwableId: MS_BODY_THROWABLE_ID,
+            position: feet,
+            rotation: rot,
+          });
+        } else {
+          const camDir = new THREE.Vector3();
+          state.camera.getWorldDirection(camDir);
+          camDir.y = 0;
+          camDir.normalize();
+          throwObject([camDir.x * 10, 5, camDir.z * 10]);
+        }
       }
     }
 
@@ -367,6 +409,7 @@ export const LocalPlayer = ({
             isRolling={physics.isRolling.current}
             skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
             pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
+            wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
           />
         </group>
         <Billboard position={[0, 2.2, 0]}>
@@ -374,6 +417,20 @@ export const LocalPlayer = ({
             {playerName}
           </Text>
         </Billboard>
+        {wornPropId === MS_BODY_THROWABLE_ID && (
+          <Billboard position={[0, 1.15, 0]}>
+            <Text
+              fontSize={0.14}
+              color="#a5f3fc"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.008}
+              outlineColor="black"
+            >
+              [E] Take off Michael Suit
+            </Text>
+          </Billboard>
+        )}
         {isTimerActive && (
           <Billboard position={[0, 3.0, 0]}>
             {/* Outer background */}

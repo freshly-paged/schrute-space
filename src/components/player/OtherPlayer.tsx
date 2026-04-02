@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Player, DEFAULT_AVATAR_CONFIG } from '../../types';
+import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
 import { ChatBubble } from '../ui/ChatBubble';
 
@@ -26,6 +27,7 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
           isRolling={player.isRolling || false}
           skinTone={player.avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
           pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
+          wornUpperPropId={player.wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
         />
       </group>
       <Billboard position={[0, 2.2, 0]}>
