@@ -43,6 +43,19 @@ https://schrute-space.com (with restricted access).
    ```
    App runs at `http://localhost:8080`.
 
+### Local test mode (no PostgreSQL)
+
+For quick debugging without Docker or `DATABASE_URL`:
+
+```bash
+npm run dev:local-test
+```
+
+- Uses an in-memory database (data is lost when the process exits).
+- Each browser profile gets its own mock user via an HttpOnly cookie (`mock-xxxxxxxx@local.test`, `Player xxxxxxxx`).
+- By default the process **exits after 3 minutes** so ports are not left open. Set `LOCAL_TEST_TTL_MS=0` to disable the timer, or override the duration in milliseconds.
+
+Normal `npm run dev` is unchanged and still requires PostgreSQL.
 
 ### Stopping / restarting the database
 

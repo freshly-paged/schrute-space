@@ -5,9 +5,13 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
+import type { ViteDevServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { nanoid } from "nanoid";
+import * as mem from "./server/memoryDb.js";
+import type { FurnitureItem as MemFurnitureItem } from "./server/memoryDb.js";
 import {
   WORKING_AREA_BOUNDS,
   DESK_SPAWN_MARGIN,
@@ -19,36 +23,72 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const LOCAL_TEST_COOKIE = "office_local_test_identity";
+
+function isLocalTest(): boolean {
+  const v = process.env.LOCAL_TEST?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+function isLocalTestEnabled(): boolean {
+  return isLocalTest() && process.env.NODE_ENV !== "production";
+}
+
+function parseLocalTestCookie(
+  cookieHeader: string | undefined
+): { email: string; name: string } | null {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(";").map((p) => p.trim());
+  for (const p of parts) {
+    if (!p.startsWith(`${LOCAL_TEST_COOKIE}=`)) continue;
+    const raw = p.slice(LOCAL_TEST_COOKIE.length + 1);
+    try {
+      const v = decodeURIComponent(raw);
+      const o = JSON.parse(v) as { email?: string; name?: string };
+      if (o && typeof o.email === "string" && typeof o.name === "string") {
+        return { email: o.email, name: o.name };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
 // ── Database ────────────────────────────────────────────────────────────────
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+let pool: pg.Pool | undefined;
+if (!isLocalTest()) {
+  pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+}
 
 async function initDb() {
-  await pool.query(`
+  if (isLocalTest()) return;
+  await pool!.query(`
     CREATE TABLE IF NOT EXISTS users (
       email       TEXT PRIMARY KEY,
       paper_reams INTEGER NOT NULL DEFAULT 0
     )
   `);
-  await pool.query(`
+  await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '{}'
   `);
-  await pool.query(`
+  await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT
   `);
-  await pool.query(`
+  await pool!.query(`
     CREATE TABLE IF NOT EXISTS room_layouts (
       room_id TEXT PRIMARY KEY,
       layout  JSONB NOT NULL DEFAULT '[]'
     )
   `);
-  await pool.query(`
+  await pool!.query(`
     CREATE TABLE IF NOT EXISTS rooms (
       room_id     TEXT PRIMARY KEY,
       max_workers INTEGER NOT NULL DEFAULT 20,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  await pool.query(`
+  await pool!.query(`
     CREATE TABLE IF NOT EXISTS room_members (
       room_id   TEXT NOT NULL REFERENCES rooms(room_id) ON DELETE CASCADE,
       email     TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
@@ -60,7 +100,8 @@ async function initDb() {
 }
 
 async function getPaperReams(email: string): Promise<number> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetPaperReams(email);
+  const { rows } = await pool!.query(
     'SELECT paper_reams FROM users WHERE email = $1',
     [email]
   );
@@ -68,7 +109,8 @@ async function getPaperReams(email: string): Promise<number> {
 }
 
 async function savePaperReams(email: string, count: number): Promise<void> {
-  await pool.query(
+  if (isLocalTest()) return mem.memSavePaperReams(email, count);
+  await pool!.query(
     `INSERT INTO users (email, paper_reams) VALUES ($1, $2)
      ON CONFLICT (email) DO UPDATE SET paper_reams = EXCLUDED.paper_reams`,
     [email, count]
@@ -82,7 +124,8 @@ interface AvatarConfig {
 }
 
 async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetAvatarConfig(email);
+  const { rows } = await pool!.query(
     'SELECT avatar_config FROM users WHERE email = $1',
     [email]
   );
@@ -93,7 +136,8 @@ async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
 
 
 async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
-  await pool.query(
+  if (isLocalTest()) return mem.memSaveAvatarConfig(email, config);
+  await pool!.query(
     `INSERT INTO users (email, avatar_config) VALUES ($1, $2)
      ON CONFLICT (email) DO UPDATE SET avatar_config = EXCLUDED.avatar_config`,
     [email, JSON.stringify(config)]
@@ -102,13 +146,7 @@ async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<vo
 
 // ── Room Layout ───────────────────────────────────────────────────────────────
 
-interface FurnitureItem {
-  id: string;
-  type: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
-  config: Record<string, unknown>;
-}
+type FurnitureItem = MemFurnitureItem;
 
 interface DeskItem extends FurnitureItem {
   type: 'desk';
@@ -116,7 +154,8 @@ interface DeskItem extends FurnitureItem {
 }
 
 async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetRoomLayout(roomId);
+  const { rows } = await pool!.query(
     'SELECT layout FROM room_layouts WHERE room_id = $1',
     [roomId]
   );
@@ -124,7 +163,8 @@ async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
 }
 
 async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<void> {
-  await pool.query(
+  if (isLocalTest()) return mem.memSaveRoomLayout(roomId, layout);
+  await pool!.query(
     `INSERT INTO room_layouts (room_id, layout) VALUES ($1, $2)
      ON CONFLICT (room_id) DO UPDATE SET layout = EXCLUDED.layout`,
     [roomId, JSON.stringify(layout)]
@@ -183,7 +223,8 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
 type RoomRole = 'admin' | 'manager' | 'worker';
 
 async function ensureRoom(roomId: string): Promise<boolean> {
-  const result = await pool.query(
+  if (isLocalTest()) return mem.memEnsureRoom(roomId);
+  const result = await pool!.query(
     `INSERT INTO rooms (room_id) VALUES ($1) ON CONFLICT (room_id) DO NOTHING RETURNING room_id`,
     [roomId]
   );
@@ -191,7 +232,8 @@ async function ensureRoom(roomId: string): Promise<boolean> {
 }
 
 async function getMemberRole(roomId: string, email: string): Promise<RoomRole | null> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetMemberRole(roomId, email);
+  const { rows } = await pool!.query(
     'SELECT role FROM room_members WHERE room_id = $1 AND email = $2',
     [roomId, email]
   );
@@ -199,7 +241,8 @@ async function getMemberRole(roomId: string, email: string): Promise<RoomRole | 
 }
 
 async function upsertMember(roomId: string, email: string, role: RoomRole): Promise<void> {
-  await pool.query(
+  if (isLocalTest()) return mem.memUpsertMember(roomId, email, role);
+  await pool!.query(
     `INSERT INTO room_members (room_id, email, role) VALUES ($1, $2, $3)
      ON CONFLICT (room_id, email) DO UPDATE SET role = EXCLUDED.role`,
     [roomId, email, role]
@@ -207,14 +250,16 @@ async function upsertMember(roomId: string, email: string, role: RoomRole): Prom
 }
 
 async function removeMember(roomId: string, email: string): Promise<void> {
-  await pool.query(
+  if (isLocalTest()) return mem.memRemoveMember(roomId, email);
+  await pool!.query(
     'DELETE FROM room_members WHERE room_id = $1 AND email = $2',
     [roomId, email]
   );
 }
 
 async function getRoomMembers(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetRoomMembers(roomId);
+  const { rows } = await pool!.query(
     `SELECT rm.email, u.display_name as name, rm.role, rm.joined_at as "joinedAt"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
@@ -226,7 +271,8 @@ async function getRoomMembers(roomId: string): Promise<Array<{ email: string; na
 }
 
 async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetRoomLeaderboard(roomId);
+  const { rows } = await pool!.query(
     `SELECT rm.email, u.display_name as name, rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
@@ -238,7 +284,8 @@ async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string
 }
 
 async function getMyRooms(email: string): Promise<Array<{ roomId: string; role: string; maxWorkers: number }>> {
-  const { rows } = await pool.query(
+  if (isLocalTest()) return mem.memGetMyRooms(email);
+  const { rows } = await pool!.query(
     `SELECT rm.room_id as "roomId", rm.role, r.max_workers as "maxWorkers"
      FROM room_members rm
      JOIN rooms r ON r.room_id = rm.room_id
@@ -249,10 +296,54 @@ async function getMyRooms(email: string): Promise<Array<{ roomId: string; role: 
   return rows;
 }
 
+async function getRoomMaxWorkers(roomId: string): Promise<number> {
+  if (isLocalTest()) return mem.memGetRoomMaxWorkers(roomId);
+  const { rows } = await pool!.query(
+    "SELECT max_workers FROM rooms WHERE room_id = $1",
+    [roomId]
+  );
+  return rows[0]?.max_workers ?? 20;
+}
+
+async function getRoomMemberCount(roomId: string): Promise<number> {
+  if (isLocalTest()) return mem.memGetRoomMemberCount(roomId);
+  const { rows } = await pool!.query(
+    "SELECT COUNT(*) FROM room_members WHERE room_id = $1",
+    [roomId]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
+async function ensureUserRow(email: string): Promise<void> {
+  if (isLocalTest()) return mem.memEnsureUser(email);
+  await pool!.query(
+    `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
+    [email]
+  );
+}
+
+async function upsertUserDisplayName(email: string, displayName: string): Promise<void> {
+  if (isLocalTest()) return mem.memUpsertUserDisplayName(email, displayName);
+  await pool!.query(
+    `INSERT INTO users (email, display_name) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name`,
+    [email, displayName]
+  );
+}
+
+async function updateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise<void> {
+  if (isLocalTest()) return mem.memUpdateRoomMaxWorkers(roomId, maxWorkers);
+  await pool!.query("UPDATE rooms SET max_workers = $1 WHERE room_id = $2", [
+    maxWorkers,
+    roomId,
+  ]);
+}
+
 // ── Config ───────────────────────────────────────────────────────────────────
 
 // Extract user from IAP-injected headers (X-Goog-Authenticated-User-Email).
 // Falls back to DEV_USER_EMAIL for local development without IAP.
+// When LOCAL_TEST is enabled (non-production), uses HttpOnly cookie identity or returns null until /api/auth/me mints one.
 function getIAPUser(headers: Record<string, any>): { email: string; name: string } | null {
   const iapEmail = headers['x-goog-authenticated-user-email'];
   if (iapEmail && typeof iapEmail === 'string') {
@@ -265,6 +356,11 @@ function getIAPUser(headers: Record<string, any>): { email: string; name: string
     const name = devEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
     return { email: devEmail, name };
   }
+  if (isLocalTestEnabled()) {
+    const fromCookie = parseLocalTestCookie(headers.cookie);
+    if (fromCookie) return fromCookie;
+    return null;
+  }
   // Local `npm run dev`: no IAP headers — act as a default dev user (production uses NODE_ENV=production).
   if (process.env.NODE_ENV !== "production") {
     return { email: "dev@local.test", name: "Local Dev" };
@@ -274,6 +370,11 @@ function getIAPUser(headers: Record<string, any>): { email: string; name: string
 
 async function startServer() {
   await initDb();
+  if (isLocalTest()) {
+    console.log(
+      "[LOCAL_TEST] in-memory DB; auto mock users; TTL exit when NODE_ENV is not production"
+    );
+  }
   const app = express();
   app.set("trust proxy", 1);
   const httpServer = createServer(app);
@@ -297,6 +398,19 @@ async function startServer() {
 
   // Auth Routes
   app.get("/api/auth/me", (req, res) => {
+    if (isLocalTestEnabled()) {
+      let user = getIAPUser(req.headers);
+      if (!user) {
+        const id = nanoid(8);
+        user = { email: `mock-${id}@local.test`, name: `Player ${id}` };
+        const payload = encodeURIComponent(JSON.stringify(user));
+        res.setHeader(
+          "Set-Cookie",
+          `${LOCAL_TEST_COOKIE}=${payload}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}`
+        );
+      }
+      return res.json(user);
+    }
     res.json((req as any).user || null);
   });
 
@@ -396,20 +510,15 @@ async function startServer() {
       if (role === 'manager' && requesterRole !== 'admin') {
         return res.status(403).json({ error: "Only admins can assign managers" });
       }
-      const [membersResult, roomRow] = await Promise.all([
-        pool.query('SELECT COUNT(*) FROM room_members WHERE room_id = $1', [roomId]),
-        pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [roomId])
+      const [currentCount, maxWorkers] = await Promise.all([
+        getRoomMemberCount(roomId),
+        getRoomMaxWorkers(roomId),
       ]);
-      const currentCount = parseInt(membersResult.rows[0].count);
-      const maxWorkers = roomRow.rows[0]?.max_workers ?? 20;
       if (currentCount >= maxWorkers) {
         return res.status(409).json({ error: "Room is at capacity" });
       }
       // Ensure user row exists before adding to room_members
-      await pool.query(
-        `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
-        [email]
-      );
+      await ensureUserRow(email);
       await upsertMember(roomId, email, role as RoomRole);
       // If the new member is currently online, give them a desk and notify them
       const onlineEntry = Object.entries(rooms[roomId] ?? {})
@@ -488,7 +597,7 @@ async function startServer() {
       if (typeof maxWorkers !== 'number' || maxWorkers < 1 || maxWorkers > 100) {
         return res.status(400).json({ error: "maxWorkers must be 1-100" });
       }
-      await pool.query('UPDATE rooms SET max_workers = $1 WHERE room_id = $2', [maxWorkers, roomId]);
+      await updateRoomMaxWorkers(roomId, maxWorkers);
       io.to(roomId).emit("roomMembersUpdated", { roomId, maxWorkers });
       res.json({ ok: true });
     } catch {
@@ -554,11 +663,7 @@ io.on("connection", (socket) => {
       }
 
       // Ensure user row exists and update display name
-      await pool.query(
-        `INSERT INTO users (email, display_name) VALUES ($1, $2)
-         ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name`,
-        [user.email, user.name]
-      );
+      await upsertUserDisplayName(user.email, user.name);
 
       // Ensure room exists; first joiner (or first joiner with no existing members) becomes admin
       await ensureRoom(room);
@@ -630,16 +735,16 @@ io.on("connection", (socket) => {
 
       // Send room info to joining socket
       try {
-        const [members, roomRow] = await Promise.all([
+        const [members, maxWorkers] = await Promise.all([
           getRoomMembers(room),
-          pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [room])
+          getRoomMaxWorkers(room),
         ]);
         const onlineEmails = new Set(
           Object.values(rooms[room]).map((p: any) => p.email)
         );
         socket.emit("roomInfoLoaded", {
           roomId: room,
-          maxWorkers: roomRow.rows[0]?.max_workers ?? 20,
+          maxWorkers,
           myRole: role,
           memberCount: members.length,
           members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))
@@ -828,9 +933,11 @@ io.on("connection", (socket) => {
     }
   }, 3000);
 
+  let vite: ViteDevServer | null = null;
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    vite = await createViteServer({
       server: {
         middlewareMode: true,
         // Reuse the same HTTP server so HMR shares PORT (no separate 24678/24679).
@@ -873,6 +980,34 @@ io.on("connection", (socket) => {
   });
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+
+    if (isLocalTestEnabled()) {
+      const raw = process.env.LOCAL_TEST_TTL_MS;
+      const ttlMs =
+        raw === undefined || raw === ""
+          ? 180_000
+          : parseInt(raw, 10);
+      if (Number.isFinite(ttlMs) && ttlMs > 0) {
+        console.log(
+          `[LOCAL_TEST] will exit in ${ttlMs / 1000}s (LOCAL_TEST_TTL_MS=0 to disable)`
+        );
+        setTimeout(() => {
+          console.log("[LOCAL_TEST] shutting down...");
+          void (async () => {
+            io.disconnectSockets(true);
+            await new Promise<void>((resolve) => {
+              io.close(() => resolve());
+            });
+            if (vite) {
+              await vite.close();
+              vite = null;
+            }
+            httpServer.closeAllConnections?.();
+            httpServer.close(() => process.exit(0));
+          })();
+        }, ttlMs);
+      }
+    }
   });
 }
 
