@@ -8,7 +8,13 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
-import { WORKING_AREA_BOUNDS, DESK_SPAWN_MARGIN, DESK_SPAWN_SPACING } from "./src/officeLayout.js";
+import {
+  WORKING_AREA_BOUNDS,
+  DESK_SPAWN_MARGIN,
+  DESK_SPAWN_SPACING,
+  WATER_COOLER_WORLD_POSITION,
+  WATER_COOLER_RADIUS,
+} from "./src/officeLayout.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -258,6 +264,10 @@ function getIAPUser(headers: Record<string, any>): { email: string; name: string
   if (devEmail) {
     const name = devEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
     return { email: devEmail, name };
+  }
+  // Local `npm run dev`: no IAP headers — act as a default dev user (production uses NODE_ENV=production).
+  if (process.env.NODE_ENV !== "production") {
+    return { email: "dev@local.test", name: "Local Dev" };
   }
   return null;
 }
@@ -569,7 +579,8 @@ io.on("connection", (socket) => {
         rotation: [0, 0, 0],
         color: getDeterministicColor(name),
         name: name,
-        room: room
+        room: room,
+        wornPropId: null,
       };
 
       // Remove stale entries for the same email before sending currentPlayers.
@@ -644,6 +655,37 @@ io.on("connection", (socket) => {
       if (typeof count === 'number' && count >= 0) {
         savePaperReams(user.email, Math.floor(count));
       }
+    });
+
+    socket.on("playerWornProp", (data: { propId: string | null }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const pid = data?.propId ?? null;
+      if (pid !== null && pid !== "ms_body") return;
+      rooms[playerRoom][socket.id].wornPropId = pid;
+      socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+    });
+
+    socket.on("throwableRestSync", (data: { throwableId: string; position: number[]; rotation: number[] }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+      if (!playerRoom) return;
+      if (!data || data.throwableId !== "ms_body") return;
+      const { position, rotation } = data;
+      if (!Array.isArray(position) || position.length !== 3) return;
+      if (!Array.isArray(rotation) || rotation.length !== 3) return;
+      socket.to(playerRoom).emit("throwableRestSync", data);
     });
 
     socket.on("saveAvatarConfig", (config: AvatarConfig) => {
@@ -748,10 +790,55 @@ io.on("connection", (socket) => {
     });
   });
 
+  const waterCoolerGossipTurn: Record<string, number> = {};
+  const [wcX, , wcZ] = WATER_COOLER_WORLD_POSITION;
+
+  setInterval(() => {
+    for (const roomId of Object.keys(rooms)) {
+      const roomPlayers = rooms[roomId];
+      if (!roomPlayers) continue;
+
+      const nearIds: string[] = [];
+      for (const socketId of Object.keys(roomPlayers)) {
+        const p = roomPlayers[socketId];
+        if (!p?.position || !Array.isArray(p.position) || p.position.length < 3) continue;
+        const dx = p.position[0] - wcX;
+        const dz = p.position[2] - wcZ;
+        if (Math.sqrt(dx * dx + dz * dz) < WATER_COOLER_RADIUS) {
+          nearIds.push(socketId);
+        }
+      }
+      nearIds.sort();
+      if (nearIds.length < 2) continue;
+
+      const turn = waterCoolerGossipTurn[roomId] ?? 0;
+      const speakerId = nearIds[turn % nearIds.length];
+      waterCoolerGossipTurn[roomId] = turn + 1;
+      const time = Date.now();
+      const speaker = roomPlayers[speakerId];
+      if (speaker) {
+        speaker.lastMessage = "Gossip Gossip";
+        speaker.lastMessageTime = time;
+      }
+      io.to(roomId).emit("ambientSpeech", {
+        playerId: speakerId,
+        text: "Gossip Gossip",
+        time,
+      });
+    }
+  }, 3000);
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // Reuse the same HTTP server so HMR shares PORT (no separate 24678/24679).
+        hmr:
+          process.env.DISABLE_HMR === "true"
+            ? false
+            : { server: httpServer },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -777,6 +864,13 @@ io.on("connection", (socket) => {
     });
   }
 
+  httpServer.once("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `Port ${PORT} is already in use (another \`npm run dev\`?). Close it or set PORT=8081 in .env.local.`
+      );
+    }
+  });
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

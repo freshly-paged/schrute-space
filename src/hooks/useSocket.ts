@@ -125,6 +125,28 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    newSocket.on(
+      'ambientSpeech',
+      (payload: { playerId: string; text: string; time: number }) => {
+        if (!payload?.playerId || typeof payload.text !== 'string' || typeof payload.time !== 'number') return;
+        if (payload.playerId !== newSocket.id) {
+          setPlayers((prev) => {
+            if (!prev[payload.playerId]) return prev;
+            return {
+              ...prev,
+              [payload.playerId]: {
+                ...prev[payload.playerId],
+                lastMessage: payload.text,
+                lastMessageTime: payload.time,
+              },
+            };
+          });
+        } else {
+          setLastLocalMessage({ text: payload.text, time: payload.time });
+        }
+      }
+    );
+
     newSocket.on('playerDisconnected', (id: string) => {
       console.log(`[socket] playerDisconnected: ${id}`);
       setPlayers((prev) => {
@@ -204,6 +226,8 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setRoomInfo(null);
       useGameStore.getState().setRemoteWornThrowableIds([]);
       useGameStore.getState().clearWornProp();
+      useGameStore.getState().setNearWaterCooler(false);
+      useGameStore.getState().setWaterBuffExpiresAt(null);
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

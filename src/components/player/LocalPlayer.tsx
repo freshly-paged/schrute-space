@@ -10,6 +10,7 @@ import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
+import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
 
 const BOUNDS = 22;
@@ -402,6 +403,7 @@ export const LocalPlayer = ({
       />
       <group ref={playerRef} name="localPlayer">
         <group ref={rollGroupRef}>
+          <WaterEnergyAura />
           <CharacterAvatar
             color={playerColor}
             isMoving={isMoving}

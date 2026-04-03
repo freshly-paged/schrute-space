@@ -54,6 +54,12 @@ interface GameState {
 
   nearWhiteboard: boolean;
   setNearWhiteboard: (near: boolean) => void;
+
+  nearWaterCooler: boolean;
+  setNearWaterCooler: (near: boolean) => void;
+  /** Local-only UI: epoch ms when water cooler buff ends (5 min from last enter). */
+  waterBuffExpiresAt: number | null;
+  setWaterBuffExpiresAt: (expiresAt: number | null) => void;
   showLeaderboard: boolean;
   setShowLeaderboard: (show: boolean) => void;
 
@@ -175,6 +181,11 @@ export const useGameStore = create<GameState>((set) => ({
 
   nearWhiteboard: false,
   setNearWhiteboard: (near) => set({ nearWhiteboard: near }),
+
+  nearWaterCooler: false,
+  setNearWaterCooler: (near) => set({ nearWaterCooler: near }),
+  waterBuffExpiresAt: null,
+  setWaterBuffExpiresAt: (expiresAt) => set({ waterBuffExpiresAt: expiresAt }),
   showLeaderboard: false,
   setShowLeaderboard: (show) => set({ showLeaderboard: show }),
 
