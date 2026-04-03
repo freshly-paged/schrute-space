@@ -24,6 +24,8 @@ export interface Player {
   focusProgress?: number; // 0-1
   activeDeskId?: string | null;
   avatarConfig?: AvatarConfig;
+  /** Prop id from ThrowableObject (e.g. ms_body) worn on the torso; synced for multiplayer. */
+  wornPropId?: string | null;
 }
 
 export interface FurnitureItem {

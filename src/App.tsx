@@ -12,6 +12,7 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { WaterEnergyBuffOverlay } from './components/ui/WaterEnergyBuffOverlay';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
@@ -146,8 +147,11 @@ export default function App() {
     );
   }
 
-  // ── Not authenticated (IAP misconfigured or session missing) ────────────
+  // ── Not authenticated (IAP in prod, or /api/auth/me failed) ───────────────
   if (!user) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isLocal =
+      host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-50 p-6">
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-10 rounded-3xl shadow-2xl max-w-md text-center">
@@ -155,7 +159,17 @@ export default function App() {
             <Monitor className="text-red-400 w-10 h-10" />
           </div>
           <h2 className="text-white text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="text-slate-300 mb-8">Access is managed by Identity-Aware Proxy. Please ensure you are signed in.</p>
+          <p className="text-slate-300 mb-8">
+            {isLocal ? (
+              <>
+                The app could not load your session from <code className="text-indigo-300">/api/auth/me</code>. Make sure
+                the dev server is running and you are opening the same origin (e.g.{' '}
+                <code className="text-indigo-300">http://localhost:8080</code>), not a static preview on another port.
+              </>
+            ) : (
+              <>Access is managed by Google Identity-Aware Proxy. Sign in with your allowed Google account, then retry.</>
+            )}
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-xl transition-all"
@@ -220,6 +234,7 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
+      <WaterEnergyBuffOverlay />
       <PaperBurst />
       <InspectOverlay />
 

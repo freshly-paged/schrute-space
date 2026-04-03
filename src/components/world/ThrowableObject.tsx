@@ -24,6 +24,8 @@ interface ThrowableObjectProps {
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
+  /** Upper-body wearables: [E] while held equips; [G] puts down (no throw). */
+  wearable?: boolean;
   children: React.ReactNode;
 }
 
@@ -35,9 +37,19 @@ export function ThrowableObject({
   restPosition,
   restRotation,
   proximityRadius,
+  wearable,
   children,
 }: ThrowableObjectProps) {
-  const { groupRef, phase, isNear } = useThrowable({ id, label, description, assetKey, restPosition, restRotation, proximityRadius });
+  const { groupRef, phase, isNear } = useThrowable({
+    id,
+    label,
+    description,
+    assetKey,
+    restPosition,
+    restRotation,
+    proximityRadius,
+    wearable,
+  });
 
   return (
     <group ref={groupRef}>
@@ -85,7 +97,7 @@ export function ThrowableObject({
             outlineWidth={0.01}
             outlineColor="black"
           >
-            [E] Put Down    [G] Throw
+            {wearable ? '[E] Wear    [G] Put Down' : '[E] Put Down    [G] Throw'}
           </Text>
         </Billboard>
       )}
