@@ -22,6 +22,8 @@ export interface Player {
   rollTimer?: number;
   isFocused?: boolean;
   focusProgress?: number; // 0-1
+  /** Index into seated leg presets; set when focused. */
+  focusSitPoseIndex?: number;
   activeDeskId?: string | null;
   avatarConfig?: AvatarConfig;
   /** Prop id from ThrowableObject (e.g. ms_body) worn on the torso; synced for multiplayer. */

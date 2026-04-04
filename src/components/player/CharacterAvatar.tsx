@@ -3,7 +3,13 @@ import { useFrame } from '@react-three/fiber';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
+import { FOCUS_SIT_POSES, FOCUS_SIT_POSE_COUNT } from '../../avatarFocusPoses';
 import { WornMsBody } from './WornMsBody';
+
+export { FOCUS_SIT_POSES, FOCUS_SIT_POSE_COUNT } from '../../avatarFocusPoses';
+
+/** Local +Z = toward desk when seated; shifts thighs forward past the chair seat. */
+const FOCUS_LEG_FORWARD_Z = 0.14;
 
 export const CharacterAvatar = ({
   color,
@@ -14,6 +20,8 @@ export const CharacterAvatar = ({
   skinTone = '#ffdbac',
   pantColor = '#333333',
   wornUpperPropId,
+  isFocused = false,
+  focusSitPoseIndex = 0,
 }: {
   color: string;
   isMoving: boolean;
@@ -23,6 +31,10 @@ export const CharacterAvatar = ({
   skinTone?: string;
   pantColor?: string;
   wornUpperPropId?: string | null;
+  /** When true, legs use a seated preset instead of standing idle. */
+  isFocused?: boolean;
+  /** Index into `FOCUS_SIT_POSES` (clamped). */
+  focusSitPoseIndex?: number;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
@@ -44,29 +56,107 @@ export const CharacterAvatar = ({
       return;
     }
 
+    if (isFocused) {
+      const idx = Math.min(
+        Math.max(0, focusSitPoseIndex),
+        FOCUS_SIT_POSE_COUNT - 1
+      );
+      const [lx, ly, lz, rx, ry, rz] = FOCUS_SIT_POSES[idx]!;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = 0.38;
+        leftArmRef.current.rotation.y = -0.06;
+        leftArmRef.current.rotation.z = 0.05;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = 0.38;
+        rightArmRef.current.rotation.y = 0.06;
+        rightArmRef.current.rotation.z = -0.05;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.x = lx;
+        leftLegRef.current.rotation.y = ly;
+        leftLegRef.current.rotation.z = lz;
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.x = rx;
+        rightLegRef.current.rotation.y = ry;
+        rightLegRef.current.rotation.z = rz;
+      }
+      return;
+    }
+
     if (!isGrounded) {
       // Jumping pose
-      if (leftArmRef.current) leftArmRef.current.rotation.x = -Math.PI * 0.2;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = -Math.PI * 0.2;
-      if (leftLegRef.current) leftLegRef.current.rotation.x = Math.PI * 0.1;
-      if (rightLegRef.current) rightLegRef.current.rotation.x = Math.PI * 0.1;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = -Math.PI * 0.2;
+        leftArmRef.current.rotation.y = 0;
+        leftArmRef.current.rotation.z = 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -Math.PI * 0.2;
+        rightArmRef.current.rotation.y = 0;
+        rightArmRef.current.rotation.z = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.x = Math.PI * 0.1;
+        leftLegRef.current.rotation.y = 0;
+        leftLegRef.current.rotation.z = 0;
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.x = Math.PI * 0.1;
+        rightLegRef.current.rotation.y = 0;
+        rightLegRef.current.rotation.z = 0;
+      }
     } else if (isMoving) {
       // Walking animation
       const swing = Math.sin(t * walkSpeed) * walkAmount;
-      if (leftArmRef.current) leftArmRef.current.rotation.x = swing;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = -swing;
-      if (leftLegRef.current) leftLegRef.current.rotation.x = -swing;
-      if (rightLegRef.current) rightLegRef.current.rotation.x = swing;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = swing;
+        leftArmRef.current.rotation.y = 0;
+        leftArmRef.current.rotation.z = 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -swing;
+        rightArmRef.current.rotation.y = 0;
+        rightArmRef.current.rotation.z = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.x = -swing;
+        leftLegRef.current.rotation.y = 0;
+        leftLegRef.current.rotation.z = 0;
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.x = swing;
+        rightLegRef.current.rotation.y = 0;
+        rightLegRef.current.rotation.z = 0;
+      }
     } else {
       // Idle pose
-      if (leftArmRef.current) leftArmRef.current.rotation.x = 0;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = 0;
-      if (leftLegRef.current) leftLegRef.current.rotation.x = 0;
-      if (rightLegRef.current) rightLegRef.current.rotation.x = 0;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = 0;
+        leftArmRef.current.rotation.y = 0;
+        leftArmRef.current.rotation.z = 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = 0;
+        rightArmRef.current.rotation.y = 0;
+        rightArmRef.current.rotation.z = 0;
+      }
+      if (leftLegRef.current) {
+        leftLegRef.current.rotation.x = 0;
+        leftLegRef.current.rotation.y = 0;
+        leftLegRef.current.rotation.z = 0;
+      }
+      if (rightLegRef.current) {
+        rightLegRef.current.rotation.x = 0;
+        rightLegRef.current.rotation.y = 0;
+        rightLegRef.current.rotation.z = 0;
+      }
     }
   });
 
   const suitReplacesHead = wornUpperPropId === MS_BODY_THROWABLE_ID;
+  const legAnchorZ = isFocused ? FOCUS_LEG_FORWARD_Z : 0;
 
   return (
     <group ref={groupRef}>
@@ -104,14 +194,14 @@ export const CharacterAvatar = ({
 
       {suitReplacesHead ? <WornMsBody /> : null}
 
-      {/* Legs */}
-      <group position={[-0.15, 0.5, 0]}>
+      {/* Legs — forward Z when seated so mesh clears chair seat */}
+      <group position={[-0.15, 0.5, legAnchorZ]}>
         <mesh ref={leftLegRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.2, 0.5, 0.2]} />
           <meshStandardMaterial color={pantColor} />
         </mesh>
       </group>
-      <group position={[0.15, 0.5, 0]}>
+      <group position={[0.15, 0.5, legAnchorZ]}>
         <mesh ref={rightLegRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.2, 0.5, 0.2]} />
           <meshStandardMaterial color={pantColor} />
