@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { FOCUS_SIT_POSE_COUNT } from '../avatarFocusPoses';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
@@ -27,8 +28,12 @@ interface GameState {
   isTimerPaused: boolean;
   timerMode: 'focus' | 'break';
   timeLeft: number; // in seconds
+  /** Wall-clock end time for the running timer (null while paused). Keeps countdown accurate when the tab is backgrounded. */
+  timerEndsAt: number | null;
   sessionPaper: number; // paper earned in current focus session
   lastPaperEarnedAt: number; // timestamp — changes when paper is earned, triggers animation
+  /** Random seated leg preset index for the current focus session (set when focus starts). */
+  focusSitPoseIndex: number;
   startTimer: (mode: 'focus' | 'break') => void;
   stopTimer: () => void;
   togglePause: () => void;
@@ -114,48 +119,98 @@ export const useGameStore = create<GameState>((set) => ({
   isTimerPaused: false,
   timerMode: 'focus',
   timeLeft: 25 * 60,
+  timerEndsAt: null,
   sessionPaper: 0,
   lastPaperEarnedAt: 0,
-  startTimer: (mode) => set((state) => ({
-    isTimerActive: true,
-    isTimerPaused: false,
-    timerMode: mode,
-    timeLeft: mode === 'focus' ? 25 * 60 : 5 * 60,
-    activeDeskId: state.nearestDeskId,
-    sessionPaper: 0,
-    lastPaperEarnedAt: 0,
-  })),
-  stopTimer: () => set({ isTimerActive: false, isTimerPaused: false, activeDeskId: null, sessionPaper: 0 }),
-  togglePause: () => set((state) => ({ isTimerPaused: !state.isTimerPaused })),
+  focusSitPoseIndex: 0,
+  startTimer: (mode) =>
+    set((state) => {
+      const durationSec = mode === 'focus' ? 25 * 60 : 5 * 60;
+      const now = Date.now();
+      return {
+        isTimerActive: true,
+        isTimerPaused: false,
+        timerMode: mode,
+        timeLeft: durationSec,
+        timerEndsAt: now + durationSec * 1000,
+        activeDeskId: state.nearestDeskId,
+        sessionPaper: 0,
+        lastPaperEarnedAt: 0,
+        focusSitPoseIndex:
+          mode === 'focus' ? Math.floor(Math.random() * FOCUS_SIT_POSE_COUNT) : state.focusSitPoseIndex,
+      };
+    }),
+  stopTimer: () =>
+    set({
+      isTimerActive: false,
+      isTimerPaused: false,
+      activeDeskId: null,
+      sessionPaper: 0,
+      focusSitPoseIndex: 0,
+      timerEndsAt: null,
+    }),
+  togglePause: () =>
+    set((state) => {
+      if (!state.isTimerActive) return {};
+      const nextPaused = !state.isTimerPaused;
+      if (nextPaused) {
+        return { isTimerPaused: true, timerEndsAt: null };
+      }
+      return {
+        isTimerPaused: false,
+        timerEndsAt: Date.now() + state.timeLeft * 1000,
+      };
+    }),
   tickTimer: () => set((state) => {
     if (state.isTimerPaused || !state.isTimerActive) return {};
 
-    const newTimeLeft = state.timeLeft - 1;
+    const endsAt = state.timerEndsAt ?? Date.now() + state.timeLeft * 1000;
+    const newTimeLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
 
     if (newTimeLeft <= 0) {
-      return { isTimerActive: false, isTimerPaused: false, timeLeft: 0, activeDeskId: null };
+      return {
+        isTimerActive: false,
+        isTimerPaused: false,
+        timeLeft: 0,
+        activeDeskId: null,
+        focusSitPoseIndex: 0,
+        timerEndsAt: null,
+      };
     }
 
     let newPaperReams = state.paperReams;
     let newSessionPaper = state.sessionPaper;
     let newLastPaperEarnedAt = state.lastPaperEarnedAt;
 
-    // Passive generation: 1 paper every 30 seconds during focus
-    if (state.timerMode === 'focus' && (1500 - newTimeLeft) % 30 === 0 && newTimeLeft < 1500) {
-      newPaperReams += 1;
-      newSessionPaper += 1;
-      newLastPaperEarnedAt = Date.now();
+    // Passive generation: 1 paper every 30 seconds during focus (derived from wall time so bursts catch up)
+    if (state.timerMode === 'focus') {
+      const targetSessionPaper = Math.floor((1500 - newTimeLeft) / 30);
+      const paperDelta = targetSessionPaper - state.sessionPaper;
+      if (paperDelta > 0) {
+        newPaperReams += paperDelta;
+        newSessionPaper = targetSessionPaper;
+        newLastPaperEarnedAt = Date.now();
+      }
     }
 
-    return { timeLeft: newTimeLeft, paperReams: newPaperReams, sessionPaper: newSessionPaper, lastPaperEarnedAt: newLastPaperEarnedAt };
+    return {
+      timeLeft: newTimeLeft,
+      timerEndsAt: endsAt,
+      paperReams: newPaperReams,
+      sessionPaper: newSessionPaper,
+      lastPaperEarnedAt: newLastPaperEarnedAt,
+    };
   }),
-  resetTimer: () => set((state) => ({
-    isTimerActive: false,
-    isTimerPaused: false,
-    timeLeft: state.timerMode === 'focus' ? 25 * 60 : 5 * 60,
-    activeDeskId: null,
-    sessionPaper: 0,
-  })),
+  resetTimer: () =>
+    set((state) => ({
+      isTimerActive: false,
+      isTimerPaused: false,
+      timeLeft: state.timerMode === 'focus' ? 25 * 60 : 5 * 60,
+      activeDeskId: null,
+      sessionPaper: 0,
+      focusSitPoseIndex: 0,
+      timerEndsAt: null,
+    })),
 
   nearestDeskId: null,
   activeDeskId: null,

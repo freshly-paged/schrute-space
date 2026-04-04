@@ -876,7 +876,12 @@ io.on("connection", (socket) => {
       }
     });
 
-    socket.on("playerFocusUpdate", (data: { isFocused: boolean; focusProgress: number; activeDeskId: string | null }) => {
+    socket.on("playerFocusUpdate", (data: {
+      isFocused: boolean;
+      focusProgress: number;
+      activeDeskId: string | null;
+      focusSitPoseIndex?: number;
+    }) => {
       let playerRoom = "";
       for (const roomId in rooms) {
         if (rooms[roomId][socket.id]) {
@@ -889,6 +894,11 @@ io.on("connection", (socket) => {
         rooms[playerRoom][socket.id].isFocused = data.isFocused;
         rooms[playerRoom][socket.id].focusProgress = data.focusProgress;
         rooms[playerRoom][socket.id].activeDeskId = data.activeDeskId;
+        if (data.isFocused && typeof data.focusSitPoseIndex === "number") {
+          rooms[playerRoom][socket.id].focusSitPoseIndex = data.focusSitPoseIndex;
+        } else {
+          delete rooms[playerRoom][socket.id].focusSitPoseIndex;
+        }
         socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
       }
     });

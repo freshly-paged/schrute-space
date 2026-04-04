@@ -30,6 +30,8 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
           skinTone={player.avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
           pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
           wornUpperPropId={player.wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
+          isFocused={player.isFocused ?? false}
+          focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
         />
       </group>
       <Billboard position={[0, 2.2, 0]}>

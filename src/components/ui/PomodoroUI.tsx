@@ -17,14 +17,22 @@ export const PomodoroUI = () => {
   } = useGameStore();
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerActive && !isTimerPaused && timeLeft > 0) {
-      interval = setInterval(() => {
-        tickTimer();
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerActive, isTimerPaused, timeLeft, tickTimer]);
+    if (!isTimerActive || isTimerPaused) return;
+
+    const sync = () => tickTimer();
+    const id = setInterval(sync, 1000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [isTimerActive, isTimerPaused, tickTimer]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

@@ -64,6 +64,7 @@ export const LocalPlayer = ({
   const isChatFocused = useGameStore((state) => state.isChatFocused);
   const isInspecting = useGameStore((state) => state.inspectedObject !== null);
   const timeLeft = useGameStore((state) => state.timeLeft);
+  const focusSitPoseIndex = useGameStore((state) => state.focusSitPoseIndex);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
   const wornPropId = useGameStore((state) => state.wornPropId);
@@ -99,8 +100,9 @@ export const LocalPlayer = ({
       isFocused: isTimerActive,
       focusProgress,
       activeDeskId: isTimerActive ? activeDeskId : null,
+      focusSitPoseIndex: isTimerActive ? focusSitPoseIndex : undefined,
     });
-  }, [socket, isTimerActive, timeLeft, activeDeskId]);
+  }, [socket, isTimerActive, timeLeft, activeDeskId, focusSitPoseIndex]);
 
   useFrame((state, delta) => {
     // Keep camera below roof
@@ -422,6 +424,8 @@ export const LocalPlayer = ({
             skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
             pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
             wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
+            isFocused={isTimerActive}
+            focusSitPoseIndex={focusSitPoseIndex}
           />
         </group>
         <Billboard position={[0, 2.2, 0]}>
