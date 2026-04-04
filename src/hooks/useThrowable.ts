@@ -131,7 +131,8 @@ export function useThrowable({
     if (!groupRef.current) return;
 
     const store = useGameStore.getState();
-    const { heldObjectId, throwVelocity, wornPropId, remoteWornThrowableIds } = store;
+    const { heldObjectId, throwVelocity, wornPropId, remoteWornThrowableIds, remoteHeldThrowableIds } =
+      store;
 
     const playerGroup = rfState.scene.getObjectByName('localPlayer');
     const playerPos = new THREE.Vector3();
@@ -143,6 +144,11 @@ export function useThrowable({
       wornPropId !== id &&
       phaseRef.current !== 'held' &&
       phaseRef.current !== 'worn';
+
+    const hiddenBecauseHeldElsewhere =
+      remoteHeldThrowableIds.includes(id) &&
+      heldObjectId !== id &&
+      phaseRef.current === 'idle';
 
     // ── Transitions ───────────────────────────────────────────────────────
 
@@ -201,7 +207,7 @@ export function useThrowable({
       posRef.current.copy(restPosRef.current);
       groupRef.current.rotation.copy(restRotRef.current);
 
-      if (hiddenBecauseWornElsewhere) {
+      if (hiddenBecauseWornElsewhere || hiddenBecauseHeldElsewhere) {
         groupRef.current.visible = false;
         if (store.nearThrowableId === id) store.setNearThrowable(null);
       } else {

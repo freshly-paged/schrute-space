@@ -77,6 +77,10 @@ interface GameState {
   remoteWornThrowableIds: string[];
   setRemoteWornThrowableIds: (ids: string[]) => void;
 
+  /** Throwable ids held by *other* players — hides world copies; used for remote held mesh. */
+  remoteHeldThrowableIds: string[];
+  setRemoteHeldThrowableIds: (ids: string[]) => void;
+
   /** Last known rest pose for a throwable (synced when someone drops / removes wear). */
   throwableRest: Partial<
     Record<string, { position: [number, number, number]; rotation: [number, number, number] }>
@@ -200,6 +204,9 @@ export const useGameStore = create<GameState>((set) => ({
 
   remoteWornThrowableIds: [],
   setRemoteWornThrowableIds: (ids) => set({ remoteWornThrowableIds: ids }),
+
+  remoteHeldThrowableIds: [],
+  setRemoteHeldThrowableIds: (ids) => set({ remoteHeldThrowableIds: ids }),
 
   throwableRest: {},
   setThrowableRest: (id, position, rotation) =>

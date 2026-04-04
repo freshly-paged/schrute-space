@@ -13,6 +13,10 @@ import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
 
+function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
+  if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
+}
+
 const BOUNDS = 22;
 const CAMERA_BOUNDS = 22;
 // Camera is clamped within this radius of the player to prevent wall-clipping
@@ -175,6 +179,7 @@ export const LocalPlayer = ({
       } else if (heldObjectId !== null) {
         if (heldObjectId === MS_BODY_THROWABLE_ID) {
           wearHeldProp(MS_BODY_THROWABLE_ID);
+          emitHeldThrowableSync(socket, null);
           socket?.emit('playerWornProp', { propId: MS_BODY_THROWABLE_ID });
           socket?.connected &&
             socket.emit(
@@ -183,10 +188,12 @@ export const LocalPlayer = ({
             );
         } else {
           dropObject();
+          emitHeldThrowableSync(socket, null);
         }
         interactConsumed = true;
       } else if (nearThrowableId !== null) {
         pickUpObject(nearThrowableId);
+        emitHeldThrowableSync(socket, nearThrowableId);
         interactConsumed = true;
       }
     }
@@ -197,6 +204,7 @@ export const LocalPlayer = ({
       if (heldObjectId !== null) {
         if (heldObjectId === MS_BODY_THROWABLE_ID) {
           dropObject();
+          emitHeldThrowableSync(socket, null);
           const feet: [number, number, number] = [positionRef.current[0], 0.15, positionRef.current[2]];
           const rot: [number, number, number] = [0, rotationRef.current[1], 0];
           socket?.emit('throwableRestSync', {
@@ -210,6 +218,7 @@ export const LocalPlayer = ({
           camDir.y = 0;
           camDir.normalize();
           throwObject([camDir.x * 10, 5, camDir.z * 10]);
+          emitHeldThrowableSync(socket, null);
         }
       }
     }

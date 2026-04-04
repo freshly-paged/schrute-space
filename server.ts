@@ -19,6 +19,7 @@ import {
   WATER_COOLER_WORLD_POSITION,
   WATER_COOLER_RADIUS,
 } from "./src/officeLayout.js";
+import { isAllowedHeldThrowableId } from "./src/networkThrowables.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -686,6 +687,7 @@ io.on("connection", (socket) => {
         name: name,
         room: room,
         wornPropId: null,
+        heldThrowableId: null,
       };
 
       // Remove stale entries for the same email before sending currentPlayers.
@@ -774,6 +776,24 @@ io.on("connection", (socket) => {
       const pid = data?.propId ?? null;
       if (pid !== null && pid !== "ms_body") return;
       rooms[playerRoom][socket.id].wornPropId = pid;
+      if (pid !== null) {
+        rooms[playerRoom][socket.id].heldThrowableId = null;
+      }
+      socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+    });
+
+    socket.on("playerHeldThrowable", (data: { propId: string | null }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const propId = data?.propId ?? null;
+      if (!isAllowedHeldThrowableId(propId)) return;
+      rooms[playerRoom][socket.id].heldThrowableId = propId;
       socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
     });
 
