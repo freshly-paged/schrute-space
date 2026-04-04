@@ -32,3 +32,9 @@ export const WATER_COOLER_WORLD_POSITION: [number, number, number] = [
 
 /** Horizontal proximity radius for water cooler interactions (meters). */
 export const WATER_COOLER_RADIUS = 2.5;
+
+/** Vending machine position local to the break room group (east side). */
+export const VENDING_MACHINE_LOCAL_POSITION: [number, number, number] = [13, 0, 0];
+
+/** Horizontal proximity radius for Vend-O-Matic interactions (meters). */
+export const VENDING_MACHINE_RADIUS = 2.5;

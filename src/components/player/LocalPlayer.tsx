@@ -4,11 +4,12 @@ import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-thre
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
-import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
+import { getDeterministicColor, COLLISION_BOXES, ROLL_PIVOT_Y } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics, usePlayerPhysicsAvatarSync } from '../../hooks/usePlayerPhysics';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
+import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
@@ -63,11 +64,14 @@ export const LocalPlayer = ({
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
   const isInspecting = useGameStore((state) => state.inspectedObject !== null);
+  const showVendingMenu = useGameStore((state) => state.showVendingMenu);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const focusSitPoseIndex = useGameStore((state) => state.focusSitPoseIndex);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
   const wornPropId = useGameStore((state) => state.wornPropId);
+  const heldIceCream = useGameStore((state) => state.heldIceCream);
+  const heldObjectId = useGameStore((state) => state.heldObjectId);
 
   // Build AABB collision boxes for each desk based on its current position/rotation
   const deskBoxes = useMemo(() =>
@@ -108,6 +112,12 @@ export const LocalPlayer = ({
     // Keep camera below roof
     if (state.camera.position.y > 7.5) state.camera.position.y = 7.5;
 
+    const ice = useGameStore.getState().heldIceCream;
+    if (ice && Date.now() >= ice.expiresAt) {
+      useGameStore.getState().setHeldIceCream(null);
+      socket?.connected && socket.emit('playerIceCream', { flavorIndex: null, expiresAt: null });
+    }
+
     // Track active desk while session is running
     if (isTimerActive && activeDeskId) {
       lastActiveDeskIdRef.current = activeDeskId;
@@ -140,7 +150,7 @@ export const LocalPlayer = ({
     const rawKeys = get();
 
     const keys =
-      isChatFocused || isTimerActive || isInspecting
+      isChatFocused || isTimerActive || isInspecting || showVendingMenu
         ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, computer: false, drop: false }
         : rawKeys;
     const { forward, backward, left, right, jump, interact, computer, drop } = keys;
@@ -231,6 +241,14 @@ export const LocalPlayer = ({
       const { nearWhiteboard, setShowLeaderboard } = useGameStore.getState();
       if (nearWhiteboard) {
         setShowLeaderboard(true);
+        interactConsumed = true;
+      }
+    }
+
+    if (!interactConsumed && interactEdge) {
+      const { nearVendingMachine, setShowVendingMenu } = useGameStore.getState();
+      if (nearVendingMachine) {
+        setShowVendingMenu(true);
         interactConsumed = true;
       }
     }
@@ -414,19 +432,30 @@ export const LocalPlayer = ({
         makeDefault
       />
       <group ref={playerRef} name="localPlayer">
-        <group ref={rollGroupRef}>
-          <WaterEnergyAura />
-          <CharacterAvatar
-            color={playerColor}
-            isMoving={isMoving}
-            isGrounded={avatarPhysics.grounded}
-            isRolling={avatarPhysics.rolling}
-            skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
-            pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
-            wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
-            isFocused={isTimerActive}
-            focusSitPoseIndex={focusSitPoseIndex}
-          />
+        <group position={[0, ROLL_PIVOT_Y, 0]}>
+          <group ref={rollGroupRef}>
+            <group position={[0, -ROLL_PIVOT_Y, 0]}>
+              <WaterEnergyAura />
+              <CharacterAvatar
+                color={playerColor}
+                isMoving={isMoving}
+                isGrounded={avatarPhysics.grounded}
+                isRolling={avatarPhysics.rolling}
+                skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+                pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
+                wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
+                heldIceCreamColor={
+                  heldIceCream &&
+                  Date.now() < heldIceCream.expiresAt &&
+                  heldObjectId === null
+                    ? iceCreamColorForIndex(heldIceCream.flavorIndex)
+                    : null
+                }
+                isFocused={isTimerActive}
+                focusSitPoseIndex={focusSitPoseIndex}
+              />
+            </group>
+          </group>
         </group>
         <Billboard position={[0, 2.2, 0]}>
           <Text fontSize={0.3} color="yellow" anchorX="center" anchorY="middle">

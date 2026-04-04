@@ -20,6 +20,10 @@ import {
   WATER_COOLER_RADIUS,
 } from "./src/officeLayout.js";
 import { isAllowedHeldThrowableId } from "./src/networkThrowables.js";
+import {
+  CHAIR_UPGRADE_COST_REAMS,
+  CHAIR_UPGRADE_MAX_LEVEL,
+} from "./src/chairUpgradeConstants.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +102,9 @@ async function initDb() {
       PRIMARY KEY (room_id, email)
     )
   `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS chair_upgrade_level INTEGER NOT NULL DEFAULT 0
+  `);
 }
 
 async function getPaperReams(email: string): Promise<number> {
@@ -152,6 +159,92 @@ type FurnitureItem = MemFurnitureItem;
 interface DeskItem extends FurnitureItem {
   type: 'desk';
   config: { ownerEmail: string; ownerName: string; [key: string]: unknown };
+}
+
+function extractDeskOwnerEmails(layout: FurnitureItem[]): string[] {
+  const seen = new Set<string>();
+  for (const f of layout) {
+    if (f.type !== "desk") continue;
+    const email = (f as DeskItem).config?.ownerEmail;
+    if (typeof email === "string" && email.length > 0) seen.add(email);
+  }
+  return [...seen];
+}
+
+async function getChairLevelsForEmails(emails: string[]): Promise<Record<string, number>> {
+  if (emails.length === 0) return {};
+  if (isLocalTest()) return mem.memGetChairLevelsForEmails(emails);
+  const { rows } = await pool!.query(
+    "SELECT email, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level FROM users WHERE email = ANY($1::text[])",
+    [emails]
+  );
+  const out: Record<string, number> = {};
+  for (const e of emails) out[e] = 0;
+  for (const row of rows) {
+    const n = Number(row.chair_upgrade_level);
+    out[row.email] = Math.min(
+      CHAIR_UPGRADE_MAX_LEVEL,
+      Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0)
+    );
+  }
+  return out;
+}
+
+type ChairPurchaseResult =
+  | { ok: true; paperReams: number; chairUpgradeLevel: number }
+  | { ok: false; error: "max_level" | "insufficient" };
+
+async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResult> {
+  if (isLocalTest()) {
+    return mem.memPurchaseChairUpgrade(email, CHAIR_UPGRADE_COST_REAMS);
+  }
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const sel = await client.query(
+      "SELECT paper_reams, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      [email]
+    );
+    if (sel.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const paper = sel.rows[0].paper_reams as number;
+    let level = Math.floor(Number(sel.rows[0].chair_upgrade_level));
+    if (!Number.isFinite(level)) level = 0;
+    level = Math.min(CHAIR_UPGRADE_MAX_LEVEL, Math.max(0, level));
+    if (level >= CHAIR_UPGRADE_MAX_LEVEL) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "max_level" };
+    }
+    if (paper < CHAIR_UPGRADE_COST_REAMS) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const newPaper = paper - CHAIR_UPGRADE_COST_REAMS;
+    const newLevel = level + 1;
+    await client.query(
+      "UPDATE users SET paper_reams = $1, chair_upgrade_level = $2 WHERE email = $3",
+      [newPaper, newLevel, email]
+    );
+    await client.query("COMMIT");
+    return { ok: true, paperReams: newPaper, chairUpgradeLevel: newLevel };
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function broadcastDeskChairLevels(io: Server, roomId: string, layout: FurnitureItem[]) {
+  const emails = extractDeskOwnerEmails(layout);
+  const map = await getChairLevelsForEmails(emails);
+  io.to(roomId).emit("deskChairLevels", map);
 }
 
 async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
@@ -445,6 +538,7 @@ async function startServer() {
     }
     await saveRoomLayout(roomId, layout as FurnitureItem[]);
     io.to(roomId).emit("roomLayoutUpdated", layout);
+    void broadcastDeskChairLevels(io, roomId, layout as FurnitureItem[]);
     res.json({ ok: true });
   });
 
@@ -527,6 +621,7 @@ async function startServer() {
       if (onlineEntry) {
         const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name);
         io.to(roomId).emit("roomLayoutUpdated", layout);
+        void broadcastDeskChairLevels(io, roomId, layout);
         io.to(onlineEntry[0]).emit("roleChanged", { newRole: role });
       }
       const members = await getRoomMembers(roomId);
@@ -565,6 +660,7 @@ async function startServer() {
       if (filtered.length !== layout.length) {
         await saveRoomLayout(roomId, filtered);
         io.to(roomId).emit("roomLayoutUpdated", filtered);
+        void broadcastDeskChairLevels(io, roomId, filtered);
       }
       await removeMember(roomId, memberEmail);
       // Notify the removed member's socket if online
@@ -721,17 +817,22 @@ io.on("connection", (socket) => {
 
       // Desk: only for members (admin/manager/worker)
       if (isMember) {
-        ensurePlayerDesk(room, user.email, user.name).then((layout) => {
-          socket.emit("roomLayoutLoaded", layout);
-          socket.to(room).emit("roomLayoutUpdated", layout);
-        }).catch((err) => {
-          console.error("Error ensuring player desk:", err);
-          socket.emit("roomLayoutLoaded", []);
-        });
+        ensurePlayerDesk(room, user.email, user.name)
+          .then(async (layout) => {
+            socket.emit("roomLayoutLoaded", layout);
+            socket.to(room).emit("roomLayoutUpdated", layout);
+            await broadcastDeskChairLevels(io, room, layout);
+          })
+          .catch((err) => {
+            console.error("Error ensuring player desk:", err);
+            socket.emit("roomLayoutLoaded", []);
+          });
       } else {
         // Visitor: send current layout read-only, no desk created
-        getRoomLayout(room).then((layout) => {
+        getRoomLayout(room).then(async (layout) => {
           socket.emit("roomLayoutLoaded", layout);
+          const map = await getChairLevelsForEmails(extractDeskOwnerEmails(layout));
+          socket.emit("deskChairLevels", map);
         });
       }
 
@@ -764,6 +865,45 @@ io.on("connection", (socket) => {
       }
     });
 
+    socket.on(
+      "purchaseChairUpgrade",
+      async (ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        let playerRoom = "";
+        for (const roomId in rooms) {
+          if (rooms[roomId][socket.id]) {
+            playerRoom = roomId;
+            break;
+          }
+        }
+        if (!playerRoom) {
+          respond({ ok: false, error: "not_in_room" });
+          return;
+        }
+        try {
+          await ensureUserRow(user.email);
+          const result = await purchaseChairUpgradeTxn(user.email);
+          if (!result.ok) {
+            respond(result);
+            return;
+          }
+          socket.emit("paperReamsLoaded", result.paperReams);
+          io.to(playerRoom).emit("chairLevelUpdated", {
+            email: user.email,
+            level: result.chairUpgradeLevel,
+          });
+          respond({
+            ok: true,
+            paperReams: result.paperReams,
+            chairUpgradeLevel: result.chairUpgradeLevel,
+          });
+        } catch (e) {
+          console.error("purchaseChairUpgrade:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
     socket.on("playerWornProp", (data: { propId: string | null }) => {
       let playerRoom = "";
       for (const roomId in rooms) {
@@ -795,6 +935,35 @@ io.on("connection", (socket) => {
       if (!isAllowedHeldThrowableId(propId)) return;
       rooms[playerRoom][socket.id].heldThrowableId = propId;
       socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+    });
+
+    socket.on("playerIceCream", (data: { flavorIndex: number | null; expiresAt: number | null }) => {
+      let playerRoom = "";
+      for (const roomId in rooms) {
+        if (rooms[roomId][socket.id]) {
+          playerRoom = roomId;
+          break;
+        }
+      }
+      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const player = rooms[playerRoom][socket.id];
+      const fi = data?.flavorIndex;
+      const ex = data?.expiresAt;
+      if (fi == null || ex == null) {
+        delete player.iceCreamFlavorIndex;
+        delete player.iceCreamExpiresAt;
+      } else {
+        const fiNum = typeof fi === "number" ? fi : Number(fi);
+        const exNum = typeof ex === "number" ? ex : Number(ex);
+        if (!Number.isFinite(fiNum) || fiNum !== Math.floor(fiNum) || fiNum < 0 || fiNum > 4) return;
+        if (!Number.isFinite(exNum)) return;
+        const now = Date.now();
+        // Allow client/server clock skew (±several minutes); duration is ~1 min client-side.
+        if (exNum < now - 180_000 || exNum > now + 8 * 60_000) return;
+        player.iceCreamFlavorIndex = fiNum;
+        player.iceCreamExpiresAt = exNum;
+      }
+      socket.to(playerRoom).emit("playerMoved", player);
     });
 
     socket.on("throwableRestSync", (data: { throwableId: string; position: number[]; rotation: number[] }) => {

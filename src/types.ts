@@ -30,6 +30,10 @@ export interface Player {
   wornPropId?: string | null;
   /** Throwable id currently held in hands; synced for multiplayer. */
   heldThrowableId?: string | null;
+  /** Vend-O-Matic ice cream flavor index (0..4); only shown while not expired. */
+  iceCreamFlavorIndex?: number | null;
+  /** Wall-clock ms when the ice cream prop disappears (client + server validated). */
+  iceCreamExpiresAt?: number | null;
 }
 
 export interface FurnitureItem {

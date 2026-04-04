@@ -54,6 +54,11 @@ interface GameState {
   setAvatarConfig: (config: AvatarConfig) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;
+  /** Desk owner email → vending chair upgrade level (0–20); synced from server. */
+  chairLevelByEmail: Record<string, number>;
+  setDeskChairLevels: (map: Record<string, number>) => void;
+  patchChairLevel: (email: string, level: number) => void;
+  resetChairLevels: () => void;
   roomInfo: RoomInfo | null;
   setRoomInfo: (info: RoomInfo | null) => void;
 
@@ -72,6 +77,15 @@ interface GameState {
   setShowAdminPanel: (show: boolean) => void;
   showComputerInterface: boolean;
   setShowComputerInterface: (show: boolean) => void;
+
+  nearVendingMachine: boolean;
+  setNearVendingMachine: (near: boolean) => void;
+  showVendingMenu: boolean;
+  setShowVendingMenu: (show: boolean) => void;
+
+  /** Local Vend-O-Matic treat; cleared when `expiresAt` passes (see LocalPlayer). */
+  heldIceCream: { flavorIndex: number; expiresAt: number } | null;
+  setHeldIceCream: (value: { flavorIndex: number; expiresAt: number } | null) => void;
 
   /** Local-only: throwable prop id currently worn on the avatar (upper body). */
   wornPropId: string | null;
@@ -235,6 +249,14 @@ export const useGameStore = create<GameState>((set) => ({
   },
   roomLayout: [],
   setRoomLayout: (layout) => set({ roomLayout: layout }),
+  chairLevelByEmail: {},
+  setDeskChairLevels: (map) =>
+    set((s) => ({ chairLevelByEmail: { ...s.chairLevelByEmail, ...map } })),
+  patchChairLevel: (email, level) =>
+    set((s) => ({
+      chairLevelByEmail: { ...s.chairLevelByEmail, [email]: level },
+    })),
+  resetChairLevels: () => set({ chairLevelByEmail: {} }),
   roomInfo: null,
   setRoomInfo: (info) => set({ roomInfo: info }),
 
@@ -252,6 +274,14 @@ export const useGameStore = create<GameState>((set) => ({
   setShowAdminPanel: (show) => set({ showAdminPanel: show }),
   showComputerInterface: false,
   setShowComputerInterface: (show) => set({ showComputerInterface: show }),
+
+  nearVendingMachine: false,
+  setNearVendingMachine: (near) => set({ nearVendingMachine: near }),
+  showVendingMenu: false,
+  setShowVendingMenu: (show) => set({ showVendingMenu: show }),
+
+  heldIceCream: null,
+  setHeldIceCream: (value) => set({ heldIceCream: value }),
 
   wornPropId: null,
   wearHeldProp: (id) => set({ wornPropId: id, heldObjectId: null, nearThrowableId: null }),
