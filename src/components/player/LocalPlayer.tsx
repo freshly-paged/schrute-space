@@ -7,7 +7,7 @@ import { Player, DeskItem } from '../../types';
 import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
-import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
+import { usePlayerPhysics, usePlayerPhysicsAvatarSync } from '../../hooks/usePlayerPhysics';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
@@ -55,6 +55,7 @@ export const LocalPlayer = ({
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
   const physics = usePlayerPhysics();
+  const avatarPhysics = usePlayerPhysicsAvatarSync(physics);
 
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
   const activeDeskId = useGameStore((state) => state.activeDeskId);
@@ -416,8 +417,8 @@ export const LocalPlayer = ({
           <CharacterAvatar
             color={playerColor}
             isMoving={isMoving}
-            isGrounded={physics.isGrounded.current}
-            isRolling={physics.isRolling.current}
+            isGrounded={avatarPhysics.grounded}
+            isRolling={avatarPhysics.rolling}
             skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
             pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
             wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
