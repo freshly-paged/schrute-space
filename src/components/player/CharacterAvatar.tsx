@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { FOCUS_SIT_POSES, FOCUS_SIT_POSE_COUNT } from '../../avatarFocusPoses';
 import { WornMsBody } from './WornMsBody';
+import { HeldIceCream } from './HeldIceCream';
 
 export { FOCUS_SIT_POSES, FOCUS_SIT_POSE_COUNT } from '../../avatarFocusPoses';
 
@@ -20,6 +21,7 @@ export const CharacterAvatar = ({
   skinTone = '#ffdbac',
   pantColor = '#333333',
   wornUpperPropId,
+  heldIceCreamColor = null,
   isFocused = false,
   focusSitPoseIndex = 0,
 }: {
@@ -31,6 +33,8 @@ export const CharacterAvatar = ({
   skinTone?: string;
   pantColor?: string;
   wornUpperPropId?: string | null;
+  /** When set, a small ice cream is attached to the right hand. */
+  heldIceCreamColor?: string | null;
   /** When true, legs use a seated preset instead of standing idle. */
   isFocused?: boolean;
   /** Index into `FOCUS_SIT_POSES` (clamped). */
@@ -189,6 +193,11 @@ export const CharacterAvatar = ({
         <mesh ref={rightArmRef} position={[0, -0.25, 0]}>
           <boxGeometry args={[0.15, 0.5, 0.15]} />
           <meshStandardMaterial color={skinTone} />
+          {heldIceCreamColor ? (
+            <group position={[0.1, -0.3, 0.06]} rotation={[0.25, 0, -0.2]}>
+              <HeldIceCream color={heldIceCreamColor} />
+            </group>
+          ) : null}
         </mesh>
       </group>
 

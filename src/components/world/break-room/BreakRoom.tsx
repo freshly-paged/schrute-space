@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { FloorPlanRect } from '../../../types';
 import {
   BREAK_ROOM_GROUP_POSITION,
+  VENDING_MACHINE_LOCAL_POSITION,
   WATER_COOLER_LOCAL_POSITION,
 } from '../../../officeLayout';
 import { WallDef, wallsToBoxes } from '../../../utils/walls';
@@ -90,7 +91,7 @@ export const BreakRoom = () => (
     <WaterCooler position={WATER_COOLER_LOCAL_POSITION} />
 
     {/* ── Vending machine (east side) ── */}
-    <VendingMachine position={[13, 0, 0]} rotation={[0, -Math.PI / 2, 0]} />
+    <VendingMachine position={VENDING_MACHINE_LOCAL_POSITION} rotation={[0, -Math.PI / 2, 0]} />
 
     {/* ── Plants ── */}
     <Plant position={[-13, 0, 5]} />

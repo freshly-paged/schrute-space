@@ -29,6 +29,8 @@ export const Desk = ({
   const deskRef = useRef<THREE.Group>(null);
   const userEmail = useGameStore((state) => state.user?.email);
   const myRole = useGameStore((state) => state.roomInfo?.myRole);
+  const chairLevelByEmail = useGameStore((state) => state.chairLevelByEmail);
+  const chairLevel = ownerEmail ? (chairLevelByEmail[ownerEmail] ?? 0) : 0;
 
   const isOwnDesk = !!ownerEmail && ownerEmail === userEmail;
   const isOwnAdminDesk = isOwnDesk && (myRole === 'admin' || myRole === 'manager');
@@ -150,7 +152,9 @@ export const Desk = ({
         </Box>
       </group>
 
-      {hasChair && <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} />}
+      {hasChair && (
+        <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} level={chairLevel} />
+      )}
     </group>
   );
 };

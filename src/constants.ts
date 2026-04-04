@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+
+export { CHAIR_UPGRADE_COST_REAMS, CHAIR_UPGRADE_MAX_LEVEL } from './chairUpgradeConstants';
 import { WORKING_AREA_COLLISION_BOXES } from './components/world/working-area/WorkingArea';
 import { BREAK_ROOM_COLLISION_BOXES } from './components/world/break-room/BreakRoom';
 import { CONFERENCE_ROOM_COLLISION_BOXES } from './components/world/conference-room/ConferenceRoom';
@@ -14,6 +16,9 @@ export const OFFICE_COLORS = [
   "#db2777", // Pink
   "#0891b2", // Cyan
 ];
+
+/** Feet → torso center: roll rotates around this height; paired with a downward child offset so feet stay on the floor when not rolling. */
+export const ROLL_PIVOT_Y = 0.85;
 
 export const getDeterministicColor = (name: string) => {
   let hash = 0;

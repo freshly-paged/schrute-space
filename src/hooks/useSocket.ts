@@ -197,6 +197,16 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setRoomLayout(layout);
     });
 
+    newSocket.on('deskChairLevels', (map: Record<string, number>) => {
+      if (map && typeof map === 'object') useGameStore.getState().setDeskChairLevels(map);
+    });
+
+    newSocket.on('chairLevelUpdated', (payload: { email: string; level: number }) => {
+      if (payload?.email && typeof payload.level === 'number') {
+        useGameStore.getState().patchChairLevel(payload.email, payload.level);
+      }
+    });
+
     newSocket.on('roomInfoLoaded', (info: RoomInfo) => {
       console.log(`[socket] roomInfoLoaded: role=${info.myRole ?? 'visitor'} members=${info.memberCount}`);
       useGameStore.getState().setRoomInfo(info);
@@ -232,6 +242,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     return () => {
       console.log(`[socket] cleaning up, disconnecting from room=${currentRoom}`);
       unsubscribeReams();
+      useGameStore.getState().resetChairLevels();
       useGameStore.getState().setRoomInfo(null);
       useGameStore.getState().setRemoteWornThrowableIds([]);
       useGameStore.getState().clearWornProp();

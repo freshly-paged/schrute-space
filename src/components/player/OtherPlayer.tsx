@@ -1,16 +1,36 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Player, DEFAULT_AVATAR_CONFIG } from '../../types';
+import { ROLL_PIVOT_Y } from '../../constants';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
+import { getSyncedIceCreamState, iceCreamColorForIndex } from '../../iceCreamFlavors';
 
 export const OtherPlayer = ({ player }: { player: Player }) => {
   const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
+  const [, setIceCreamTick] = useState(0);
+
+  const syncedIce = getSyncedIceCreamState(player);
+  const iceExp = syncedIce?.expiresAt ?? null;
+
+  useEffect(() => {
+    if (iceExp == null || Date.now() >= iceExp) return;
+    const ms = iceExp - Date.now() + 30;
+    const id = window.setTimeout(() => setIceCreamTick((t) => t + 1), Math.max(ms, 0));
+    return () => clearTimeout(id);
+  }, [iceExp, syncedIce?.flavorIndex]);
+
+  const showHeldIceCream =
+    syncedIce != null &&
+    Date.now() < syncedIce.expiresAt &&
+    !player.heldThrowableId;
+
+  const heldIceCreamColor = showHeldIceCream ? iceCreamColorForIndex(syncedIce!.flavorIndex) : null;
 
   useFrame(() => {
     const dist = new THREE.Vector3(...player.position).distanceTo(new THREE.Vector3(...prevPos.current));
@@ -20,19 +40,24 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
 
   return (
     <group position={player.position} rotation={[0, player.rotation[1], 0]}>
-      <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
-        <OtherPlayerHeldThrowable heldThrowableId={player.heldThrowableId} />
-        <CharacterAvatar
-          color={player.avatarConfig?.shirtColor ?? player.color}
-          isMoving={isMoving}
-          isGrounded={player.position[1] < 0.1}
-          isRolling={player.isRolling || false}
-          skinTone={player.avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
-          pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
-          wornUpperPropId={player.wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
-          isFocused={player.isFocused ?? false}
-          focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
-        />
+      <group position={[0, ROLL_PIVOT_Y, 0]}>
+        <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
+          <group position={[0, -ROLL_PIVOT_Y, 0]}>
+            <OtherPlayerHeldThrowable heldThrowableId={player.heldThrowableId} />
+            <CharacterAvatar
+              color={player.avatarConfig?.shirtColor ?? player.color}
+              isMoving={isMoving}
+              isGrounded={player.position[1] < 0.1}
+              isRolling={player.isRolling || false}
+              skinTone={player.avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+              pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
+              wornUpperPropId={player.wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
+              heldIceCreamColor={heldIceCreamColor}
+              isFocused={player.isFocused ?? false}
+              focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
+            />
+          </group>
+        </group>
       </group>
       <Billboard position={[0, 2.2, 0]}>
         <Text

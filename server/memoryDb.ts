@@ -1,5 +1,8 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
+/** Starting paper reams for each mock player in local test mode. */
+export const LOCAL_TEST_INITIAL_PAPER_REAMS = 1000;
+
 export interface FurnitureItem {
   id: string;
   type: string;
@@ -20,6 +23,7 @@ interface UserRow {
   paper_reams: number;
   avatar_config: Record<string, unknown>;
   display_name: string | null;
+  chair_upgrade_level: number;
 }
 
 interface RoomRow {
@@ -43,15 +47,22 @@ function getMemberMap(roomId: string): Map<string, { role: RoomRole; joined_at: 
 }
 
 export async function memGetPaperReams(email: string): Promise<number> {
-  return users.get(email)?.paper_reams ?? 0;
+  const row = users.get(email);
+  if (row) return row.paper_reams;
+  return LOCAL_TEST_INITIAL_PAPER_REAMS;
+}
+
+function defaultUserRow(): UserRow {
+  return {
+    paper_reams: LOCAL_TEST_INITIAL_PAPER_REAMS,
+    avatar_config: {},
+    display_name: null,
+    chair_upgrade_level: 0,
+  };
 }
 
 export async function memSavePaperReams(email: string, count: number): Promise<void> {
-  const u = users.get(email) ?? {
-    paper_reams: 0,
-    avatar_config: {},
-    display_name: null,
-  };
+  const u = users.get(email) ?? defaultUserRow();
   u.paper_reams = count;
   users.set(email, u);
 }
@@ -63,11 +74,7 @@ export async function memGetAvatarConfig(email: string): Promise<AvatarConfig | 
 }
 
 export async function memSaveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
-  const u = users.get(email) ?? {
-    paper_reams: 0,
-    avatar_config: {},
-    display_name: null,
-  };
+  const u = users.get(email) ?? defaultUserRow();
   u.avatar_config = { ...config };
   users.set(email, u);
 }
@@ -130,7 +137,7 @@ export async function memGetRoomLeaderboard(
       email,
       name: users.get(email)?.display_name ?? null,
       role: row.role,
-      paperReams: users.get(email)?.paper_reams ?? 0,
+      paperReams: users.get(email)?.paper_reams ?? LOCAL_TEST_INITIAL_PAPER_REAMS,
     });
   }
   list.sort((a, b) => b.paperReams - a.paperReams);
@@ -171,17 +178,43 @@ export async function memGetRoomMemberCount(roomId: string): Promise<number> {
 
 export async function memEnsureUser(email: string): Promise<void> {
   if (users.has(email)) return;
-  users.set(email, { paper_reams: 0, avatar_config: {}, display_name: null });
+  users.set(email, defaultUserRow());
 }
 
 export async function memUpsertUserDisplayName(email: string, displayName: string): Promise<void> {
-  const u = users.get(email) ?? {
-    paper_reams: 0,
-    avatar_config: {},
-    display_name: null,
-  };
+  const u = users.get(email) ?? defaultUserRow();
   u.display_name = displayName;
   users.set(email, u);
+}
+
+const CHAIR_MAX = 20;
+
+export async function memGetChairLevelsForEmails(emails: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const e of emails) {
+    const row = users.get(e);
+    const lv = row?.chair_upgrade_level ?? 0;
+    out[e] = Math.min(CHAIR_MAX, Math.max(0, Math.floor(lv)));
+  }
+  return out;
+}
+
+export type MemChairPurchaseResult =
+  | { ok: true; paperReams: number; chairUpgradeLevel: number }
+  | { ok: false; error: 'max_level' | 'insufficient' };
+
+export async function memPurchaseChairUpgrade(
+  email: string,
+  costReams: number
+): Promise<MemChairPurchaseResult> {
+  const u = users.get(email) ?? defaultUserRow();
+  let level = Math.min(CHAIR_MAX, Math.max(0, Math.floor(u.chair_upgrade_level)));
+  if (level >= CHAIR_MAX) return { ok: false, error: 'max_level' };
+  if (u.paper_reams < costReams) return { ok: false, error: 'insufficient' };
+  u.paper_reams -= costReams;
+  u.chair_upgrade_level = level + 1;
+  users.set(email, u);
+  return { ok: true, paperReams: u.paper_reams, chairUpgradeLevel: u.chair_upgrade_level };
 }
 
 export async function memUpdateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise<void> {

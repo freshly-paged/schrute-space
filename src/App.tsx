@@ -19,6 +19,7 @@ import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage
 import { RoomLeaderboard } from './components/ui/RoomLeaderboard';
 import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
 import { ComputerInterface } from './components/ui/ComputerInterface';
+import { VendingMenu } from './components/ui/VendingMenu';
 import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
@@ -49,7 +50,7 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, setUser } = useGameStore();
+  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, showVendingMenu, setShowVendingMenu, setHeldIceCream, setUser } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
   useEffect(() => {
@@ -71,6 +72,9 @@ export default function App() {
     setShowLeaderboard(false);
     setShowAdminPanel(false);
     setShowComputerInterface(false);
+    setShowVendingMenu(false);
+    setHeldIceCream(null);
+    socket?.emit('playerIceCream', { flavorIndex: null, expiresAt: null });
     window.location.search = '';
   };
 
@@ -270,6 +274,10 @@ export default function App() {
           onClose={() => setShowComputerInterface(false)}
           onOpenAdminPanel={() => { setShowComputerInterface(false); setShowAdminPanel(true); }}
         />
+      )}
+
+      {showVendingMenu && currentRoom && (
+        <VendingMenu socket={socket} onClose={() => setShowVendingMenu(false)} />
       )}
 
       {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
