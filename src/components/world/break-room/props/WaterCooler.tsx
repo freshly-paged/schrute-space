@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WATER_COOLER_RADIUS } from '../../../../officeLayout';
 import { useGameStore } from '../../../../store/useGameStore';
+import { onOverlayTextSync } from '../../../../utils/overlayTextSync';
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -52,6 +53,7 @@ export const WaterCooler = ({
             color="#7dd3fc"
             outlineColor="black"
             outlineWidth={0.02}
+            onSync={onOverlayTextSync}
           >
             Water cooler gossip time
           </Text>

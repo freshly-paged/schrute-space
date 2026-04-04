@@ -3,6 +3,7 @@ import { Box, Cylinder, Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../../../store/useGameStore';
+import { onOverlayTextSync } from '../../../../utils/overlayTextSync';
 
 interface WhiteboardProps {
   position: [number, number, number];
@@ -131,7 +132,13 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
       {/* Proximity prompt */}
       {nearWhiteboard && (
         <Billboard position={[0, 2.5, 0]}>
-          <Text fontSize={0.2} color="white" outlineColor="black" outlineWidth={0.02}>
+          <Text
+            fontSize={0.2}
+            color="white"
+            outlineColor="black"
+            outlineWidth={0.02}
+            onSync={onOverlayTextSync}
+          >
             Press [E] to View Leaderboard
           </Text>
         </Billboard>

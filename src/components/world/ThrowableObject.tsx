@@ -15,6 +15,7 @@
 import React from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import { useThrowable } from '../../hooks/useThrowable';
+import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
 interface ThrowableObjectProps {
   id: string;
@@ -65,6 +66,7 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.012}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
             {label}
           </Text>
@@ -81,6 +83,7 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.01}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
             [E] Pick Up    [F] Inspect
           </Text>
@@ -96,6 +99,7 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.01}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
             {wearable ? '[E] Wear    [G] Put Down' : '[E] Put Down    [G] Throw'}
           </Text>

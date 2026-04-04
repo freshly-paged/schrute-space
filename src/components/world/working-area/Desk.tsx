@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
+import { onOverlayTextSync } from '../../../utils/overlayTextSync';
 
 export const Desk = ({
   id,
@@ -56,6 +57,7 @@ export const Desk = ({
             color="#fde68a"
             outlineColor="black"
             outlineWidth={0.02}
+            onSync={onOverlayTextSync}
           >
             {ownerName}
           </Text>
@@ -68,6 +70,7 @@ export const Desk = ({
             color={isOccupied ? '#f87171' : 'white'}
             outlineColor="black"
             outlineWidth={0.02}
+            onSync={onOverlayTextSync}
           >
             {isOccupied ? 'Desk Occupied' : 'Press [E] to Start Focus'}
           </Text>
@@ -78,6 +81,7 @@ export const Desk = ({
               outlineColor="black"
               outlineWidth={0.02}
               position={[0, -0.28, 0]}
+              onSync={onOverlayTextSync}
             >
               Press [F] to Use Computer
             </Text>
