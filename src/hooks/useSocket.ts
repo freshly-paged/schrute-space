@@ -25,9 +25,18 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     useGameStore.getState().setRemoteWornThrowableIds(worn);
   };
 
+  const syncRemoteHeldThrowableIds = (playerMap: Record<string, Player>) => {
+    const held: string[] = [];
+    for (const p of Object.values(playerMap)) {
+      if (p.heldThrowableId) held.push(p.heldThrowableId);
+    }
+    useGameStore.getState().setRemoteHeldThrowableIds(held);
+  };
+
   const syncFromPlayerMap = (playerMap: Record<string, Player>) => {
     syncOccupiedDesks(playerMap);
     syncRemoteWornThrowableIds(playerMap);
+    syncRemoteHeldThrowableIds(playerMap);
   };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [lastLocalMessage, setLastLocalMessage] = useState<{ text: string; time: number } | null>(null);

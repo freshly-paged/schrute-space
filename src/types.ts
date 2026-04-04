@@ -26,6 +26,8 @@ export interface Player {
   avatarConfig?: AvatarConfig;
   /** Prop id from ThrowableObject (e.g. ms_body) worn on the torso; synced for multiplayer. */
   wornPropId?: string | null;
+  /** Throwable id currently held in hands; synced for multiplayer. */
+  heldThrowableId?: string | null;
 }
 
 export interface FurnitureItem {

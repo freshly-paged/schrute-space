@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Player, DEFAULT_AVATAR_CONFIG } from '../../types';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
+import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
 
 export const OtherPlayer = ({ player }: { player: Player }) => {
@@ -20,6 +21,7 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
   return (
     <group position={player.position} rotation={[0, player.rotation[1], 0]}>
       <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
+        <OtherPlayerHeldThrowable heldThrowableId={player.heldThrowableId} />
         <CharacterAvatar
           color={player.avatarConfig?.shirtColor ?? player.color}
           isMoving={isMoving}
