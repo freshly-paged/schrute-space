@@ -160,6 +160,9 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                 <div key={m.email} className="flex items-center gap-2 bg-white pixel-border px-3 py-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-[10px] font-bold truncate">{displayName(m.email, m.name)}</div>
+                    {m.jobTitle ? (
+                      <div className="text-[8px] text-slate-500 truncate">{m.jobTitle}</div>
+                    ) : null}
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <RoleBadge role={m.role} />
                       {m.isOnline

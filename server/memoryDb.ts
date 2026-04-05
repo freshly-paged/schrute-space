@@ -1,5 +1,7 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
+import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
+
 /** Starting paper reams for each mock player in local test mode. */
 export const LOCAL_TEST_INITIAL_PAPER_REAMS = 1000;
 
@@ -23,7 +25,9 @@ interface UserRow {
   paper_reams: number;
   avatar_config: Record<string, unknown>;
   display_name: string | null;
+  job_title: string | null;
   chair_upgrade_level: number;
+  monitor_upgrade_level: number;
 }
 
 interface RoomRow {
@@ -57,7 +61,9 @@ function defaultUserRow(): UserRow {
     paper_reams: LOCAL_TEST_INITIAL_PAPER_REAMS,
     avatar_config: {},
     display_name: null,
+    job_title: null,
     chair_upgrade_level: 0,
+    monitor_upgrade_level: 0,
   };
 }
 
@@ -112,13 +118,23 @@ export async function memRemoveMember(roomId: string, email: string): Promise<vo
 
 export async function memGetRoomMembers(
   roomId: string
-): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
+): Promise<
+  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; joinedAt: Date }>
+> {
   const m = getMemberMap(roomId);
-  const list: Array<{ email: string; name: string | null; role: string; joinedAt: Date }> = [];
+  const list: Array<{
+    email: string;
+    name: string | null;
+    jobTitle: string | null;
+    role: string;
+    joinedAt: Date;
+  }> = [];
   for (const [email, row] of m) {
+    const u = users.get(email);
     list.push({
       email,
-      name: users.get(email)?.display_name ?? null,
+      name: u?.display_name ?? null,
+      jobTitle: u?.job_title ?? null,
       role: row.role,
       joinedAt: row.joined_at,
     });
@@ -129,15 +145,25 @@ export async function memGetRoomMembers(
 
 export async function memGetRoomLeaderboard(
   roomId: string
-): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
+): Promise<
+  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; paperReams: number }>
+> {
   const m = getMemberMap(roomId);
-  const list: Array<{ email: string; name: string | null; role: string; paperReams: number }> = [];
+  const list: Array<{
+    email: string;
+    name: string | null;
+    jobTitle: string | null;
+    role: string;
+    paperReams: number;
+  }> = [];
   for (const [email, row] of m) {
+    const u = users.get(email);
     list.push({
       email,
-      name: users.get(email)?.display_name ?? null,
+      name: u?.display_name ?? null,
+      jobTitle: u?.job_title ?? null,
       role: row.role,
-      paperReams: users.get(email)?.paper_reams ?? LOCAL_TEST_INITIAL_PAPER_REAMS,
+      paperReams: u?.paper_reams ?? LOCAL_TEST_INITIAL_PAPER_REAMS,
     });
   }
   list.sort((a, b) => b.paperReams - a.paperReams);
@@ -181,9 +207,33 @@ export async function memEnsureUser(email: string): Promise<void> {
   users.set(email, defaultUserRow());
 }
 
-export async function memUpsertUserDisplayName(email: string, displayName: string): Promise<void> {
+/** Sets display_name from auth only when the user has no display_name yet (matches PG COALESCE seed). */
+export async function memSeedUserDisplayNameIfEmpty(email: string, fallbackDisplayName: string): Promise<void> {
+  const u = users.get(email) ?? defaultUserRow();
+  if (u.display_name == null || u.display_name === "") {
+    u.display_name = fallbackDisplayName;
+  }
+  users.set(email, u);
+}
+
+export async function memGetUserProfileFields(
+  email: string
+): Promise<{ display_name: string | null; job_title: string | null }> {
+  const u = users.get(email);
+  return {
+    display_name: u?.display_name ?? null,
+    job_title: u?.job_title ?? null,
+  };
+}
+
+export async function memSaveUserProfileFields(
+  email: string,
+  displayName: string,
+  jobTitle: string | null
+): Promise<void> {
   const u = users.get(email) ?? defaultUserRow();
   u.display_name = displayName;
+  u.job_title = jobTitle;
   users.set(email, u);
 }
 
@@ -215,6 +265,34 @@ export async function memPurchaseChairUpgrade(
   u.chair_upgrade_level = level + 1;
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams, chairUpgradeLevel: u.chair_upgrade_level };
+}
+
+const MONITOR_MAX = MONITOR_UPGRADE_MAX_LEVEL;
+
+export async function memGetMonitorLevelsForEmails(emails: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const e of emails) {
+    const row = users.get(e);
+    const lv = row?.monitor_upgrade_level ?? 0;
+    out[e] = Math.min(MONITOR_MAX, Math.max(0, Math.floor(lv)));
+  }
+  return out;
+}
+
+export type MemMonitorPurchaseResult =
+  | { ok: true; paperReams: number; monitorUpgradeLevel: number }
+  | { ok: false; error: 'max_level' | 'insufficient' };
+
+export async function memPurchaseMonitorUpgrade(email: string): Promise<MemMonitorPurchaseResult> {
+  const u = users.get(email) ?? defaultUserRow();
+  let level = Math.min(MONITOR_MAX, Math.max(0, Math.floor(u.monitor_upgrade_level)));
+  if (level >= MONITOR_MAX) return { ok: false, error: "max_level" };
+  const costReams = monitorUpgradeCostForNextLevel(level);
+  if (u.paper_reams < costReams) return { ok: false, error: "insufficient" };
+  u.paper_reams -= costReams;
+  u.monitor_upgrade_level = level + 1;
+  users.set(email, u);
+  return { ok: true, paperReams: u.paper_reams, monitorUpgradeLevel: u.monitor_upgrade_level };
 }
 
 export async function memUpdateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise<void> {

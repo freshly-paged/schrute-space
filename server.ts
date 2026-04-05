@@ -24,6 +24,10 @@ import {
   CHAIR_UPGRADE_COST_REAMS,
   CHAIR_UPGRADE_MAX_LEVEL,
 } from "./src/chairUpgradeConstants.js";
+import {
+  MONITOR_UPGRADE_MAX_LEVEL,
+  monitorUpgradeCostForNextLevel,
+} from "./src/monitorUpgradeConstants.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,6 +109,12 @@ async function initDb() {
   await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS chair_upgrade_level INTEGER NOT NULL DEFAULT 0
   `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS monitor_upgrade_level INTEGER NOT NULL DEFAULT 0
+  `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT
+  `);
 }
 
 async function getPaperReams(email: string): Promise<number> {
@@ -171,23 +181,40 @@ function extractDeskOwnerEmails(layout: FurnitureItem[]): string[] {
   return [...seen];
 }
 
-async function getChairLevelsForEmails(emails: string[]): Promise<Record<string, number>> {
-  if (emails.length === 0) return {};
-  if (isLocalTest()) return mem.memGetChairLevelsForEmails(emails);
+async function getChairAndMonitorLevelsForEmails(
+  emails: string[]
+): Promise<{ chairs: Record<string, number>; monitors: Record<string, number> }> {
+  if (emails.length === 0) return { chairs: {}, monitors: {} };
+  if (isLocalTest()) {
+    const [chairs, monitors] = await Promise.all([
+      mem.memGetChairLevelsForEmails(emails),
+      mem.memGetMonitorLevelsForEmails(emails),
+    ]);
+    return { chairs, monitors };
+  }
   const { rows } = await pool!.query(
-    "SELECT email, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level FROM users WHERE email = ANY($1::text[])",
+    "SELECT email, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level, COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level FROM users WHERE email = ANY($1::text[])",
     [emails]
   );
-  const out: Record<string, number> = {};
-  for (const e of emails) out[e] = 0;
+  const chairs: Record<string, number> = {};
+  const monitors: Record<string, number> = {};
+  for (const e of emails) {
+    chairs[e] = 0;
+    monitors[e] = 0;
+  }
   for (const row of rows) {
-    const n = Number(row.chair_upgrade_level);
-    out[row.email] = Math.min(
+    const cn = Number(row.chair_upgrade_level);
+    chairs[row.email] = Math.min(
       CHAIR_UPGRADE_MAX_LEVEL,
-      Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0)
+      Math.max(0, Number.isFinite(cn) ? Math.floor(cn) : 0)
+    );
+    const mn = Number(row.monitor_upgrade_level);
+    monitors[row.email] = Math.min(
+      MONITOR_UPGRADE_MAX_LEVEL,
+      Math.max(0, Number.isFinite(mn) ? Math.floor(mn) : 0)
     );
   }
-  return out;
+  return { chairs, monitors };
 }
 
 type ChairPurchaseResult =
@@ -241,10 +268,63 @@ async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResu
   }
 }
 
+type MonitorPurchaseResult =
+  | { ok: true; paperReams: number; monitorUpgradeLevel: number }
+  | { ok: false; error: "max_level" | "insufficient" };
+
+async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchaseResult> {
+  if (isLocalTest()) {
+    return mem.memPurchaseMonitorUpgrade(email);
+  }
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const sel = await client.query(
+      "SELECT paper_reams, COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      [email]
+    );
+    if (sel.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const paper = sel.rows[0].paper_reams as number;
+    let level = Math.floor(Number(sel.rows[0].monitor_upgrade_level));
+    if (!Number.isFinite(level)) level = 0;
+    level = Math.min(MONITOR_UPGRADE_MAX_LEVEL, Math.max(0, level));
+    if (level >= MONITOR_UPGRADE_MAX_LEVEL) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "max_level" };
+    }
+    const cost = monitorUpgradeCostForNextLevel(level);
+    if (paper < cost) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const newPaper = paper - cost;
+    const newLevel = level + 1;
+    await client.query(
+      "UPDATE users SET paper_reams = $1, monitor_upgrade_level = $2 WHERE email = $3",
+      [newPaper, newLevel, email]
+    );
+    await client.query("COMMIT");
+    return { ok: true, paperReams: newPaper, monitorUpgradeLevel: newLevel };
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function broadcastDeskChairLevels(io: Server, roomId: string, layout: FurnitureItem[]) {
   const emails = extractDeskOwnerEmails(layout);
-  const map = await getChairLevelsForEmails(emails);
-  io.to(roomId).emit("deskChairLevels", map);
+  const { chairs, monitors } = await getChairAndMonitorLevelsForEmails(emails);
+  io.to(roomId).emit("deskChairLevels", chairs);
+  io.to(roomId).emit("deskMonitorLevels", monitors);
 }
 
 async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
@@ -351,10 +431,14 @@ async function removeMember(roomId: string, email: string): Promise<void> {
   );
 }
 
-async function getRoomMembers(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
+async function getRoomMembers(
+  roomId: string
+): Promise<
+  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; joinedAt: Date }>
+> {
   if (isLocalTest()) return mem.memGetRoomMembers(roomId);
   const { rows } = await pool!.query(
-    `SELECT rm.email, u.display_name as name, rm.role, rm.joined_at as "joinedAt"
+    `SELECT rm.email, u.display_name as name, u.job_title as "jobTitle", rm.role, rm.joined_at as "joinedAt"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
      WHERE rm.room_id = $1
@@ -364,10 +448,14 @@ async function getRoomMembers(roomId: string): Promise<Array<{ email: string; na
   return rows;
 }
 
-async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
+async function getRoomLeaderboard(
+  roomId: string
+): Promise<
+  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; paperReams: number }>
+> {
   if (isLocalTest()) return mem.memGetRoomLeaderboard(roomId);
   const { rows } = await pool!.query(
-    `SELECT rm.email, u.display_name as name, rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
+    `SELECT rm.email, u.display_name as name, u.job_title as "jobTitle", rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
      WHERE rm.room_id = $1
@@ -416,12 +504,53 @@ async function ensureUserRow(email: string): Promise<void> {
   );
 }
 
-async function upsertUserDisplayName(email: string, displayName: string): Promise<void> {
-  if (isLocalTest()) return mem.memUpsertUserDisplayName(email, displayName);
+/** Seeds display_name from IAP/auth when missing; never overwrites a player-chosen name. */
+async function seedUserDisplayNameFromAuth(email: string, fallbackDisplayName: string): Promise<void> {
+  if (isLocalTest()) return mem.memSeedUserDisplayNameIfEmpty(email, fallbackDisplayName);
   await pool!.query(
     `INSERT INTO users (email, display_name) VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name`,
-    [email, displayName]
+     ON CONFLICT (email) DO UPDATE SET
+       display_name = COALESCE(users.display_name, EXCLUDED.display_name)`,
+    [email, fallbackDisplayName]
+  );
+}
+
+async function getUserProfileFields(
+  email: string
+): Promise<{ display_name: string | null; job_title: string | null }> {
+  if (isLocalTest()) return mem.memGetUserProfileFields(email);
+  const { rows } = await pool!.query(
+    `SELECT display_name, job_title FROM users WHERE email = $1`,
+    [email]
+  );
+  const r = rows[0];
+  return {
+    display_name: r?.display_name ?? null,
+    job_title: r?.job_title ?? null,
+  };
+}
+
+const MAX_PROFILE_DISPLAY_NAME = 40;
+const MAX_PROFILE_JOB_TITLE = 60;
+
+function sanitizeProfileLine(value: unknown, maxLen: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") return null;
+  const t = value.trim().replace(/[\x00-\x1f\x7f]/g, "");
+  if (!t) return null;
+  return t.slice(0, maxLen);
+}
+
+async function saveUserProfileDisplayAndTitle(
+  email: string,
+  displayName: string,
+  jobTitle: string | null
+): Promise<void> {
+  if (isLocalTest()) return mem.memSaveUserProfileFields(email, displayName, jobTitle);
+  await pool!.query(
+    `INSERT INTO users (email, display_name, job_title) VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, job_title = EXCLUDED.job_title`,
+    [email, displayName, jobTitle]
   );
 }
 
@@ -511,21 +640,51 @@ async function startServer() {
   app.get("/api/player", async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const [paperReams, avatarConfig] = await Promise.all([
+    const [paperReams, avatarConfig, profile] = await Promise.all([
       getPaperReams(user.email),
       getAvatarConfig(user.email),
+      getUserProfileFields(user.email),
     ]);
-    res.json({ paperReams, avatarConfig });
+    res.json({
+      paperReams,
+      avatarConfig,
+      displayName: profile.display_name,
+      jobTitle: profile.job_title,
+    });
   });
 
   app.post("/api/avatar", express.json(), async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const { shirtColor, skinTone, pantColor } = req.body ?? {};
-    if (typeof shirtColor !== 'string' || typeof skinTone !== 'string' || typeof pantColor !== 'string') {
+    const body = req.body ?? {};
+    const { shirtColor, skinTone, pantColor, displayName: rawDisplayName, jobTitle: rawJobTitle } = body;
+    if (typeof shirtColor !== "string" || typeof skinTone !== "string" || typeof pantColor !== "string") {
       return res.status(400).json({ error: "Invalid avatar config" });
     }
     await saveAvatarConfig(user.email, { shirtColor, skinTone, pantColor });
+
+    const hasJobTitleKey = Object.prototype.hasOwnProperty.call(body, "jobTitle");
+    if (rawDisplayName !== undefined || hasJobTitleKey) {
+      const cur = await getUserProfileFields(user.email);
+      let nextName: string;
+      if (rawDisplayName !== undefined) {
+        const s = sanitizeProfileLine(rawDisplayName, MAX_PROFILE_DISPLAY_NAME);
+        if (!s) return res.status(400).json({ error: "Invalid display name" });
+        nextName = s;
+      } else {
+        const fallback = (cur.display_name?.trim() || user.name).slice(0, MAX_PROFILE_DISPLAY_NAME);
+        nextName = fallback || user.email.split("@")[0];
+      }
+      let nextTitle = cur.job_title;
+      if (hasJobTitleKey) {
+        nextTitle =
+          rawJobTitle === null || rawJobTitle === ""
+            ? null
+            : sanitizeProfileLine(rawJobTitle, MAX_PROFILE_JOB_TITLE);
+      }
+      await saveUserProfileDisplayAndTitle(user.email, nextName, nextTitle);
+    }
+
     res.json({ ok: true });
   });
 
@@ -759,8 +918,10 @@ io.on("connection", (socket) => {
         rooms[room] = {};
       }
 
-      // Ensure user row exists and update display name
-      await upsertUserDisplayName(user.email, user.name);
+      await seedUserDisplayNameFromAuth(user.email, user.name);
+      const profileFields = await getUserProfileFields(user.email);
+      const visibleName =
+        (profileFields.display_name && profileFields.display_name.trim()) || user.name;
 
       // Ensure room exists; first joiner (or first joiner with no existing members) becomes admin
       await ensureRoom(room);
@@ -772,8 +933,8 @@ io.on("connection", (socket) => {
       const role = await getMemberRole(room, user.email);
       const isMember = role !== null;
 
-      // Initialize player using authenticated user info
-      const name = user.name;
+      // Initialize player using DB display name when set
+      const name = visibleName;
       rooms[room][socket.id] = {
         id: socket.id,
         email: user.email,
@@ -817,7 +978,7 @@ io.on("connection", (socket) => {
 
       // Desk: only for members (admin/manager/worker)
       if (isMember) {
-        ensurePlayerDesk(room, user.email, user.name)
+        ensurePlayerDesk(room, user.email, visibleName)
           .then(async (layout) => {
             socket.emit("roomLayoutLoaded", layout);
             socket.to(room).emit("roomLayoutUpdated", layout);
@@ -831,8 +992,11 @@ io.on("connection", (socket) => {
         // Visitor: send current layout read-only, no desk created
         getRoomLayout(room).then(async (layout) => {
           socket.emit("roomLayoutLoaded", layout);
-          const map = await getChairLevelsForEmails(extractDeskOwnerEmails(layout));
-          socket.emit("deskChairLevels", map);
+          const { chairs, monitors } = await getChairAndMonitorLevelsForEmails(
+            extractDeskOwnerEmails(layout)
+          );
+          socket.emit("deskChairLevels", chairs);
+          socket.emit("deskMonitorLevels", monitors);
         });
       }
 
@@ -899,6 +1063,45 @@ io.on("connection", (socket) => {
           });
         } catch (e) {
           console.error("purchaseChairUpgrade:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
+    socket.on(
+      "purchaseMonitorUpgrade",
+      async (ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        let playerRoom = "";
+        for (const roomId in rooms) {
+          if (rooms[roomId][socket.id]) {
+            playerRoom = roomId;
+            break;
+          }
+        }
+        if (!playerRoom) {
+          respond({ ok: false, error: "not_in_room" });
+          return;
+        }
+        try {
+          await ensureUserRow(user.email);
+          const result = await purchaseMonitorUpgradeTxn(user.email);
+          if (!result.ok) {
+            respond(result);
+            return;
+          }
+          socket.emit("paperReamsLoaded", result.paperReams);
+          io.to(playerRoom).emit("monitorLevelUpdated", {
+            email: user.email,
+            level: result.monitorUpgradeLevel,
+          });
+          respond({
+            ok: true,
+            paperReams: result.paperReams,
+            monitorUpgradeLevel: result.monitorUpgradeLevel,
+          });
+        } catch (e) {
+          console.error("purchaseMonitorUpgrade:", e);
           respond({ ok: false, error: "server_error" });
         }
       }

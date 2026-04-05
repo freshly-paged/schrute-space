@@ -1,10 +1,57 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
+
+function SingleDeskMonitor() {
+  return (
+    <group>
+      <Box args={[0.65, 0.42, 0.05]} position={[0, 0.21, -0.2]}>
+        <meshStandardMaterial color="#111111" />
+      </Box>
+      <Box args={[0.55, 0.32, 0.01]} position={[0, 0.21, -0.17]}>
+        <meshStandardMaterial color="#0a1f33" emissive="#1a3a5c" emissiveIntensity={0.6} />
+      </Box>
+      <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
+        <meshStandardMaterial color="#222" />
+      </Box>
+      <Box args={[0.4, 0.02, 0.2]} position={[0, 0.01, 0.1]}>
+        <meshStandardMaterial color="#222" />
+      </Box>
+    </group>
+  );
+}
+
+function DeskMonitors({ count }: { count: number }) {
+  const c = Math.min(8, Math.max(1, Math.floor(count)));
+  const maxRowW = 1.72;
+  const unitW = 0.65;
+  const gap = 0.06;
+  const denom = c * unitW + Math.max(0, c - 1) * gap;
+  /** Use desk width when few monitors; cap so one screen does not dominate the desk. */
+  const fitScale = maxRowW / denom;
+  const maxScaleForFew = 1.28;
+  const scale = Math.min(fitScale, maxScaleForFew);
+  const step = scale * (unitW + gap);
+  const mid = (c - 1) / 2;
+  return (
+    <group position={[0, 1.0, 0]}>
+      {Array.from({ length: c }, (_, i) => (
+        <group
+          key={i}
+          position={[(i - mid) * step, 0, 0]}
+          scale={[scale, scale, scale]}
+        >
+          <SingleDeskMonitor />
+        </group>
+      ))}
+    </group>
+  );
+}
 
 export const Desk = ({
   id,
@@ -31,6 +78,26 @@ export const Desk = ({
   const myRole = useGameStore((state) => state.roomInfo?.myRole);
   const chairLevelByEmail = useGameStore((state) => state.chairLevelByEmail);
   const chairLevel = ownerEmail ? (chairLevelByEmail[ownerEmail] ?? 0) : 0;
+  const monitorLevelByEmail = useGameStore((state) => state.monitorLevelByEmail);
+  const rawMonitorLv = ownerEmail ? (monitorLevelByEmail[ownerEmail] ?? 0) : 0;
+  const monitorLv = Math.min(
+    MONITOR_UPGRADE_MAX_LEVEL,
+    Math.max(0, Math.floor(rawMonitorLv))
+  );
+  const monitorCount = 1 + monitorLv;
+
+  const members = useGameStore((state) => state.roomInfo?.members);
+  const resolvedDeskOwnerName = useMemo(() => {
+    const layoutName = ownerName?.trim();
+    if (!ownerEmail) return layoutName || '';
+    const m = members?.find((x) => x.email === ownerEmail);
+    const fromDb = m?.name?.trim();
+    if (fromDb) return fromDb;
+    if (layoutName) return layoutName;
+    return ownerEmail.split('@')[0] ?? '';
+  }, [members, ownerEmail, ownerName]);
+
+  const deskNameplate = resolvedDeskOwnerName ? `${resolvedDeskOwnerName}'s desk` : '';
 
   const isOwnDesk = !!ownerEmail && ownerEmail === userEmail;
   const isOwnAdminDesk = isOwnDesk && (myRole === 'admin' || myRole === 'manager');
@@ -52,7 +119,7 @@ export const Desk = ({
 
   return (
     <group ref={deskRef} position={position} rotation={rotation}>
-      {ownerName && (
+      {deskNameplate && (
         <Billboard position={[0, 1.8, 0]}>
           <Text
             fontSize={0.18}
@@ -61,7 +128,7 @@ export const Desk = ({
             outlineWidth={0.02}
             onSync={onOverlayTextSync}
           >
-            {ownerName}
+            {deskNameplate}
           </Text>
         </Billboard>
       )}
@@ -128,29 +195,7 @@ export const Desk = ({
         <meshStandardMaterial color="#1a1a1a" />
       </Box>
 
-      {/* Monitor — improved with larger bezel and glowing screen */}
-      <group position={[0, 1.0, 0]}>
-        {/* Bezel */}
-        <Box args={[0.65, 0.42, 0.05]} position={[0, 0.21, -0.2]}>
-          <meshStandardMaterial color="#111111" />
-        </Box>
-        {/* Inner screen with blue emissive glow */}
-        <Box args={[0.55, 0.32, 0.01]} position={[0, 0.21, -0.17]}>
-          <meshStandardMaterial
-            color="#0a1f33"
-            emissive="#1a3a5c"
-            emissiveIntensity={0.6}
-          />
-        </Box>
-        {/* Monitor stand neck */}
-        <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
-          <meshStandardMaterial color="#222" />
-        </Box>
-        {/* Monitor stand base */}
-        <Box args={[0.4, 0.02, 0.2]} position={[0, 0.01, 0.1]}>
-          <meshStandardMaterial color="#222" />
-        </Box>
-      </group>
+      <DeskMonitors count={monitorCount} />
 
       {hasChair && (
         <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} level={chairLevel} />

@@ -12,6 +12,7 @@ interface WhiteboardProps {
 
 interface TopEntry {
   name: string | null;
+  jobTitle?: string | null;
   email: string;
   paperReams: number;
 }
@@ -59,6 +60,7 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
   const displayName = topEntry
     ? (topEntry.name ?? topEntry.email.split('@')[0])
     : null;
+  const titleLine = topEntry?.jobTitle?.trim() || null;
 
   return (
     <group ref={groupRef} position={position} rotation={rotation}>
@@ -97,10 +99,15 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
           <Text position={[-2.0, 0.45, 0.04]} fontSize={0.34} color="#c8a000" anchorX="center" anchorY="middle">
             #1
           </Text>
-          <Text position={[0.5, 0.45, 0.04]} fontSize={0.28} color="#1a1a1a" anchorX="center" anchorY="middle">
+          <Text position={[0.5, titleLine ? 0.55 : 0.45, 0.04]} fontSize={0.28} color="#1a1a1a" anchorX="center" anchorY="middle">
             {displayName}
           </Text>
-          <Text position={[0.5, 0.05, 0.04]} fontSize={0.22} color="#555" anchorX="center" anchorY="middle">
+          {titleLine ? (
+            <Text position={[0.5, 0.28, 0.04]} fontSize={0.16} color="#555" anchorX="center" anchorY="middle">
+              {titleLine}
+            </Text>
+          ) : null}
+          <Text position={[0.5, titleLine ? -0.02 : 0.05, 0.04]} fontSize={0.22} color="#555" anchorX="center" anchorY="middle">
             {`${topEntry!.paperReams.toLocaleString()} reams`}
           </Text>
         </>

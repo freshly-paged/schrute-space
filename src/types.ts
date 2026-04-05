@@ -73,6 +73,8 @@ export type RoomRole = 'admin' | 'manager' | 'worker';
 export interface RoomMember {
   email: string;
   name: string | null;
+  /** Job title from `users.job_title`; optional for older API payloads. */
+  jobTitle?: string | null;
   role: RoomRole;
   isOnline?: boolean;
 }

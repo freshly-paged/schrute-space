@@ -6,6 +6,7 @@ import { RoomRole } from '../../types';
 interface LeaderboardEntry {
   email: string;
   name: string | null;
+  jobTitle?: string | null;
   role: RoomRole;
   paperReams: number;
 }
@@ -54,7 +55,7 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
     return () => clearInterval(interval);
   }, [roomId]);
 
-  const displayName = (entry: LeaderboardEntry) =>
+  const primaryName = (entry: LeaderboardEntry) =>
     entry.name ?? entry.email.split('@')[0];
 
   return (
@@ -97,12 +98,15 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
                   }`}>
                     {i + 1}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       <span className={`text-xs font-semibold truncate ${isMe ? 'text-indigo-200' : 'text-white'}`}>
-                        {displayName(entry)}
+                        {primaryName(entry)}
                         {isMe && <span className="text-indigo-400 ml-1">(you)</span>}
                       </span>
+                      {entry.jobTitle ? (
+                        <span className="text-[9px] text-slate-400 truncate leading-tight">{entry.jobTitle}</span>
+                      ) : null}
                     </div>
                     <RoleBadge role={entry.role} />
                   </div>
