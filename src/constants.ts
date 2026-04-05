@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 
 export { CHAIR_UPGRADE_COST_REAMS, CHAIR_UPGRADE_MAX_LEVEL } from './chairUpgradeConstants';
+export {
+  MONITOR_UPGRADE_MAX_LEVEL,
+  FOCUS_BASE_REAMS_PER_MINUTE,
+  monitorUpgradeCostForNextLevel,
+  focusReamsPerMinute,
+} from './monitorUpgradeConstants';
 import { WORKING_AREA_COLLISION_BOXES } from './components/world/working-area/WorkingArea';
 import { BREAK_ROOM_COLLISION_BOXES } from './components/world/break-room/BreakRoom';
 import { CONFERENCE_ROOM_COLLISION_BOXES } from './components/world/conference-room/ConferenceRoom';

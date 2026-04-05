@@ -38,17 +38,29 @@ const PANT_COLORS = [
 
 interface AvatarCustomizationPageProps {
   config: AvatarConfig;
-  onSave: (config: AvatarConfig) => void;
+  initialDisplayName: string;
+  initialJobTitle: string;
+  onSave: (payload: { config: AvatarConfig; displayName: string; jobTitle: string }) => void | Promise<void>;
   onBack: () => void;
 }
 
-export const AvatarCustomizationPage = ({ config, onSave, onBack }: AvatarCustomizationPageProps) => {
+export const AvatarCustomizationPage = ({
+  config,
+  initialDisplayName,
+  initialJobTitle,
+  onSave,
+  onBack,
+}: AvatarCustomizationPageProps) => {
   const [draft, setDraft] = useState<AvatarConfig>(config);
+  const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [jobTitle, setJobTitle] = useState(initialJobTitle);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    const trimmed = displayName.trim();
+    if (!trimmed) return;
     setSaving(true);
-    await onSave(draft);
+    await onSave({ config: draft, displayName: trimmed, jobTitle: jobTitle.trim() });
     setSaving(false);
   };
 
@@ -89,6 +101,28 @@ export const AvatarCustomizationPage = ({ config, onSave, onBack }: AvatarCustom
 
           {/* Options */}
           <div className="flex-1 space-y-6">
+            <Section label="DISPLAY NAME">
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={40}
+                className="w-full px-2 py-1.5 text-[10px] font-pixel border-2 border-slate-400 bg-white text-black outline-none focus:border-indigo-600"
+                placeholder="Name shown in-game"
+                autoComplete="nickname"
+              />
+            </Section>
+            <Section label="TITLE (OPTIONAL)">
+              <input
+                type="text"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                maxLength={60}
+                className="w-full px-2 py-1.5 text-[10px] font-pixel border-2 border-slate-400 bg-white text-black outline-none focus:border-indigo-600"
+                placeholder="e.g. Assistant to the Regional Manager"
+                autoComplete="organization-title"
+              />
+            </Section>
             <Section label="SHIRT COLOR">
               <SwatchGrid
                 options={SHIRT_COLORS}
@@ -118,7 +152,7 @@ export const AvatarCustomizationPage = ({ config, onSave, onBack }: AvatarCustom
         <div className="flex flex-col gap-3 mt-8">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !displayName.trim()}
             className="pixel-button text-xs py-4 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'SAVING...' : 'SAVE APPEARANCE'}

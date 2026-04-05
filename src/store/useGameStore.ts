@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { FOCUS_SIT_POSE_COUNT } from '../avatarFocusPoses';
+import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
@@ -47,11 +48,19 @@ interface GameState {
   occupiedDeskIds: string[];
   user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
+  /** After `/api/player`; null displayName means use auth `user.name` in UI. */
+  playerProfileLoaded: boolean;
+  playerProfileDisplayName: string | null;
+  playerProfileJobTitle: string | null;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
   setOccupiedDeskIds: (ids: string[]) => void;
   setUser: (user: { email: string; name: string; picture?: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
+  setPlayerProfileFromServer: (profile: {
+    displayName: string | null;
+    jobTitle: string | null;
+  }) => void;
   roomLayout: FurnitureItem[];
   setRoomLayout: (layout: FurnitureItem[]) => void;
   /** Desk owner email → vending chair upgrade level (0–20); synced from server. */
@@ -59,6 +68,11 @@ interface GameState {
   setDeskChairLevels: (map: Record<string, number>) => void;
   patchChairLevel: (email: string, level: number) => void;
   resetChairLevels: () => void;
+  /** Desk owner email → monitor upgrade count (0–7); synced from server. */
+  monitorLevelByEmail: Record<string, number>;
+  setDeskMonitorLevels: (map: Record<string, number>) => void;
+  patchMonitorLevel: (email: string, level: number) => void;
+  resetMonitorLevels: () => void;
   roomInfo: RoomInfo | null;
   setRoomInfo: (info: RoomInfo | null) => void;
 
@@ -196,9 +210,18 @@ export const useGameStore = create<GameState>((set) => ({
     let newSessionPaper = state.sessionPaper;
     let newLastPaperEarnedAt = state.lastPaperEarnedAt;
 
-    // Passive generation: 1 paper every 30 seconds during focus (derived from wall time so bursts catch up)
+    // Passive generation during focus: wall-clock based; rate scales with monitor upgrades (first 3 levels).
     if (state.timerMode === 'focus') {
-      const targetSessionPaper = Math.floor((1500 - newTimeLeft) / 30);
+      const elapsed = 1500 - newTimeLeft;
+      const email = state.user?.email;
+      const rawLv =
+        email !== undefined ? (state.monitorLevelByEmail[email] ?? 0) : 0;
+      const monitorLv = Math.min(
+        MONITOR_UPGRADE_MAX_LEVEL,
+        Math.max(0, Math.floor(rawLv))
+      );
+      const reamsPerMin = focusReamsPerMinute(monitorLv);
+      const targetSessionPaper = Math.floor((elapsed * reamsPerMin) / 60);
       const paperDelta = targetSessionPaper - state.sessionPaper;
       if (paperDelta > 0) {
         newPaperReams += paperDelta;
@@ -231,6 +254,9 @@ export const useGameStore = create<GameState>((set) => ({
   isChatFocused: false,
   occupiedDeskIds: [],
   user: null,
+  playerProfileLoaded: false,
+  playerProfileDisplayName: null,
+  playerProfileJobTitle: null,
   avatarConfig: (() => {
     try {
       const stored = localStorage.getItem('avatar_config');
@@ -243,6 +269,12 @@ export const useGameStore = create<GameState>((set) => ({
   setChatFocused: (focused) => set({ isChatFocused: focused }),
   setOccupiedDeskIds: (ids) => set({ occupiedDeskIds: ids }),
   setUser: (user) => set({ user }),
+  setPlayerProfileFromServer: (profile) =>
+    set({
+      playerProfileLoaded: true,
+      playerProfileDisplayName: profile.displayName,
+      playerProfileJobTitle: profile.jobTitle,
+    }),
   setAvatarConfig: (config) => {
     localStorage.setItem('avatar_config', JSON.stringify(config));
     set({ avatarConfig: config });
@@ -257,6 +289,14 @@ export const useGameStore = create<GameState>((set) => ({
       chairLevelByEmail: { ...s.chairLevelByEmail, [email]: level },
     })),
   resetChairLevels: () => set({ chairLevelByEmail: {} }),
+  monitorLevelByEmail: {},
+  setDeskMonitorLevels: (map) =>
+    set((s) => ({ monitorLevelByEmail: { ...s.monitorLevelByEmail, ...map } })),
+  patchMonitorLevel: (email, level) =>
+    set((s) => ({
+      monitorLevelByEmail: { ...s.monitorLevelByEmail, [email]: level },
+    })),
+  resetMonitorLevels: () => set({ monitorLevelByEmail: {} }),
   roomInfo: null,
   setRoomInfo: (info) => set({ roomInfo: info }),
 

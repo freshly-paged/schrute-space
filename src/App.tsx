@@ -50,7 +50,30 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, showVendingMenu, setShowVendingMenu, setHeldIceCream, setUser } = useGameStore();
+  const {
+    isTimerActive,
+    paperReams,
+    avatarConfig,
+    setAvatarConfig,
+    setPaperReams,
+    roomLayout,
+    setRoomLayout,
+    roomInfo,
+    showLeaderboard,
+    setShowLeaderboard,
+    showAdminPanel,
+    setShowAdminPanel,
+    showComputerInterface,
+    setShowComputerInterface,
+    showVendingMenu,
+    setShowVendingMenu,
+    setHeldIceCream,
+    setUser,
+    playerProfileLoaded,
+    playerProfileDisplayName,
+    playerProfileJobTitle,
+    setPlayerProfileFromServer,
+  } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
   useEffect(() => {
@@ -88,17 +111,21 @@ export default function App() {
     }
   }, [user, currentRoom]);
 
-  // Load player stats from DB when on landing page
+  // Load paper, avatar, and profile from DB whenever the authenticated user is known
   useEffect(() => {
-    if (!user || currentRoom) return;
+    if (!user) return;
     fetch('/api/player', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         if (typeof data.paperReams === 'number') setPaperReams(data.paperReams);
         if (data.avatarConfig) setAvatarConfig(data.avatarConfig);
+        setPlayerProfileFromServer({
+          displayName: data.displayName ?? null,
+          jobTitle: data.jobTitle ?? null,
+        });
       })
       .catch(() => {});
-  }, [user, currentRoom]);
+  }, [user, setPaperReams, setAvatarConfig, setPlayerProfileFromServer]);
 
   const handleSaveOfficeLayout = useCallback(async (layout: FurnitureItem[]) => {
     setRoomLayout(layout);
@@ -110,16 +137,36 @@ export default function App() {
     });
   }, [currentRoom, setRoomLayout]);
 
-  const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
-    setAvatarConfig(config);
-    await fetch('/api/avatar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(config),
-    });
-    setView('landing');
-  }, [setAvatarConfig]);
+  const handleSaveAvatar = useCallback(
+    async (payload: {
+      config: typeof avatarConfig;
+      displayName: string;
+      jobTitle: string;
+    }) => {
+      setAvatarConfig(payload.config);
+      setPlayerProfileFromServer({
+        displayName: payload.displayName,
+        jobTitle: payload.jobTitle ? payload.jobTitle : null,
+      });
+      await fetch('/api/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...payload.config,
+          displayName: payload.displayName,
+          jobTitle: payload.jobTitle || null,
+        }),
+      });
+      setView('landing');
+    },
+    [setAvatarConfig, setPlayerProfileFromServer]
+  );
+
+  const visibleDisplayName =
+    playerProfileLoaded && user
+      ? (playerProfileDisplayName?.trim() || user.name)
+      : user?.name ?? '';
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -190,6 +237,8 @@ export default function App() {
     return (
       <AvatarCustomizationPage
         config={avatarConfig}
+        initialDisplayName={visibleDisplayName}
+        initialJobTitle={playerProfileJobTitle ?? ''}
         onSave={handleSaveAvatar}
         onBack={() => setView('landing')}
       />
@@ -210,7 +259,16 @@ export default function App() {
 
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
-    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} avatarConfig={avatarConfig} paperReams={paperReams} />;
+    return (
+      <LandingPage
+        onJoin={handleJoin}
+        userName={visibleDisplayName}
+        onLogout={logout}
+        onCustomize={() => setView('customize')}
+        avatarConfig={avatarConfig}
+        paperReams={paperReams}
+      />
+    );
   }
 
   // ── Game ─────────────────────────────────────────────────────────────────
@@ -310,7 +368,7 @@ export default function App() {
               socket={socket}
               lastMessage={lastLocalMessage?.text}
               lastMessageTime={lastLocalMessage?.time}
-              playerName={user.name}
+              playerName={visibleDisplayName}
               players={players}
             />
             {Object.values(players).map((player) => (

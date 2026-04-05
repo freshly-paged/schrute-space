@@ -7,6 +7,10 @@ import {
   CHAIR_UPGRADE_COST_REAMS,
   CHAIR_UPGRADE_MAX_LEVEL,
 } from '../../chairUpgradeConstants';
+import {
+  MONITOR_UPGRADE_MAX_LEVEL,
+  monitorUpgradeCostForNextLevel,
+} from '../../monitorUpgradeConstants';
 
 /** Ice cream price in paper reams (syncs to server via existing savePaperReams). */
 const ICE_CREAM_COST_REAMS = 2;
@@ -21,6 +25,10 @@ type ChairPurchaseAck =
   | { ok: true; paperReams: number; chairUpgradeLevel: number }
   | { ok: false; error: 'max_level' | 'insufficient' | 'not_in_room' | 'server_error' };
 
+type MonitorPurchaseAck =
+  | { ok: true; paperReams: number; monitorUpgradeLevel: number }
+  | { ok: false; error: 'max_level' | 'insufficient' | 'not_in_room' | 'server_error' };
+
 export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const paperReams = useGameStore((s) => s.paperReams);
   const addPaper = useGameStore((s) => s.addPaper);
@@ -29,11 +37,17 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const chairLevelByEmail = useGameStore((s) => s.chairLevelByEmail);
   const setPaperReams = useGameStore((s) => s.setPaperReams);
   const patchChairLevel = useGameStore((s) => s.patchChairLevel);
+  const monitorLevelByEmail = useGameStore((s) => s.monitorLevelByEmail);
+  const patchMonitorLevel = useGameStore((s) => s.patchMonitorLevel);
   const [subView, setSubView] = useState<'main' | 'flavor'>('main');
   const [selectedFlavor, setSelectedFlavor] = useState(0);
   const [feedback, setFeedback] = useState<'insufficient' | 'offline' | null>(null);
   const [chairBusy, setChairBusy] = useState(false);
   const [chairFeedback, setChairFeedback] = useState<
+    'insufficient' | 'max_level' | 'offline' | 'not_in_room' | 'server_error' | null
+  >(null);
+  const [monitorBusy, setMonitorBusy] = useState(false);
+  const [monitorFeedback, setMonitorFeedback] = useState<
     'insufficient' | 'max_level' | 'offline' | 'not_in_room' | 'server_error' | null
   >(null);
 
@@ -58,6 +72,11 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const myChairLevel = user?.email ? (chairLevelByEmail[user.email] ?? 0) : 0;
   const chairMaxed = myChairLevel >= CHAIR_UPGRADE_MAX_LEVEL;
   const canAffordChair = paperReams >= CHAIR_UPGRADE_COST_REAMS;
+
+  const myMonitorLevel = user?.email ? (monitorLevelByEmail[user.email] ?? 0) : 0;
+  const monitorMaxed = myMonitorLevel >= MONITOR_UPGRADE_MAX_LEVEL;
+  const nextMonitorCost = monitorMaxed ? 0 : monitorUpgradeCostForNextLevel(myMonitorLevel);
+  const canAffordMonitor = !monitorMaxed && paperReams >= nextMonitorCost;
 
   const openFlavorSubmenu = () => {
     setFeedback(null);
@@ -117,6 +136,45 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
       else if (fail === 'insufficient') setChairFeedback('insufficient');
       else if (fail === 'not_in_room') setChairFeedback('not_in_room');
       else setChairFeedback('server_error');
+    });
+  };
+
+  const handleBuyMonitorUpgrade = () => {
+    setMonitorFeedback(null);
+    if (!socket?.connected) {
+      setMonitorFeedback('offline');
+      return;
+    }
+    if (monitorMaxed) {
+      setMonitorFeedback('max_level');
+      return;
+    }
+    if (!canAffordMonitor) {
+      setMonitorFeedback('insufficient');
+      return;
+    }
+    setMonitorBusy(true);
+    socket.timeout(12_000).emit('purchaseMonitorUpgrade', (socketErr: Error | null, res: unknown) => {
+      setMonitorBusy(false);
+      if (socketErr) {
+        setMonitorFeedback('server_error');
+        return;
+      }
+      const r = res as MonitorPurchaseAck;
+      if (!r || typeof r !== 'object' || !('ok' in r)) {
+        setMonitorFeedback('server_error');
+        return;
+      }
+      if (r.ok === true) {
+        setPaperReams(r.paperReams);
+        if (user?.email) patchMonitorLevel(user.email, r.monitorUpgradeLevel);
+        return;
+      }
+      const fail = r.error;
+      if (fail === 'max_level') setMonitorFeedback('max_level');
+      else if (fail === 'insufficient') setMonitorFeedback('insufficient');
+      else if (fail === 'not_in_room') setMonitorFeedback('not_in_room');
+      else setMonitorFeedback('server_error');
     });
   };
 
@@ -234,6 +292,73 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
               </p>
             )}
             {chairFeedback === 'offline' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
+                Not connected — try again when online.
+              </p>
+            )}
+
+            <div className="border-2 border-cyan-700/40 bg-cyan-950/20 p-4 mb-4 mt-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-cyan-100 mb-1">
+                    Desk monitors
+                  </p>
+                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
+                    Add a screen on your desk each time (up to 8). First 3 upgrades also add +1 ream/min
+                    while focusing; later ones are look-only.
+                  </p>
+                  <p className="text-slate-500 font-mono text-[9px] mt-2">
+                    Upgrades:{' '}
+                    <span className="text-cyan-200">
+                      {myMonitorLevel}/{MONITOR_UPGRADE_MAX_LEVEL}
+                    </span>
+                    {!monitorMaxed && (
+                      <span className="text-slate-500">
+                        {' '}
+                        → next: {1 + myMonitorLevel} monitors ({nextMonitorCost} reams)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {!monitorMaxed && (
+                  <span className="font-mono text-cyan-300 text-sm shrink-0">{nextMonitorCost} reams</span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBuyMonitorUpgrade}
+              disabled={!socketOk || monitorMaxed || monitorBusy}
+              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {monitorMaxed
+                ? 'Monitors maxed (8 screens)'
+                : monitorBusy
+                  ? 'Processing…'
+                  : `Add monitor (${nextMonitorCost} reams)`}
+            </button>
+            {monitorFeedback === 'insufficient' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
+                Not enough reams.
+              </p>
+            )}
+            {monitorFeedback === 'max_level' && (
+              <p className="text-center text-slate-400 text-xs font-mono mt-2">
+                Already at max ({MONITOR_UPGRADE_MAX_LEVEL} upgrades, 8 monitors).
+              </p>
+            )}
+            {monitorFeedback === 'not_in_room' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
+                Join the office room first.
+              </p>
+            )}
+            {monitorFeedback === 'server_error' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
+                Could not complete purchase — try again.
+              </p>
+            )}
+            {monitorFeedback === 'offline' && (
               <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
                 Not connected — try again when online.
               </p>

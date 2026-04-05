@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
+import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
 import { useGameStore } from '../../store/useGameStore';
 
 export const PomodoroUI = () => {
@@ -14,7 +15,13 @@ export const PomodoroUI = () => {
     togglePause,
     nearestDeskId,
     sessionPaper,
+    user,
+    monitorLevelByEmail,
   } = useGameStore();
+  const focusEarnPerMin =
+    user?.email !== undefined
+      ? focusReamsPerMinute(monitorLevelByEmail[user.email] ?? 0)
+      : focusReamsPerMinute(0);
 
   useEffect(() => {
     if (!isTimerActive || isTimerPaused) return;
@@ -71,6 +78,13 @@ export const PomodoroUI = () => {
               <div className="flex flex-col items-center gap-1 mb-6">
                 <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold animate-pulse text-center">
                   {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
+                </div>
+                <div className="text-slate-400 font-mono text-[10px]">
+                  Earn rate:{' '}
+                  <span className="text-cyan-300/90">
+                    {focusEarnPerMin} reams/min
+                  </span>
+                  {isTimerPaused ? ' (paused)' : ''}
                 </div>
                 {sessionPaper > 0 && (
                   <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-full">
