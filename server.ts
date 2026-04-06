@@ -28,6 +28,7 @@ import {
   MONITOR_UPGRADE_MAX_LEVEL,
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
+import { totalPaperReamsEarnedFloor } from "./src/paperReamsLifetime.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +116,37 @@ async function initDb() {
   await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT
   `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS total_paper_reams_earned INTEGER NOT NULL DEFAULT 0
+  `);
+  await backfillTotalPaperReamsEarned();
+}
+
+/**
+ * Best-effort floor for lifetime earned: current balance + inferred upgrade spend.
+ * Ongoing earnings update `total_paper_reams_earned` via savePaperReams deltas;
+ * upgrade purchases also apply this floor so spenders are not under-ranked vs hoarders.
+ */
+async function backfillTotalPaperReamsEarned(): Promise<void> {
+  if (isLocalTest()) return;
+  const { rows } = await pool!.query<{
+    email: string;
+    paper_reams: number;
+    cl: number;
+    ml: number;
+  }>(
+    `SELECT email, paper_reams,
+            COALESCE(chair_upgrade_level, 0) AS cl,
+            COALESCE(monitor_upgrade_level, 0) AS ml
+     FROM users`
+  );
+  for (const row of rows) {
+    const atLeast = totalPaperReamsEarnedFloor(row.paper_reams, row.cl, row.ml);
+    await pool!.query(
+      `UPDATE users SET total_paper_reams_earned = GREATEST(total_paper_reams_earned, $1) WHERE email = $2`,
+      [atLeast, row.email]
+    );
+  }
 }
 
 async function getPaperReams(email: string): Promise<number> {
@@ -128,10 +160,13 @@ async function getPaperReams(email: string): Promise<number> {
 
 async function savePaperReams(email: string, count: number): Promise<void> {
   if (isLocalTest()) return mem.memSavePaperReams(email, count);
+  const c = Math.floor(count);
   await pool!.query(
-    `INSERT INTO users (email, paper_reams) VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET paper_reams = EXCLUDED.paper_reams`,
-    [email, count]
+    `INSERT INTO users (email, paper_reams, total_paper_reams_earned) VALUES ($1, $2, $2)
+     ON CONFLICT (email) DO UPDATE SET
+       paper_reams = EXCLUDED.paper_reams,
+       total_paper_reams_earned = users.total_paper_reams_earned + GREATEST(0, EXCLUDED.paper_reams - users.paper_reams)`,
+    [email, c]
   );
 }
 
@@ -229,7 +264,10 @@ async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResu
   try {
     await client.query("BEGIN");
     const sel = await client.query(
-      "SELECT paper_reams, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
       [email]
     );
     if (sel.rows.length === 0) {
@@ -250,9 +288,13 @@ async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResu
     }
     const newPaper = paper - CHAIR_UPGRADE_COST_REAMS;
     const newLevel = level + 1;
+    const monitorLv = Number(sel.rows[0].monitor_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, newLevel, monitorLv);
     await client.query(
-      "UPDATE users SET paper_reams = $1, chair_upgrade_level = $2 WHERE email = $3",
-      [newPaper, newLevel, email]
+      `UPDATE users SET paper_reams = $1, chair_upgrade_level = $2,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $4)
+       WHERE email = $3`,
+      [newPaper, newLevel, email, floor]
     );
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper, chairUpgradeLevel: newLevel };
@@ -280,7 +322,10 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
   try {
     await client.query("BEGIN");
     const sel = await client.query(
-      "SELECT paper_reams, COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
       [email]
     );
     if (sel.rows.length === 0) {
@@ -302,9 +347,13 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
     }
     const newPaper = paper - cost;
     const newLevel = level + 1;
+    const chairLv = Number(sel.rows[0].chair_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, chairLv, newLevel);
     await client.query(
-      "UPDATE users SET paper_reams = $1, monitor_upgrade_level = $2 WHERE email = $3",
-      [newPaper, newLevel, email]
+      `UPDATE users SET paper_reams = $1, monitor_upgrade_level = $2,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $4)
+       WHERE email = $3`,
+      [newPaper, newLevel, email, floor]
     );
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper, monitorUpgradeLevel: newLevel };
@@ -345,6 +394,22 @@ async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<
   );
 }
 
+/** Serialize layout read–modify–write per room so concurrent joins/API never interleave. */
+const roomLayoutMutationChains = new Map<string, Promise<unknown>>();
+
+function runSerializedRoomLayout<T>(roomId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = roomLayoutMutationChains.get(roomId) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(() => fn());
+  roomLayoutMutationChains.set(
+    roomId,
+    run.then(
+      () => {},
+      () => {}
+    )
+  );
+  return run;
+}
+
 function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
   const { x1, z1, x2, z2 } = WORKING_AREA_BOUNDS;
   const xMin = x1 + DESK_SPAWN_MARGIN;
@@ -371,12 +436,26 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
   return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
-async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
+function layoutHasDeskForEmail(layout: FurnitureItem[], email: string): boolean {
+  return layout.some((f) => {
+    if (f.type !== "desk") return false;
+    const ownerEmail = (f as DeskItem).config?.ownerEmail;
+    return typeof ownerEmail === "string" && ownerEmail === email;
+  });
+}
+
+/**
+ * Ensures a desk exists for this member (must run inside runSerializedRoomLayout for roomId).
+ */
+async function ensurePlayerDeskBody(
+  roomId: string,
+  email: string,
+  name: string
+): Promise<FurnitureItem[]> {
   const layout = await getRoomLayout(roomId);
-  const existingDesk = layout.find(
-    (f) => f.type === 'desk' && (f as DeskItem).config.ownerEmail === email
-  );
-  if (existingDesk) return layout;
+  if (layoutHasDeskForEmail(layout, email)) {
+    return layout;
+  }
 
   const desks = layout.filter((f): f is DeskItem => f.type === 'desk');
   const position = generateSpawnPosition(desks);
@@ -390,6 +469,14 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
   const updated = [...layout, newDesk];
   await saveRoomLayout(roomId, updated);
   return updated;
+}
+
+/**
+ * Ensures a desk exists for this member. Serialized per roomId so concurrent async
+ * joinRoom handlers cannot overwrite each other (late roomLayoutUpdated would drop desks).
+ */
+function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
+  return runSerializedRoomLayout(roomId, () => ensurePlayerDeskBody(roomId, email, name));
 }
 
 // ── Room Management ───────────────────────────────────────────────────────────
@@ -451,15 +538,22 @@ async function getRoomMembers(
 async function getRoomLeaderboard(
   roomId: string
 ): Promise<
-  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; paperReams: number }>
+  Array<{
+    email: string;
+    name: string | null;
+    jobTitle: string | null;
+    role: string;
+    totalReamsEarned: number;
+  }>
 > {
   if (isLocalTest()) return mem.memGetRoomLeaderboard(roomId);
   const { rows } = await pool!.query(
-    `SELECT rm.email, u.display_name as name, u.job_title as "jobTitle", rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
+    `SELECT rm.email, u.display_name as name, u.job_title as "jobTitle", rm.role,
+            COALESCE(u.total_paper_reams_earned, u.paper_reams, 0) as "totalReamsEarned"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
      WHERE rm.room_id = $1
-     ORDER BY u.paper_reams DESC NULLS LAST`,
+     ORDER BY COALESCE(u.total_paper_reams_earned, u.paper_reams, 0) DESC NULLS LAST`,
     [roomId]
   );
   return rows;
@@ -695,7 +789,9 @@ async function startServer() {
     if (typeof roomId !== 'string' || !Array.isArray(layout)) {
       return res.status(400).json({ error: "Invalid layout" });
     }
-    await saveRoomLayout(roomId, layout as FurnitureItem[]);
+    await runSerializedRoomLayout(roomId, async () => {
+      await saveRoomLayout(roomId, layout as FurnitureItem[]);
+    });
     io.to(roomId).emit("roomLayoutUpdated", layout);
     void broadcastDeskChairLevels(io, roomId, layout as FurnitureItem[]);
     res.json({ ok: true });
@@ -812,14 +908,22 @@ async function startServer() {
         return res.status(404).json({ error: "Member not found" });
       }
       // Remove their desk from layout
-      const layout = await getRoomLayout(roomId);
-      const filtered = layout.filter(
-        f => !(f.type === 'desk' && (f as DeskItem).config.ownerEmail === memberEmail)
-      );
-      if (filtered.length !== layout.length) {
-        await saveRoomLayout(roomId, filtered);
-        io.to(roomId).emit("roomLayoutUpdated", filtered);
-        void broadcastDeskChairLevels(io, roomId, filtered);
+      let removedDeskLayout: FurnitureItem[] | null = null;
+      await runSerializedRoomLayout(roomId, async () => {
+        const layout = await getRoomLayout(roomId);
+        const filtered = layout.filter((f) => {
+          if (f.type !== 'desk') return true;
+          const owner = (f as DeskItem).config?.ownerEmail;
+          return !(typeof owner === 'string' && owner === memberEmail);
+        });
+        if (filtered.length !== layout.length) {
+          await saveRoomLayout(roomId, filtered);
+          removedDeskLayout = filtered;
+        }
+      });
+      if (removedDeskLayout) {
+        io.to(roomId).emit("roomLayoutUpdated", removedDeskLayout);
+        void broadcastDeskChairLevels(io, roomId, removedDeskLayout);
       }
       await removeMember(roomId, memberEmail);
       // Notify the removed member's socket if online
