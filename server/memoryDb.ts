@@ -23,6 +23,8 @@ type RoomRole = "admin" | "manager" | "worker";
 
 interface UserRow {
   paper_reams: number;
+  /** Lifetime paper earned (balance + spent); leaderboard stat. */
+  total_paper_reams_earned: number;
   avatar_config: Record<string, unknown>;
   display_name: string | null;
   job_title: string | null;
@@ -59,6 +61,7 @@ export async function memGetPaperReams(email: string): Promise<number> {
 function defaultUserRow(): UserRow {
   return {
     paper_reams: LOCAL_TEST_INITIAL_PAPER_REAMS,
+    total_paper_reams_earned: LOCAL_TEST_INITIAL_PAPER_REAMS,
     avatar_config: {},
     display_name: null,
     job_title: null,
@@ -69,7 +72,15 @@ function defaultUserRow(): UserRow {
 
 export async function memSavePaperReams(email: string, count: number): Promise<void> {
   const u = users.get(email) ?? defaultUserRow();
-  u.paper_reams = count;
+  if (typeof u.total_paper_reams_earned !== "number") {
+    u.total_paper_reams_earned = u.paper_reams;
+  }
+  const prev = u.paper_reams;
+  const c = Math.floor(count);
+  if (c > prev) {
+    u.total_paper_reams_earned += c - prev;
+  }
+  u.paper_reams = c;
   users.set(email, u);
 }
 
@@ -146,7 +157,7 @@ export async function memGetRoomMembers(
 export async function memGetRoomLeaderboard(
   roomId: string
 ): Promise<
-  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; paperReams: number }>
+  Array<{ email: string; name: string | null; jobTitle: string | null; role: string; totalReamsEarned: number }>
 > {
   const m = getMemberMap(roomId);
   const list: Array<{
@@ -154,19 +165,21 @@ export async function memGetRoomLeaderboard(
     name: string | null;
     jobTitle: string | null;
     role: string;
-    paperReams: number;
+    totalReamsEarned: number;
   }> = [];
   for (const [email, row] of m) {
     const u = users.get(email);
+    const balance = u?.paper_reams ?? LOCAL_TEST_INITIAL_PAPER_REAMS;
+    const totalEarned = u?.total_paper_reams_earned ?? balance;
     list.push({
       email,
       name: u?.display_name ?? null,
       jobTitle: u?.job_title ?? null,
       role: row.role,
-      paperReams: u?.paper_reams ?? LOCAL_TEST_INITIAL_PAPER_REAMS,
+      totalReamsEarned: totalEarned,
     });
   }
-  list.sort((a, b) => b.paperReams - a.paperReams);
+  list.sort((a, b) => b.totalReamsEarned - a.totalReamsEarned);
   return list;
 }
 

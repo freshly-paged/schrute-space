@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { useGameStore } from '../../store/useGameStore';
@@ -15,7 +15,7 @@ export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
   const setChatFocused = useGameStore((state) => state.setChatFocused);
   const chatLogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = chatLogRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;

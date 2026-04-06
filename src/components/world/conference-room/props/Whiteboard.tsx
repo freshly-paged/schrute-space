@@ -14,7 +14,7 @@ interface TopEntry {
   name: string | null;
   jobTitle?: string | null;
   email: string;
-  paperReams: number;
+  totalReamsEarned: number;
 }
 
 export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) => {
@@ -84,31 +84,37 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
       </Box>
 
       {/* Header */}
-      <Text position={[0, 1.1, 0.04]} fontSize={0.24} color="#1565c0" anchorX="center" anchorY="middle">
+      <Text position={[0, 1.18, 0.04]} fontSize={0.22} color="#1565c0" anchorX="center" anchorY="middle">
         SALES STANDINGS
+      </Text>
+      <Text position={[0, 0.92, 0.04]} fontSize={0.11} color="#5c6bc0" anchorX="center" anchorY="middle">
+        Total reams earned
       </Text>
 
       {/* Divider */}
-      <Box args={[5.2, 0.03, 0.01]} position={[0, 0.82, 0.04]}>
+      <Box args={[5.2, 0.03, 0.01]} position={[0, 0.74, 0.04]}>
         <meshStandardMaterial color="#666" />
       </Box>
 
       {/* Top entry */}
       {displayName ? (
         <>
-          <Text position={[-2.0, 0.45, 0.04]} fontSize={0.34} color="#c8a000" anchorX="center" anchorY="middle">
+          <Text position={[-2.0, 0.38, 0.04]} fontSize={0.34} color="#c8a000" anchorX="center" anchorY="middle">
             #1
           </Text>
-          <Text position={[0.5, titleLine ? 0.55 : 0.45, 0.04]} fontSize={0.28} color="#1a1a1a" anchorX="center" anchorY="middle">
+          <Text position={[0.5, titleLine ? 0.48 : 0.38, 0.04]} fontSize={0.28} color="#1a1a1a" anchorX="center" anchorY="middle">
             {displayName}
           </Text>
           {titleLine ? (
-            <Text position={[0.5, 0.28, 0.04]} fontSize={0.16} color="#555" anchorX="center" anchorY="middle">
+            <Text position={[0.5, 0.22, 0.04]} fontSize={0.16} color="#555" anchorX="center" anchorY="middle">
               {titleLine}
             </Text>
           ) : null}
-          <Text position={[0.5, titleLine ? -0.02 : 0.05, 0.04]} fontSize={0.22} color="#555" anchorX="center" anchorY="middle">
-            {`${topEntry!.paperReams.toLocaleString()} reams`}
+          <Text position={[0.5, titleLine ? -0.08 : 0.02, 0.04]} fontSize={0.22} color="#555" anchorX="center" anchorY="middle">
+            {topEntry!.totalReamsEarned.toLocaleString()}
+          </Text>
+          <Text position={[0.5, titleLine ? -0.28 : -0.18, 0.04]} fontSize={0.12} color="#888" anchorX="center" anchorY="middle">
+            total reams earned
           </Text>
         </>
       ) : (
