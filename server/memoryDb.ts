@@ -1,6 +1,7 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
 import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
+import { totalPaperReamsEarnedFloor } from "../src/paperReamsLifetime.js";
 
 /** Starting paper reams for each mock player in local test mode. */
 export const LOCAL_TEST_INITIAL_PAPER_REAMS = 1000;
@@ -276,6 +277,10 @@ export async function memPurchaseChairUpgrade(
   if (u.paper_reams < costReams) return { ok: false, error: 'insufficient' };
   u.paper_reams -= costReams;
   u.chair_upgrade_level = level + 1;
+  u.total_paper_reams_earned = Math.max(
+    u.total_paper_reams_earned,
+    totalPaperReamsEarnedFloor(u.paper_reams, u.chair_upgrade_level, u.monitor_upgrade_level)
+  );
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams, chairUpgradeLevel: u.chair_upgrade_level };
 }
@@ -304,6 +309,10 @@ export async function memPurchaseMonitorUpgrade(email: string): Promise<MemMonit
   if (u.paper_reams < costReams) return { ok: false, error: "insufficient" };
   u.paper_reams -= costReams;
   u.monitor_upgrade_level = level + 1;
+  u.total_paper_reams_earned = Math.max(
+    u.total_paper_reams_earned,
+    totalPaperReamsEarnedFloor(u.paper_reams, u.chair_upgrade_level, u.monitor_upgrade_level)
+  );
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams, monitorUpgradeLevel: u.monitor_upgrade_level };
 }

@@ -28,6 +28,7 @@ import {
   MONITOR_UPGRADE_MAX_LEVEL,
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
+import { totalPaperReamsEarnedFloor } from "./src/paperReamsLifetime.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,19 +122,10 @@ async function initDb() {
   await backfillTotalPaperReamsEarned();
 }
 
-/** Sum of reams spent on monitor upgrades to reach `level` (0..MONITOR_UPGRADE_MAX_LEVEL). */
-function totalMonitorUpgradeSpend(level: number): number {
-  const L = Math.min(MONITOR_UPGRADE_MAX_LEVEL, Math.max(0, Math.floor(level)));
-  let sum = 0;
-  for (let i = 0; i < L; i++) {
-    sum += monitorUpgradeCostForNextLevel(i);
-  }
-  return sum;
-}
-
 /**
  * Best-effort floor for lifetime earned: current balance + inferred upgrade spend.
- * Ongoing earnings update `total_paper_reams_earned` via savePaperReams deltas.
+ * Ongoing earnings update `total_paper_reams_earned` via savePaperReams deltas;
+ * upgrade purchases also apply this floor so spenders are not under-ranked vs hoarders.
  */
 async function backfillTotalPaperReamsEarned(): Promise<void> {
   if (isLocalTest()) return;
@@ -149,17 +141,7 @@ async function backfillTotalPaperReamsEarned(): Promise<void> {
      FROM users`
   );
   for (const row of rows) {
-    const chairLv = Math.min(
-      CHAIR_UPGRADE_MAX_LEVEL,
-      Math.max(0, Math.floor(Number(row.cl)))
-    );
-    const monitorLv = Math.min(
-      MONITOR_UPGRADE_MAX_LEVEL,
-      Math.max(0, Math.floor(Number(row.ml)))
-    );
-    const spend =
-      chairLv * CHAIR_UPGRADE_COST_REAMS + totalMonitorUpgradeSpend(monitorLv);
-    const atLeast = Math.max(0, Math.floor(Number(row.paper_reams) || 0)) + spend;
+    const atLeast = totalPaperReamsEarnedFloor(row.paper_reams, row.cl, row.ml);
     await pool!.query(
       `UPDATE users SET total_paper_reams_earned = GREATEST(total_paper_reams_earned, $1) WHERE email = $2`,
       [atLeast, row.email]
@@ -282,7 +264,10 @@ async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResu
   try {
     await client.query("BEGIN");
     const sel = await client.query(
-      "SELECT paper_reams, COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
       [email]
     );
     if (sel.rows.length === 0) {
@@ -303,9 +288,13 @@ async function purchaseChairUpgradeTxn(email: string): Promise<ChairPurchaseResu
     }
     const newPaper = paper - CHAIR_UPGRADE_COST_REAMS;
     const newLevel = level + 1;
+    const monitorLv = Number(sel.rows[0].monitor_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, newLevel, monitorLv);
     await client.query(
-      "UPDATE users SET paper_reams = $1, chair_upgrade_level = $2 WHERE email = $3",
-      [newPaper, newLevel, email]
+      `UPDATE users SET paper_reams = $1, chair_upgrade_level = $2,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $4)
+       WHERE email = $3`,
+      [newPaper, newLevel, email, floor]
     );
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper, chairUpgradeLevel: newLevel };
@@ -333,7 +322,10 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
   try {
     await client.query("BEGIN");
     const sel = await client.query(
-      "SELECT paper_reams, COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level FROM users WHERE email = $1 FOR UPDATE",
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
       [email]
     );
     if (sel.rows.length === 0) {
@@ -355,9 +347,13 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
     }
     const newPaper = paper - cost;
     const newLevel = level + 1;
+    const chairLv = Number(sel.rows[0].chair_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, chairLv, newLevel);
     await client.query(
-      "UPDATE users SET paper_reams = $1, monitor_upgrade_level = $2 WHERE email = $3",
-      [newPaper, newLevel, email]
+      `UPDATE users SET paper_reams = $1, monitor_upgrade_level = $2,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $4)
+       WHERE email = $3`,
+      [newPaper, newLevel, email, floor]
     );
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper, monitorUpgradeLevel: newLevel };
