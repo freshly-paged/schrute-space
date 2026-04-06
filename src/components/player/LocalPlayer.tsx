@@ -13,6 +13,7 @@ import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
 function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
   if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
@@ -471,6 +472,7 @@ export const LocalPlayer = ({
               anchorY="middle"
               outlineWidth={0.008}
               outlineColor="black"
+              onSync={onOverlayTextSync}
             >
               [E] Take off Michael Suit
             </Text>

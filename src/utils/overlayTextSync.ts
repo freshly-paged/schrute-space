@@ -1,19 +1,25 @@
 ﻿import * as THREE from 'three';
 
-const OVERLAY_TEXT_RENDER_ORDER = 1000;
+/** After opaque + transmissive passes; high value so prompts sort last in the transparent list. */
+const OVERLAY_TEXT_RENDER_ORDER = 10000;
 
 /**
- * Use as drei <Text onSync={onOverlayTextSync} /> so floating prompts
- * are not occluded by walls (depth test off, high render order).
+ * Use as drei <Text onSync={onOverlayTextSync} /> so floating prompts stay on top:
+ * transparent queue (draws after glass/transmission), depth test off, last renderOrder.
  */
 export function onOverlayTextSync(troika: THREE.Object3D) {
   troika.renderOrder = OVERLAY_TEXT_RENDER_ORDER;
-  const mesh = troika as THREE.Mesh;
-  const mats = mesh.material;
-  const apply = (m: THREE.Material) => {
-    m.depthTest = false;
-    m.depthWrite = false;
-  };
-  if (Array.isArray(mats)) mats.forEach(apply);
-  else if (mats) apply(mats);
+  troika.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const mats = obj.material;
+    if (mats === undefined) return;
+
+    const apply = (m: THREE.Material) => {
+      m.transparent = true;
+      m.depthTest = false;
+      m.depthWrite = false;
+    };
+    if (Array.isArray(mats)) mats.forEach(apply);
+    else apply(mats);
+  });
 }
