@@ -13,6 +13,7 @@ import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
 function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
@@ -264,6 +265,7 @@ export const LocalPlayer = ({
 
     // Desk focus (E) — unchanged, works at any desk including own
     if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
+      requestFocusNotificationPermissionIfNeeded();
       startTimer('focus');
     }
 

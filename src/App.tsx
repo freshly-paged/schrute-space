@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Monitor, Info } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
+import { useFocusSessionCompleteFeedback } from './hooks/useFocusSessionCompleteFeedback';
 import { useSocket } from './hooks/useSocket';
 import { useGameStore } from './store/useGameStore';
 
@@ -75,6 +76,8 @@ export default function App() {
     setPlayerProfileFromServer,
   } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+
+  useFocusSessionCompleteFeedback();
 
   useEffect(() => {
     setUser(user ?? null);
