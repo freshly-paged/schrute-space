@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { useGameStore } from '../../store/useGameStore';
@@ -13,6 +13,13 @@ interface ChatPanelProps {
 export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
   const [chatInput, setChatInput] = useState('');
   const setChatFocused = useGameStore((state) => state.setChatFocused);
+  const chatLogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = chatLogRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chatHistory]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -30,7 +37,7 @@ export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
           <h3 className="text-white font-bold text-xs uppercase tracking-widest">Chat Log</h3>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+        <div ref={chatLogRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
           {chatHistory.length === 0 && (
             <p className="text-white/20 text-[10px] text-center mt-10 italic">
               No messages yet...
