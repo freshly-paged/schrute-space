@@ -441,9 +441,11 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
 }
 
 function layoutHasDeskForEmail(layout: FurnitureItem[], email: string): boolean {
-  return layout.some(
-    (f) => f.type === 'desk' && (f as DeskItem).config.ownerEmail === email
-  );
+  return layout.some((f) => {
+    if (f.type !== "desk") return false;
+    const ownerEmail = (f as DeskItem).config?.ownerEmail;
+    return typeof ownerEmail === "string" && ownerEmail === email;
+  });
 }
 
 /**
@@ -913,9 +915,11 @@ async function startServer() {
       let removedDeskLayout: FurnitureItem[] | null = null;
       await runSerializedRoomLayout(roomId, async () => {
         const layout = await getRoomLayout(roomId);
-        const filtered = layout.filter(
-          f => !(f.type === 'desk' && (f as DeskItem).config.ownerEmail === memberEmail)
-        );
+        const filtered = layout.filter((f) => {
+          if (f.type !== 'desk') return true;
+          const owner = (f as DeskItem).config?.ownerEmail;
+          return !(typeof owner === 'string' && owner === memberEmail);
+        });
         if (filtered.length !== layout.length) {
           await saveRoomLayout(roomId, filtered);
           removedDeskLayout = filtered;
