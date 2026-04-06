@@ -463,7 +463,7 @@ export const LocalPlayer = ({
           </Text>
         </Billboard>
         {wornPropId === MS_BODY_THROWABLE_ID && (
-          <Billboard position={[0, 1.15, 0]}>
+          <Billboard position={[0, 1.18, 0.42]}>
             <Text
               fontSize={0.14}
               color="#a5f3fc"
