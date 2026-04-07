@@ -267,14 +267,14 @@ export const OfficeCustomizationPage = ({
               </span>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleRotate(selectedDesk.id, -1)}
+                  onClick={() => handleRotate(selectedDesk.id, 1)}
                   className="pixel-button text-xs px-3 py-1"
                   title="Rotate counter-clockwise 45°"
                 >
                   ↺ CCW
                 </button>
                 <button
-                  onClick={() => handleRotate(selectedDesk.id, 1)}
+                  onClick={() => handleRotate(selectedDesk.id, -1)}
                   className="pixel-button text-xs px-3 py-1"
                   title="Rotate clockwise 45°"
                 >
