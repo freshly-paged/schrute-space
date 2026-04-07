@@ -18,6 +18,7 @@ import {
   PARKOUR_MIN_ENERGY_REQUIRED,
   focusWalkSpeedMultiplier,
 } from '../../focusEnergyModel';
+import { POMODORO_FOCUS_DURATION_SEC } from '../../gameConfig';
 import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
@@ -105,7 +106,7 @@ export const LocalPlayer = ({
     [roomLayout]
   );
 
-  const focusProgress = isTimerActive ? 1 - timeLeft / (25 * 60) : 0;
+  const focusProgress = isTimerActive ? 1 - timeLeft / POMODORO_FOCUS_DURATION_SEC : 0;
   const sessionPaper = useGameStore((state) => state.sessionPaper);
 
   // Emit focus state to server whenever it changes
