@@ -9,6 +9,11 @@ on:
         required: false
         type: string
         default: ""
+      auto_merge:
+        description: "Automatically merge the PR and delete the branch after creation"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   fix-issues:
@@ -93,11 +98,20 @@ jobs:
         run: git push origin "${{ steps.branch.outputs.name }}"
 
       - name: Open pull request
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "${{ steps.fixer.outputs.pr_title }}" \
             --body "${{ steps.fixer.outputs.pr_body }}" \
             --base main \
-            --head "${{ steps.branch.outputs.name }}"
+            --head "${{ steps.branch.outputs.name }}")
+          echo "url=$PR_URL" >> $GITHUB_OUTPUT
+
+      - name: Auto-merge PR
+        if: inputs.auto_merge == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ steps.pr.outputs.url }}" --merge --delete-branch
