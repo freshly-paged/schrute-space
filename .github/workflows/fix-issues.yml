@@ -1,12 +1,12 @@
 name: Fix GitHub Issues with Claude Code
 
 on:
+  # Automatic: fires when the 'claude-fix' label is applied to any issue
+  issues:
+    types: [labeled]
+  # Manual: batch-processes all open issues currently labelled 'claude-fix'
   workflow_dispatch:
     inputs:
-      issue_numbers:
-        description: "Comma-separated issue numbers to fix (e.g. 20,21,36)"
-        required: true
-        type: string
       extra_instructions:
         description: "Optional extra instructions injected into Claude's prompt (e.g. 'Prefer early returns', 'Use Tailwind, not inline styles')"
         required: false
@@ -15,11 +15,13 @@ on:
 
 jobs:
   fix-issues:
+    # For label events, only run when the applied label is 'claude-fix'
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'claude-fix'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-      issues: read
+      issues: write   # needed to remove the 'claude-fix' label after fixing
 
     steps:
       - uses: actions/checkout@v4
@@ -42,10 +44,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Resolve issue numbers
+        id: issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" == "issues" ]; then
+            # Single issue from the label event
+            echo "numbers=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          else
+            # All open issues with the claude-fix label
+            NUMBERS=$(gh issue list --label "claude-fix" --state open --json number --jq '[.[].number] | join(",")')
+            if [ -z "$NUMBERS" ]; then
+              echo "No open issues labelled 'claude-fix' found."
+              exit 1
+            fi
+            echo "numbers=$NUMBERS" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create fix branch
         id: branch
         run: |
-          SORTED=$(echo "${{ inputs.issue_numbers }}" | tr ',' '\n' | sort -n | tr '\n' '-' | sed 's/-$//')
+          SORTED=$(echo "${{ steps.issues.outputs.numbers }}" | tr ',' '\n' | sort -n | tr '\n' '-' | sed 's/-$//')
           BRANCH="fix/issues-${SORTED}"
           git checkout -b "$BRANCH"
           echo "name=$BRANCH" >> $GITHUB_OUTPUT
@@ -55,7 +75,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBERS: ${{ inputs.issue_numbers }}
+          ISSUE_NUMBERS: ${{ steps.issues.outputs.numbers }}
           EXTRA_INSTRUCTIONS: ${{ inputs.extra_instructions }}
           REPO: ${{ github.repository }}
         run: node .github/scripts/fix-issues.mjs

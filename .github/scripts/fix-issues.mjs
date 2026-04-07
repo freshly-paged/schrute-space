@@ -144,6 +144,14 @@ for (const num of issues) {
 
 Closes #${num}"`);
 
+  // 7. Remove 'claude-fix' label so the issue isn't re-processed on next run
+  try {
+    run(`gh api repos/${REPO}/issues/${num}/labels/claude-fix -X DELETE`);
+    console.log(`  ✓ Removed 'claude-fix' label`);
+  } catch {
+    // Label may have already been removed; not fatal
+  }
+
   console.log(`  ✓ Fixed and committed`);
   results.fixed.push(num);
 }

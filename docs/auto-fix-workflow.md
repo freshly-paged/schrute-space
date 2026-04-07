@@ -1,6 +1,6 @@
 # Auto-Fix Issues Workflow
 
-The **Fix GitHub Issues with Claude Code** workflow automatically generates code fixes for one or more GitHub issues and opens a PR for human review.
+The **Fix GitHub Issues with Claude Code** workflow automatically generates code fixes for issues labelled `claude-fix` and opens a PR for human review.
 
 ## One-time setup
 
@@ -8,6 +8,28 @@ The **Fix GitHub Issues with Claude Code** workflow automatically generates code
 2. In this repo, go to **Settings → Secrets and variables → Actions → New repository secret**
 3. Name: `ANTHROPIC_API_KEY` — Value: your API key
 4. Save. You only need to do this once.
+
+---
+
+## Triggering a fix
+
+There are two ways to queue issues for fixing:
+
+### Option A — Label an issue (automatic)
+
+Apply the `claude-fix` label to any open issue. The workflow fires automatically within seconds.
+
+- Works on one issue at a time
+- No extra configuration needed
+- The label is automatically removed after the fix is committed
+
+### Option B — Manual batch run
+
+Go to **Actions → "Fix GitHub Issues with Claude Code" → Run workflow**.
+
+The workflow picks up **all** open issues currently labelled `claude-fix` and processes them in one run. An optional **Extra instructions** field lets you inject guidance into Claude's prompt for that run (e.g. `Prefer early returns`, `Use Tailwind, not inline styles`).
+
+Use this when you've queued up several issues and want to fix them all at once.
 
 ---
 
@@ -25,33 +47,18 @@ The more specific the issue, the better Claude can target the fix without guessi
 
 ---
 
-## Running the workflow
+## What happens after triggering
 
-1. Go to the **Actions** tab in the GitHub repo
-2. Select **"Fix GitHub Issues with Claude Code"** from the left sidebar
-3. Click **"Run workflow"**
-4. Fill in the inputs:
+1. A branch `fix/issues-N-M` is created automatically
+2. Claude reads each issue, explores the codebase (guided by `CLAUDE.md`), and makes the minimal fix
+3. Each fix is verified with `npm run lint` — if lint fails, that issue is skipped and noted in the PR
+4. The `claude-fix` label is removed from each successfully fixed issue
+5. A PR is opened targeting `main` with:
+   - `Closes #N` links for every fixed issue
+   - A list of any skipped issues with the reason
+   - A review checklist
 
-   | Field | Required | Description | Example |
-   |---|---|---|---|
-   | **Issue numbers** | Yes | Comma-separated list of issue numbers to fix | `18, 36` |
-   | **Extra instructions** | No | Additional guidance injected into Claude's prompt for this run | `Prefer early returns over nested ifs` |
-
-5. Click **"Run workflow"** to start
-
----
-
-## What happens next
-
-- A branch named `fix/issues-N-M` is created automatically
-- Claude reads each issue, explores the codebase (guided by `CLAUDE.md`), and makes the minimal fix
-- Each fix is verified with `npm run lint` — if lint fails, that issue is skipped and noted in the PR
-- A PR is opened targeting `main` with:
-  - `Closes #N` links for every fixed issue
-  - A list of any skipped issues with the reason
-  - A review checklist
-
-You can watch the live logs under Actions → the running workflow job.
+You can watch live logs under **Actions → the running workflow job**.
 
 ---
 
@@ -71,7 +78,8 @@ Suggested checks:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Workflow fails at "Run Claude issue fixer" with auth error | `ANTHROPIC_API_KEY` secret missing or expired | Re-add the secret in repo Settings |
-| Issue skipped — "lint-failed" | Claude introduced a TypeScript error | Check the skipped issue's lint output in the PR body; file a follow-up issue with the error text |
-| Issue skipped — "no-changes" | Issue description was too vague for Claude to find the right code | Add more detail to the issue (file path, reproduction steps) and re-run |
-| PR not created | All issues in the run were skipped | Check the workflow logs; the last step will show why each issue was skipped |
+| Workflow fails with auth error | `ANTHROPIC_API_KEY` secret missing or expired | Re-add the secret in repo Settings |
+| Issue skipped — "lint-failed" | Claude introduced a TypeScript error | Check lint output in the PR body; add detail to the issue and re-label it |
+| Issue skipped — "no-changes" | Issue description was too vague | Add reproduction steps and a file path hint, then re-apply the `claude-fix` label |
+| Manual run exits with "No open issues labelled claude-fix" | No issues have the label | Apply `claude-fix` to at least one open issue first |
+| PR not created | All issues in the run were skipped | Check workflow logs; the fixer step shows why each issue was skipped |
