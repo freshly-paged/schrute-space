@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import { FOCUS_SIT_POSE_COUNT } from '../avatarFocusPoses';
+import {
+  clampFocusEnergy,
+  focusReamMultiplier,
+  settleFocusEnergy,
+} from '../focusEnergyModel';
+import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
@@ -33,6 +39,10 @@ interface GameState {
   timerEndsAt: number | null;
   sessionPaper: number; // paper earned in current focus session
   lastPaperEarnedAt: number; // timestamp — changes when paper is earned, triggers animation
+  /** Fractional reams carried between integer grants during focus (energy-scaled rate). */
+  sessionPaperAccruedFloat: number;
+  /** Wall-clock anchor for focus-session paper accrual. */
+  lastFocusPaperTickAt: number;
   /** Random seated leg preset index for the current focus session (set when focus starts). */
   focusSitPoseIndex: number;
   startTimer: (mode: 'focus' | 'break') => void;
@@ -40,6 +50,18 @@ interface GameState {
   togglePause: () => void;
   tickTimer: () => void;
   resetTimer: () => void;
+
+  /** Desk focus stamina (0–100); synced from server, advanced locally by wall clock. */
+  focusEnergy: number;
+  /** Last wall-clock sample for local energy ticks (ms). */
+  focusEnergyLastTickAt: number;
+  setFocusEnergy: (value: number) => void;
+  tickFocusEnergyWallClock: () => void;
+  /** Instant spend (e.g. parkour). Returns false if not enough energy. */
+  consumeFocusEnergy: (amount: number) => boolean;
+  /** Epoch ms until which to show “insufficient energy for parkour” UI. */
+  parkourEnergyHintUntil: number;
+  flashParkourEnergyInsufficientHint: () => void;
 
   // Interaction State
   nearestDeskId: string | null;
@@ -125,7 +147,7 @@ interface GameState {
   ) => void;
 }
 
-export const useGameStore = create<GameState>((set) => ({
+export const useGameStore = create<GameState>((set, get) => ({
   nearThrowableId: null,
   heldObjectId: null,
   throwVelocity: [0, 0, 0],
@@ -150,6 +172,8 @@ export const useGameStore = create<GameState>((set) => ({
   timerEndsAt: null,
   sessionPaper: 0,
   lastPaperEarnedAt: 0,
+  sessionPaperAccruedFloat: 0,
+  lastFocusPaperTickAt: 0,
   focusSitPoseIndex: 0,
   startTimer: (mode) =>
     set((state) => {
@@ -164,6 +188,8 @@ export const useGameStore = create<GameState>((set) => ({
         activeDeskId: state.nearestDeskId,
         sessionPaper: 0,
         lastPaperEarnedAt: 0,
+        sessionPaperAccruedFloat: 0,
+        lastFocusPaperTickAt: mode === 'focus' ? now : 0,
         focusSitPoseIndex:
           mode === 'focus' ? Math.floor(Math.random() * FOCUS_SIT_POSE_COUNT) : state.focusSitPoseIndex,
       };
@@ -174,6 +200,8 @@ export const useGameStore = create<GameState>((set) => ({
       isTimerPaused: false,
       activeDeskId: null,
       sessionPaper: 0,
+      sessionPaperAccruedFloat: 0,
+      lastFocusPaperTickAt: 0,
       focusSitPoseIndex: 0,
       timerEndsAt: null,
     }),
@@ -187,6 +215,7 @@ export const useGameStore = create<GameState>((set) => ({
       return {
         isTimerPaused: false,
         timerEndsAt: Date.now() + state.timeLeft * 1000,
+        lastFocusPaperTickAt: Date.now(),
       };
     }),
   tickTimer: () => set((state) => {
@@ -203,16 +232,20 @@ export const useGameStore = create<GameState>((set) => ({
         activeDeskId: null,
         focusSitPoseIndex: 0,
         timerEndsAt: null,
+        sessionPaperAccruedFloat: 0,
+        lastFocusPaperTickAt: 0,
       };
     }
 
     let newPaperReams = state.paperReams;
     let newSessionPaper = state.sessionPaper;
     let newLastPaperEarnedAt = state.lastPaperEarnedAt;
+    let newAccruedFloat = state.sessionPaperAccruedFloat;
+    let newLastPaperTick = state.lastFocusPaperTickAt;
 
-    // Passive generation during focus: wall-clock based; rate scales with monitor upgrades (first 3 levels).
+    // Passive generation during focus: dt-based; rate scales with monitors and current focus energy.
     if (state.timerMode === 'focus') {
-      const elapsed = 1500 - newTimeLeft;
+      const now = Date.now();
       const email = state.user?.email;
       const rawLv =
         email !== undefined ? (state.monitorLevelByEmail[email] ?? 0) : 0;
@@ -220,14 +253,22 @@ export const useGameStore = create<GameState>((set) => ({
         MONITOR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawLv))
       );
-      const reamsPerMin = focusReamsPerMinute(monitorLv);
-      const targetSessionPaper = Math.floor((elapsed * reamsPerMin) / 60);
-      const paperDelta = targetSessionPaper - state.sessionPaper;
-      if (paperDelta > 0) {
-        newPaperReams += paperDelta;
-        newSessionPaper = targetSessionPaper;
-        newLastPaperEarnedAt = Date.now();
+      const basePerMin = focusReamsPerMinute(monitorLv);
+      const mult = focusReamMultiplier(state.focusEnergy);
+      const reamsPerMin = basePerMin * mult;
+      const lastT = state.lastFocusPaperTickAt > 0 ? state.lastFocusPaperTickAt : now;
+      const dtSec = Math.min(120, Math.max(0, (now - lastT) / 1000));
+      const addFloat = (reamsPerMin / 60) * dtSec;
+      const carry = state.sessionPaperAccruedFloat + addFloat;
+      const whole = Math.floor(carry);
+      const frac = carry - whole;
+      if (whole > 0) {
+        newPaperReams += whole;
+        newSessionPaper = state.sessionPaper + whole;
+        newLastPaperEarnedAt = now;
       }
+      newAccruedFloat = frac;
+      newLastPaperTick = now;
     }
 
     return {
@@ -236,6 +277,8 @@ export const useGameStore = create<GameState>((set) => ({
       paperReams: newPaperReams,
       sessionPaper: newSessionPaper,
       lastPaperEarnedAt: newLastPaperEarnedAt,
+      sessionPaperAccruedFloat: newAccruedFloat,
+      lastFocusPaperTickAt: newLastPaperTick,
     };
   }),
   resetTimer: () =>
@@ -245,9 +288,58 @@ export const useGameStore = create<GameState>((set) => ({
       timeLeft: state.timerMode === 'focus' ? 25 * 60 : 5 * 60,
       activeDeskId: null,
       sessionPaper: 0,
+      sessionPaperAccruedFloat: 0,
+      lastFocusPaperTickAt: 0,
       focusSitPoseIndex: 0,
       timerEndsAt: null,
     })),
+
+  focusEnergy: 100,
+  focusEnergyLastTickAt: 0,
+  setFocusEnergy: (value) =>
+    set({
+      focusEnergy: clampFocusEnergy(value),
+      focusEnergyLastTickAt: Date.now(),
+    }),
+  tickFocusEnergyWallClock: () =>
+    set((state) => {
+      if (!state.user) return {};
+      const now = Date.now();
+      const last = state.focusEnergyLastTickAt;
+      if (last <= 0) return { focusEnergyLastTickAt: now };
+      const inSeatedFocus =
+        state.isTimerActive && state.timerMode === 'focus' && !state.isTimerPaused;
+      const mode = inSeatedFocus ? 'focus' : 'idle';
+      const email = state.user?.email;
+      const rawChair =
+        inSeatedFocus && email !== undefined ? (state.chairLevelByEmail[email] ?? 0) : 0;
+      const chairLv = Math.min(
+        CHAIR_UPGRADE_MAX_LEVEL,
+        Math.max(0, Math.floor(rawChair))
+      );
+      const settled = settleFocusEnergy(
+        state.focusEnergy,
+        last,
+        now,
+        mode,
+        chairLv
+      );
+      return { focusEnergy: settled, focusEnergyLastTickAt: now };
+    }),
+  consumeFocusEnergy: (amount) => {
+    const a = Math.max(0, amount);
+    if (a <= 0) return true;
+    const state = get();
+    if (state.focusEnergy < a) return false;
+    set({
+      focusEnergy: clampFocusEnergy(state.focusEnergy - a),
+      focusEnergyLastTickAt: Date.now(),
+    });
+    return true;
+  },
+  parkourEnergyHintUntil: 0,
+  flashParkourEnergyInsufficientHint: () =>
+    set({ parkourEnergyHintUntil: Date.now() + 2600 }),
 
   nearestDeskId: null,
   activeDeskId: null,

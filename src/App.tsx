@@ -13,6 +13,7 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { ParkourEnergyHint } from './components/ui/ParkourEnergyHint';
 import { WaterEnergyBuffOverlay } from './components/ui/WaterEnergyBuffOverlay';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
@@ -74,6 +75,9 @@ export default function App() {
     playerProfileDisplayName,
     playerProfileJobTitle,
     setPlayerProfileFromServer,
+    focusEnergy,
+    setFocusEnergy,
+    tickFocusEnergyWallClock,
   } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
@@ -114,13 +118,16 @@ export default function App() {
     }
   }, [user, currentRoom]);
 
-  // Load paper, avatar, and profile from DB whenever the authenticated user is known
+  // Load paper, avatar, profile, and focus energy from DB whenever the authenticated user is known
   useEffect(() => {
     if (!user) return;
     fetch('/api/player', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         if (typeof data.paperReams === 'number') setPaperReams(data.paperReams);
+        if (typeof data.focusEnergy === 'number' && Number.isFinite(data.focusEnergy)) {
+          setFocusEnergy(data.focusEnergy);
+        }
         if (data.avatarConfig) setAvatarConfig(data.avatarConfig);
         setPlayerProfileFromServer({
           displayName: data.displayName ?? null,
@@ -128,7 +135,50 @@ export default function App() {
         });
       })
       .catch(() => {});
-  }, [user, setPaperReams, setAvatarConfig, setPlayerProfileFromServer]);
+  }, [user, setPaperReams, setAvatarConfig, setPlayerProfileFromServer, setFocusEnergy]);
+
+  const storeUser = useGameStore((s) => s.user);
+
+  useEffect(() => {
+    if (!storeUser) {
+      useGameStore.setState({ focusEnergyLastTickAt: 0 });
+      return;
+    }
+    const syncEnergy = () => tickFocusEnergyWallClock();
+    const id = setInterval(syncEnergy, 1000);
+    const onVis = () => syncEnergy();
+    window.addEventListener('focus', onVis);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('focus', onVis);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [storeUser, tickFocusEnergyWallClock]);
+
+  // Persist focus energy on the hub (no socket). In-room saves use `saveFocusEnergy` in useSocket.
+  useEffect(() => {
+    if (!user || currentRoom) return;
+    const persistFocusEnergy = () => {
+      const s = useGameStore.getState();
+      const mode =
+        s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
+      void fetch('/api/player/focus-energy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ energy: s.focusEnergy, mode }),
+      }).catch(() => {});
+    };
+    const intervalId = setInterval(persistFocusEnergy, 4000);
+    const onUnload = () => persistFocusEnergy();
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      persistFocusEnergy();
+      clearInterval(intervalId);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, [user, currentRoom]);
 
   const handleSaveOfficeLayout = useCallback(async (layout: FurnitureItem[]) => {
     setRoomLayout(layout);
@@ -290,6 +340,7 @@ export default function App() {
               isConnected={isConnected}
               currentRoom={currentRoom}
               paperReams={paperReams}
+              focusEnergy={focusEnergy}
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
@@ -299,6 +350,7 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
+      <ParkourEnergyHint />
       <WaterEnergyBuffOverlay />
       <PaperBurst />
       <InspectOverlay />

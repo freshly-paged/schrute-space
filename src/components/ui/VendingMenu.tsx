@@ -11,6 +11,10 @@ import {
   MONITOR_UPGRADE_MAX_LEVEL,
   monitorUpgradeCostForNextLevel,
 } from '../../monitorUpgradeConstants';
+import {
+  FOCUS_ENERGY_SEATED_REGEN_MAX_PER_MIN,
+  FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN,
+} from '../../focusEnergyModel';
 
 /** Ice cream price in paper reams (syncs to server via existing savePaperReams). */
 const ICE_CREAM_COST_REAMS = 2;
@@ -240,6 +244,11 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
                   </p>
                   <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
                     Bigger seat, gold trim, studs &amp; plants — everyone sees it at your desk.
+                  </p>
+                  <p className="text-slate-500 text-[9px] sm:text-[10px] font-mono leading-snug mt-2">
+                    Seated focus: +{FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN} energy/min per
+                    level (max +{FOCUS_ENERGY_SEATED_REGEN_MAX_PER_MIN}/min at level{' '}
+                    {CHAIR_UPGRADE_MAX_LEVEL}), stacked with the usual focus-session energy drain.
                   </p>
                   <p className="text-slate-500 font-mono text-[9px] mt-2">
                     Your level:{' '}

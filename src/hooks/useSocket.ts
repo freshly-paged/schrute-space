@@ -182,6 +182,12 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setPaperReams(count);
     });
 
+    newSocket.on('focusEnergyLoaded', (energy: number) => {
+      if (typeof energy === 'number' && Number.isFinite(energy)) {
+        useGameStore.getState().setFocusEnergy(energy);
+      }
+    });
+
     newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
       console.log('[socket] avatarConfigLoaded');
       useGameStore.getState().setAvatarConfig(config);
@@ -249,8 +255,38 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    let focusSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    const emitFocusEnergy = () => {
+      if (!newSocket.connected) return;
+      const s = useGameStore.getState();
+      const mode =
+        s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
+      newSocket.emit('saveFocusEnergy', { energy: s.focusEnergy, mode });
+    };
+    const scheduleFocusSave = () => {
+      if (focusSaveTimer) clearTimeout(focusSaveTimer);
+      focusSaveTimer = setTimeout(() => {
+        focusSaveTimer = null;
+        emitFocusEnergy();
+      }, 4000);
+    };
+    const unsubscribeFocusEnergy = useGameStore.subscribe((state, prev) => {
+      if (
+        state.focusEnergy === prev.focusEnergy &&
+        state.isTimerActive === prev.isTimerActive &&
+        state.timerMode === prev.timerMode &&
+        state.isTimerPaused === prev.isTimerPaused
+      ) {
+        return;
+      }
+      scheduleFocusSave();
+    });
+
     return () => {
       console.log(`[socket] cleaning up, disconnecting from room=${currentRoom}`);
+      if (focusSaveTimer) clearTimeout(focusSaveTimer);
+      emitFocusEnergy();
+      unsubscribeFocusEnergy();
       unsubscribeReams();
       useGameStore.getState().resetChairLevels();
       useGameStore.getState().resetMonitorLevels();

@@ -82,7 +82,7 @@ export interface ChairVisualParams {
   backColor: string;
   columnColor: string;
   baseColor: string;
-  /** 背后镶边（靠背外侧金属条） */
+  /** Trim on the back of the chair (outer metal strip on the backrest). */
   backTrimColor: string;
   backTrimEmissive: string;
   backTrimEmissiveBoost: number;
@@ -93,7 +93,7 @@ export interface ChairVisualParams {
   accentPart: ChairAccentPart | null;
 }
 
-/** 坐垫、靠背主面：不随升级改色，保持黑色。 */
+/** Seat and main backrest surfaces: stay black across upgrade levels. */
 const SEAT_BLACK = '#222222';
 const BACK_BLACK = '#1a1a1a';
 
