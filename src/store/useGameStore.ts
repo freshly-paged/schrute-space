@@ -9,6 +9,7 @@ import {
 } from '../focusEnergyModel';
 import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
+import { POMODORO_FOCUS_DURATION_SEC, POMODORO_BREAK_DURATION_SEC } from '../gameConfig';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
@@ -170,7 +171,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   isTimerActive: false,
   isTimerPaused: false,
   timerMode: 'focus',
-  timeLeft: 25 * 60,
+  timeLeft: POMODORO_FOCUS_DURATION_SEC,
   timerEndsAt: null,
   sessionPaper: 0,
   lastPaperEarnedAt: 0,
@@ -179,7 +180,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   focusSitPoseIndex: 0,
   startTimer: (mode) =>
     set((state) => {
-      const durationSec = mode === 'focus' ? 25 * 60 : 5 * 60;
+      const durationSec = mode === 'focus' ? POMODORO_FOCUS_DURATION_SEC : POMODORO_BREAK_DURATION_SEC;
       const now = Date.now();
       return {
         isTimerActive: true,
@@ -287,7 +288,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       isTimerActive: false,
       isTimerPaused: false,
-      timeLeft: state.timerMode === 'focus' ? 25 * 60 : 5 * 60,
+      timeLeft: state.timerMode === 'focus' ? POMODORO_FOCUS_DURATION_SEC : POMODORO_BREAK_DURATION_SEC,
       activeDeskId: null,
       sessionPaper: 0,
       sessionPaperAccruedFloat: 0,

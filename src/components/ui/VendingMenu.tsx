@@ -16,9 +16,7 @@ import {
   FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN,
 } from '../../focusEnergyModel';
 
-/** Ice cream price in paper reams (syncs to server via existing savePaperReams). */
-const ICE_CREAM_COST_REAMS = 2;
-const ICE_CREAM_DURATION_MS = 60_000;
+import { ICE_CREAM_COST_REAMS, ICE_CREAM_DURATION_MS } from '../../gameConfig';
 
 interface VendingMenuProps {
   onClose: () => void;
