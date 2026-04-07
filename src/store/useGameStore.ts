@@ -3,7 +3,9 @@ import { FOCUS_SIT_POSE_COUNT } from '../avatarFocusPoses';
 import {
   clampFocusEnergy,
   focusReamMultiplier,
+  FOCUS_ENERGY_WATER_BUFF_REGEN_PER_MIN,
   settleFocusEnergy,
+  waterBuffOverlapMinutes,
 } from '../focusEnergyModel';
 import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
@@ -103,7 +105,7 @@ interface GameState {
 
   nearWaterCooler: boolean;
   setNearWaterCooler: (near: boolean) => void;
-  /** Local-only UI: epoch ms when water cooler buff ends (5 min from last enter). */
+  /** Local-only: epoch ms when water cooler buff ends (extra focus regen while window overlaps wall-clock ticks). */
   waterBuffExpiresAt: number | null;
   setWaterBuffExpiresAt: (expiresAt: number | null) => void;
   showLeaderboard: boolean;
@@ -317,12 +319,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         CHAIR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawChair))
       );
-      const settled = settleFocusEnergy(
-        state.focusEnergy,
-        last,
-        now,
-        mode,
-        chairLv
+      const overlapMin = waterBuffOverlapMinutes(last, now, state.waterBuffExpiresAt);
+      const base = settleFocusEnergy(state.focusEnergy, last, now, mode, chairLv);
+      const settled = clampFocusEnergy(
+        base + FOCUS_ENERGY_WATER_BUFF_REGEN_PER_MIN * overlapMin
       );
       return { focusEnergy: settled, focusEnergyLastTickAt: now };
     }),

@@ -6,6 +6,12 @@ export const FOCUS_ENERGY_MAX = 100;
 export const FOCUS_ENERGY_DRAIN_PER_MIN = 2;
 export const FOCUS_ENERGY_REGEN_PER_MIN = 5;
 
+/** Extra focus energy regen per minute while the local water-cooler buff is active (client-only). */
+export const FOCUS_ENERGY_WATER_BUFF_REGEN_PER_MIN = 5;
+
+/** Must match water cooler buff length in `WaterCooler.tsx` (enter radius → expires). */
+export const FOCUS_ENERGY_WATER_BUFF_DURATION_MS = 5 * 60 * 1000;
+
 /**
  * While seated in a focus session, each chair upgrade level adds this much energy per minute
  * (stacks with {@link FOCUS_ENERGY_DRAIN_PER_MIN} — net change is drain minus this bonus).
@@ -55,6 +61,23 @@ export function isFocusEnergyInDecayZone(energy: number): boolean {
 export function parseFocusEnergyMode(raw: unknown): FocusEnergyMode {
   if (raw === "focus") return "focus";
   return "idle";
+}
+
+/**
+ * Minutes within `[fromMs, toMs]` that overlap the water buff window ending at `buffExpiresAt`.
+ * Buff is assumed active on `[buffExpiresAt - {@link FOCUS_ENERGY_WATER_BUFF_DURATION_MS}, buffExpiresAt]`.
+ */
+export function waterBuffOverlapMinutes(
+  fromMs: number,
+  toMs: number,
+  buffExpiresAt: number | null
+): number {
+  if (buffExpiresAt == null || toMs <= fromMs) return 0;
+  const winStart = buffExpiresAt - FOCUS_ENERGY_WATER_BUFF_DURATION_MS;
+  const a = Math.max(fromMs, winStart);
+  const b = Math.min(toMs, buffExpiresAt);
+  if (b <= a) return 0;
+  return (b - a) / 60_000;
 }
 
 /**
