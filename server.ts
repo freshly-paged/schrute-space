@@ -73,6 +73,7 @@ function parseLocalTestCookie(
 }
 
 // ── Database ────────────────────────────────────────────────────────────────
+// Initialised lazily: createApp(injectedPool) overrides this for tests.
 let pool: pg.Pool | undefined;
 if (!isLocalTest()) {
   pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -780,7 +781,12 @@ function getIAPUser(headers: Record<string, any>): { email: string; name: string
   return null;
 }
 
-async function startServer() {
+// Exported so tests can inject a mock pg.Pool and skip port binding.
+// Does NOT call httpServer.listen() — callers are responsible for that.
+export async function createApp(injectedPool?: pg.Pool) {
+  // Override the module-level pool when a test-supplied pool is injected.
+  if (injectedPool !== undefined) pool = injectedPool;
+
   await initDb();
   if (isLocalTest()) {
     console.log(
@@ -802,8 +808,6 @@ async function startServer() {
     req.user = getIAPUser(req.headers);
     next();
   });
-
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 
   // Track active users by email to prevent multiple sessions
   const activeUsers = new Map<string, string>(); // email -> socketId
@@ -1567,8 +1571,8 @@ io.on("connection", (socket) => {
 
   let vite: ViteDevServer | null = null;
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Vite middleware for development; skipped in test (NODE_ENV=test set by Vitest)
+  if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -1603,47 +1607,56 @@ io.on("connection", (socket) => {
     });
   }
 
-  httpServer.once("error", (err: NodeJS.ErrnoException) => {
-    if (err.code === "EADDRINUSE") {
-      console.error(
-        `Port ${PORT} is already in use (another \`npm run dev\`?). Close it or set PORT=8081 in .env.local.`
-      );
-    }
-  });
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-
-    if (isLocalTestEnabled()) {
-      const raw = process.env.LOCAL_TEST_TTL_MS;
-      const ttlMs =
-        raw === undefined || raw === ""
-          ? 180_000
-          : parseInt(raw, 10);
-      if (Number.isFinite(ttlMs) && ttlMs > 0) {
-        console.log(
-          `[LOCAL_TEST] will exit in ${ttlMs / 1000}s (LOCAL_TEST_TTL_MS=0 to disable)`
-        );
-        setTimeout(() => {
-          console.log("[LOCAL_TEST] shutting down...");
-          void (async () => {
-            io.disconnectSockets(true);
-            await new Promise<void>((resolve) => {
-              io.close(() => resolve());
-            });
-            if (vite) {
-              await vite.close();
-              vite = null;
-            }
-            httpServer.closeAllConnections?.();
-            httpServer.close(() => process.exit(0));
-          })();
-        }, ttlMs);
-      }
-    }
-  });
+  return { app, httpServer, io, vite };
 }
 
-startServer().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+// ── Auto-start (only when run directly, not when imported by tests) ───────────
+
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
+  createApp()
+    .then(({ httpServer, io, vite }) => {
+      httpServer.once("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          console.error(
+            `Port ${PORT} is already in use (another \`npm run dev\`?). Close it or set PORT=8081 in .env.local.`
+          );
+        }
+      });
+      httpServer.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+
+        if (isLocalTestEnabled()) {
+          const raw = process.env.LOCAL_TEST_TTL_MS;
+          const ttlMs =
+            raw === undefined || raw === ""
+              ? 180_000
+              : parseInt(raw, 10);
+          if (Number.isFinite(ttlMs) && ttlMs > 0) {
+            console.log(
+              `[LOCAL_TEST] will exit in ${ttlMs / 1000}s (LOCAL_TEST_TTL_MS=0 to disable)`
+            );
+            setTimeout(() => {
+              console.log("[LOCAL_TEST] shutting down...");
+              void (async () => {
+                io.disconnectSockets(true);
+                await new Promise<void>((resolve) => {
+                  io.close(() => resolve());
+                });
+                if (vite) {
+                  await vite.close();
+                }
+                httpServer.closeAllConnections?.();
+                httpServer.close(() => process.exit(0));
+              })();
+            }, ttlMs);
+          }
+        }
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to start server:", err);
+      process.exit(1);
+    });
+}
