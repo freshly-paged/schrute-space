@@ -312,6 +312,53 @@ export const LocalPlayer = ({
               rollTimer: 0,
             });
         }
+
+        // Apply camera follow and bounds clamping during focus session
+        if (controlsRef.current) {
+          const focusPos = positionRef.current;
+          const focusTarget = new THREE.Vector3(
+            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[0])),
+            Math.max(0, Math.min(7.5, focusPos[1] + 1.5)),
+            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[2]))
+          );
+          controlsRef.current.target.lerp(focusTarget, 0.08);
+          controlsRef.current.update();
+
+          const cam = state.camera;
+          const px = focusPos[0];
+          const pz = focusPos[2];
+          cam.position.x = Math.max(
+            Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+          );
+          cam.position.z = Math.max(
+            Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+          );
+          cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+
+          const orbitTarget = controlsRef.current.target;
+          cameraRayRef.current.origin.copy(orbitTarget);
+          cameraRayRef.current.direction
+            .subVectors(cam.position, orbitTarget)
+            .normalize();
+          const desiredDist = cam.position.distanceTo(orbitTarget);
+          let nearestDist = desiredDist;
+
+          for (const box of COLLISION_BOXES) {
+            if (cameraRayRef.current.intersectBox(box, cameraHitRef.current)) {
+              const d = orbitTarget.distanceTo(cameraHitRef.current);
+              if (d < nearestDist) nearestDist = d;
+            }
+          }
+
+          if (nearestDist < desiredDist) {
+            cam.position
+              .copy(orbitTarget)
+              .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
+          }
+        }
+
         return;
       }
     }
