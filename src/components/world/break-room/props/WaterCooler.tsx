@@ -2,11 +2,10 @@ import React, { useRef } from 'react';
 import { Box, Cylinder, Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { FOCUS_ENERGY_WATER_BUFF_DURATION_MS } from '../../../../focusEnergyModel';
 import { WATER_COOLER_RADIUS } from '../../../../officeLayout';
 import { useGameStore } from '../../../../store/useGameStore';
 import { onOverlayTextSync } from '../../../../utils/overlayTextSync';
-
-const FIVE_MIN_MS = 5 * 60 * 1000;
 
 export const WaterCooler = ({
   position,
@@ -35,7 +34,7 @@ export const WaterCooler = ({
 
     const gs = useGameStore.getState();
     if (near && !wasNearRef.current) {
-      gs.setWaterBuffExpiresAt(Date.now() + FIVE_MIN_MS);
+      gs.setWaterBuffExpiresAt(Date.now() + FOCUS_ENERGY_WATER_BUFF_DURATION_MS);
     }
     wasNearRef.current = near;
 
