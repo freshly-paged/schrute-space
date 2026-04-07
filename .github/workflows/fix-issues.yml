@@ -7,6 +7,11 @@ on:
         description: "Comma-separated issue numbers to fix (e.g. 20,21,36)"
         required: true
         type: string
+      extra_instructions:
+        description: "Optional extra instructions injected into Claude's prompt (e.g. 'Prefer early returns', 'Use Tailwind, not inline styles')"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   fix-issues:
@@ -51,6 +56,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBERS: ${{ inputs.issue_numbers }}
+          EXTRA_INSTRUCTIONS: ${{ inputs.extra_instructions }}
           REPO: ${{ github.repository }}
         run: node .github/scripts/fix-issues.mjs
 

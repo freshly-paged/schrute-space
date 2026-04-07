@@ -15,6 +15,7 @@ import { appendFileSync } from 'node:fs';
 
 const REPO = process.env.REPO;
 const ISSUE_NUMBERS = process.env.ISSUE_NUMBERS;
+const EXTRA_INSTRUCTIONS = (process.env.EXTRA_INSTRUCTIONS ?? '').trim();
 const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT;
 
 if (!REPO || !ISSUE_NUMBERS) {
@@ -69,7 +70,8 @@ CONSTRAINTS:
 - Only modify files necessary to fix this specific issue.
 - Do not modify: package.json, package-lock.json, tsconfig.json, vite.config.ts, cloudbuild.yaml, Dockerfile.
 - Do not install new npm packages.
-`;
+${EXTRA_INSTRUCTIONS ? `\nADDITIONAL INSTRUCTIONS FROM THE WORKFLOW TRIGGER:\n${EXTRA_INSTRUCTIONS}` : ''}`;
+
 }
 
 // ─── Per-issue loop ──────────────────────────────────────────────────────────
