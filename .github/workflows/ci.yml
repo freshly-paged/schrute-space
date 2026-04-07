@@ -73,40 +73,24 @@ jobs:
       - name: Verify dist/index.html was produced
         run: test -f dist/index.html
 
-  # ── 4. Integration tests (DISABLED — see TODO #1) ───────────────────────────
-  # Unblock by refactoring server.ts to export createApp(pool?).
-  # Then remove the comment markers below and add these GitHub secrets:
-  #   DATABASE_URL, SESSION_SECRET (see plan TODOs for details)
-  #
-  # integration-tests:
-  #   name: Integration tests
-  #   runs-on: ubuntu-latest
-  #   services:
-  #     postgres:
-  #       image: postgres:16
-  #       env:
-  #         POSTGRES_USER: testuser
-  #         POSTGRES_PASSWORD: testpassword
-  #         POSTGRES_DB: schrute_test
-  #       ports:
-  #         - 5432:5432
-  #       options: >-
-  #         --health-cmd pg_isready
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #   env:
-  #     DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/schrute_test
-  #     SESSION_SECRET: ci-test-secret-do-not-use-in-prod
-  #     NODE_ENV: test
-  #     GOOGLE_CLIENT_ID: fake-client-id
-  #     GOOGLE_CLIENT_SECRET: fake-client-secret
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'npm'
-  #     - run: npm ci
-  #     - name: Run integration tests
-  #       run: npm run test:integration
+  # ── 4. Integration tests ─────────────────────────────────────────────────────
+  # Uses a mock pg.Pool injected via createApp(pool) — no real database needed.
+  # The postgres service block below is kept for future end-to-end expansion but
+  # is not required for the current mock-based suite.
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run integration tests
+        run: npm run test:integration

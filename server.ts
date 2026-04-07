@@ -14,9 +14,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ── Database ────────────────────────────────────────────────────────────────
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-async function initDb() {
+export async function initDb(pool: pg.Pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       email       TEXT PRIMARY KEY,
@@ -53,20 +52,19 @@ async function initDb() {
   `);
 }
 
-async function getPaperReams(email: string): Promise<number> {
-  const { rows } = await pool.query(
+function getPaperReams(pool: pg.Pool, email: string): Promise<number> {
+  return pool.query(
     'SELECT paper_reams FROM users WHERE email = $1',
     [email]
-  );
-  return rows[0]?.paper_reams ?? 0;
+  ).then(({ rows }) => rows[0]?.paper_reams ?? 0);
 }
 
-async function savePaperReams(email: string, count: number): Promise<void> {
-  await pool.query(
+function savePaperReams(pool: pg.Pool, email: string, count: number): Promise<void> {
+  return pool.query(
     `INSERT INTO users (email, paper_reams) VALUES ($1, $2)
      ON CONFLICT (email) DO UPDATE SET paper_reams = EXCLUDED.paper_reams`,
     [email, count]
-  );
+  ).then(() => undefined);
 }
 
 interface AvatarConfig {
@@ -75,23 +73,23 @@ interface AvatarConfig {
   pantColor: string;
 }
 
-async function getAvatarConfig(email: string): Promise<AvatarConfig | null> {
-  const { rows } = await pool.query(
+function getAvatarConfig(pool: pg.Pool, email: string): Promise<AvatarConfig | null> {
+  return pool.query(
     'SELECT avatar_config FROM users WHERE email = $1',
     [email]
-  );
-  const config = rows[0]?.avatar_config;
-  if (!config || Object.keys(config).length === 0) return null;
-  return config as AvatarConfig;
+  ).then(({ rows }) => {
+    const config = rows[0]?.avatar_config;
+    if (!config || Object.keys(config).length === 0) return null;
+    return config as AvatarConfig;
+  });
 }
 
-
-async function saveAvatarConfig(email: string, config: AvatarConfig): Promise<void> {
-  await pool.query(
+function saveAvatarConfig(pool: pg.Pool, email: string, config: AvatarConfig): Promise<void> {
+  return pool.query(
     `INSERT INTO users (email, avatar_config) VALUES ($1, $2)
      ON CONFLICT (email) DO UPDATE SET avatar_config = EXCLUDED.avatar_config`,
     [email, JSON.stringify(config)]
-  );
+  ).then(() => undefined);
 }
 
 // ── Room Layout ───────────────────────────────────────────────────────────────
@@ -109,20 +107,19 @@ interface DeskItem extends FurnitureItem {
   config: { ownerEmail: string; ownerName: string; [key: string]: unknown };
 }
 
-async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
-  const { rows } = await pool.query(
+function getRoomLayout(pool: pg.Pool, roomId: string): Promise<FurnitureItem[]> {
+  return pool.query(
     'SELECT layout FROM room_layouts WHERE room_id = $1',
     [roomId]
-  );
-  return (rows[0]?.layout as FurnitureItem[]) ?? [];
+  ).then(({ rows }) => (rows[0]?.layout as FurnitureItem[]) ?? []);
 }
 
-async function saveRoomLayout(roomId: string, layout: FurnitureItem[]): Promise<void> {
-  await pool.query(
+function saveRoomLayout(pool: pg.Pool, roomId: string, layout: FurnitureItem[]): Promise<void> {
+  return pool.query(
     `INSERT INTO room_layouts (room_id, layout) VALUES ($1, $2)
      ON CONFLICT (room_id) DO UPDATE SET layout = EXCLUDED.layout`,
     [roomId, JSON.stringify(layout)]
-  );
+  ).then(() => undefined);
 }
 
 function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, number] {
@@ -151,8 +148,8 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
   return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
-async function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
-  const layout = await getRoomLayout(roomId);
+async function ensurePlayerDesk(pool: pg.Pool, roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
+  const layout = await getRoomLayout(pool, roomId);
   const existingDesk = layout.find(
     (f) => f.type === 'desk' && (f as DeskItem).config.ownerEmail === email
   );
@@ -168,7 +165,7 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
     config: { ownerEmail: email, ownerName: name },
   };
   const updated = [...layout, newDesk];
-  await saveRoomLayout(roomId, updated);
+  await saveRoomLayout(pool, roomId, updated);
   return updated;
 }
 
@@ -176,78 +173,73 @@ async function ensurePlayerDesk(roomId: string, email: string, name: string): Pr
 
 type RoomRole = 'admin' | 'manager' | 'worker';
 
-async function ensureRoom(roomId: string): Promise<boolean> {
-  const result = await pool.query(
+function ensureRoom(pool: pg.Pool, roomId: string): Promise<boolean> {
+  return pool.query(
     `INSERT INTO rooms (room_id) VALUES ($1) ON CONFLICT (room_id) DO NOTHING RETURNING room_id`,
     [roomId]
-  );
-  return (result.rowCount ?? 0) > 0;
+  ).then((result) => (result.rowCount ?? 0) > 0);
 }
 
-async function getMemberRole(roomId: string, email: string): Promise<RoomRole | null> {
-  const { rows } = await pool.query(
+function getMemberRole(pool: pg.Pool, roomId: string, email: string): Promise<RoomRole | null> {
+  return pool.query(
     'SELECT role FROM room_members WHERE room_id = $1 AND email = $2',
     [roomId, email]
-  );
-  return (rows[0]?.role as RoomRole) ?? null;
+  ).then(({ rows }) => (rows[0]?.role as RoomRole) ?? null);
 }
 
-async function upsertMember(roomId: string, email: string, role: RoomRole): Promise<void> {
-  await pool.query(
+function upsertMember(pool: pg.Pool, roomId: string, email: string, role: RoomRole): Promise<void> {
+  return pool.query(
     `INSERT INTO room_members (room_id, email, role) VALUES ($1, $2, $3)
      ON CONFLICT (room_id, email) DO UPDATE SET role = EXCLUDED.role`,
     [roomId, email, role]
-  );
+  ).then(() => undefined);
 }
 
-async function removeMember(roomId: string, email: string): Promise<void> {
-  await pool.query(
+function removeMember(pool: pg.Pool, roomId: string, email: string): Promise<void> {
+  return pool.query(
     'DELETE FROM room_members WHERE room_id = $1 AND email = $2',
     [roomId, email]
-  );
+  ).then(() => undefined);
 }
 
-async function getRoomMembers(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
-  const { rows } = await pool.query(
+function getRoomMembers(pool: pg.Pool, roomId: string): Promise<Array<{ email: string; name: string | null; role: string; joinedAt: Date }>> {
+  return pool.query(
     `SELECT rm.email, u.display_name as name, rm.role, rm.joined_at as "joinedAt"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
      WHERE rm.room_id = $1
      ORDER BY rm.joined_at ASC`,
     [roomId]
-  );
-  return rows;
+  ).then(({ rows }) => rows);
 }
 
-async function getRoomLeaderboard(roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
-  const { rows } = await pool.query(
+function getRoomLeaderboard(pool: pg.Pool, roomId: string): Promise<Array<{ email: string; name: string | null; role: string; paperReams: number }>> {
+  return pool.query(
     `SELECT rm.email, u.display_name as name, rm.role, COALESCE(u.paper_reams, 0) as "paperReams"
      FROM room_members rm
      LEFT JOIN users u ON u.email = rm.email
      WHERE rm.room_id = $1
      ORDER BY u.paper_reams DESC NULLS LAST`,
     [roomId]
-  );
-  return rows;
+  ).then(({ rows }) => rows);
 }
 
-async function getMyRooms(email: string): Promise<Array<{ roomId: string; role: string; maxWorkers: number }>> {
-  const { rows } = await pool.query(
+function getMyRooms(pool: pg.Pool, email: string): Promise<Array<{ roomId: string; role: string; maxWorkers: number }>> {
+  return pool.query(
     `SELECT rm.room_id as "roomId", rm.role, r.max_workers as "maxWorkers"
      FROM room_members rm
      JOIN rooms r ON r.room_id = rm.room_id
      WHERE rm.email = $1
      ORDER BY rm.joined_at ASC`,
     [email]
-  );
-  return rows;
+  ).then(({ rows }) => rows);
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
 // Extract user from IAP-injected headers (X-Goog-Authenticated-User-Email).
 // Falls back to DEV_USER_EMAIL for local development without IAP.
-function getIAPUser(headers: Record<string, any>): { email: string; name: string } | null {
+export function getIAPUser(headers: Record<string, any>): { email: string; name: string } | null {
   const iapEmail = headers['x-goog-authenticated-user-email'];
   if (iapEmail && typeof iapEmail === 'string') {
     const email = iapEmail.includes(':') ? iapEmail.split(':')[1] : iapEmail;
@@ -262,8 +254,30 @@ function getIAPUser(headers: Record<string, any>): { email: string; name: string
   return null;
 }
 
-async function startServer() {
-  await initDb();
+const OFFICE_COLORS = [
+  "#4f46e5", // Indigo
+  "#059669", // Emerald
+  "#d97706", // Amber
+  "#dc2626", // Red
+  "#7c3aed", // Violet
+  "#2563eb", // Blue
+  "#db2777", // Pink
+  "#0891b2", // Cyan
+];
+
+const getDeterministicColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return OFFICE_COLORS[Math.abs(hash) % OFFICE_COLORS.length];
+};
+
+// ── App factory ───────────────────────────────────────────────────────────────
+// Exported so tests can spin up isolated instances with a mock pool.
+// Does NOT call httpServer.listen() — callers are responsible for that.
+
+export async function createApp(pool: pg.Pool) {
   const app = express();
   app.set("trust proxy", 1);
   const httpServer = createServer(app);
@@ -280,8 +294,6 @@ async function startServer() {
     next();
   });
 
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
-
   // Track active users by email to prevent multiple sessions
   const activeUsers = new Map<string, string>(); // email -> socketId
 
@@ -294,8 +306,8 @@ async function startServer() {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     const [paperReams, avatarConfig] = await Promise.all([
-      getPaperReams(user.email),
-      getAvatarConfig(user.email),
+      getPaperReams(pool, user.email),
+      getAvatarConfig(pool, user.email),
     ]);
     res.json({ paperReams, avatarConfig });
   });
@@ -307,7 +319,7 @@ async function startServer() {
     if (typeof shirtColor !== 'string' || typeof skinTone !== 'string' || typeof pantColor !== 'string') {
       return res.status(400).json({ error: "Invalid avatar config" });
     }
-    await saveAvatarConfig(user.email, { shirtColor, skinTone, pantColor });
+    await saveAvatarConfig(pool, user.email, { shirtColor, skinTone, pantColor });
     res.json({ ok: true });
   });
 
@@ -318,7 +330,7 @@ async function startServer() {
     if (typeof roomId !== 'string' || !Array.isArray(layout)) {
       return res.status(400).json({ error: "Invalid layout" });
     }
-    await saveRoomLayout(roomId, layout as FurnitureItem[]);
+    await saveRoomLayout(pool, roomId, layout as FurnitureItem[]);
     io.to(roomId).emit("roomLayoutUpdated", layout);
     res.json({ ok: true });
   });
@@ -327,7 +339,7 @@ async function startServer() {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const myRooms = await getMyRooms(user.email);
+      const myRooms = await getMyRooms(pool, user.email);
       const withOnline = myRooms.map(r => ({
         ...r,
         onlineCount: Object.keys(rooms[r.roomId] ?? {}).length
@@ -342,7 +354,7 @@ async function startServer() {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const leaderboard = await getRoomLeaderboard(req.params.roomId);
+      const leaderboard = await getRoomLeaderboard(pool, req.params.roomId);
       res.json(leaderboard);
     } catch {
       res.status(500).json({ error: "Internal server error" });
@@ -354,7 +366,7 @@ async function startServer() {
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     const { roomId } = req.params;
     try {
-      const members = await getRoomMembers(roomId);
+      const members = await getRoomMembers(pool, roomId);
       const onlineEmails = new Set(
         Object.values(rooms[roomId] ?? {}).map((p: any) => p.email)
       );
@@ -379,7 +391,7 @@ async function startServer() {
       return res.status(400).json({ error: "Invalid request" });
     }
     try {
-      const requesterRole = await getMemberRole(roomId, user.email);
+      const requesterRole = await getMemberRole(pool, roomId, user.email);
       if (!requesterRole || requesterRole === 'worker') {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -400,16 +412,16 @@ async function startServer() {
         `INSERT INTO users (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
         [email]
       );
-      await upsertMember(roomId, email, role as RoomRole);
+      await upsertMember(pool, roomId, email, role as RoomRole);
       // If the new member is currently online, give them a desk and notify them
       const onlineEntry = Object.entries(rooms[roomId] ?? {})
         .find(([, p]: [string, any]) => p.email === email);
       if (onlineEntry) {
-        const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name);
+        const layout = await ensurePlayerDesk(pool, roomId, email, (onlineEntry[1] as any).name);
         io.to(roomId).emit("roomLayoutUpdated", layout);
         io.to(onlineEntry[0]).emit("roleChanged", { newRole: role });
       }
-      const members = await getRoomMembers(roomId);
+      const members = await getRoomMembers(pool, roomId);
       const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
       io.to(roomId).emit("roomMembersUpdated", {
         roomId,
@@ -426,11 +438,11 @@ async function startServer() {
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     const { roomId, memberEmail } = req.params;
     try {
-      const requesterRole = await getMemberRole(roomId, user.email);
+      const requesterRole = await getMemberRole(pool, roomId, user.email);
       if (!requesterRole || requesterRole === 'worker') {
         return res.status(403).json({ error: "Forbidden" });
       }
-      const targetRole = await getMemberRole(roomId, memberEmail);
+      const targetRole = await getMemberRole(pool, roomId, memberEmail);
       if (targetRole === 'admin') {
         return res.status(403).json({ error: "Cannot remove admin" });
       }
@@ -438,22 +450,22 @@ async function startServer() {
         return res.status(404).json({ error: "Member not found" });
       }
       // Remove their desk from layout
-      const layout = await getRoomLayout(roomId);
+      const layout = await getRoomLayout(pool, roomId);
       const filtered = layout.filter(
         f => !(f.type === 'desk' && (f as DeskItem).config.ownerEmail === memberEmail)
       );
       if (filtered.length !== layout.length) {
-        await saveRoomLayout(roomId, filtered);
+        await saveRoomLayout(pool, roomId, filtered);
         io.to(roomId).emit("roomLayoutUpdated", filtered);
       }
-      await removeMember(roomId, memberEmail);
+      await removeMember(pool, roomId, memberEmail);
       // Notify the removed member's socket if online
       const removedEntry = Object.entries(rooms[roomId] ?? {})
         .find(([, p]: [string, any]) => p.email === memberEmail);
       if (removedEntry) {
         io.to(removedEntry[0]).emit("roleChanged", { newRole: null });
       }
-      const members = await getRoomMembers(roomId);
+      const members = await getRoomMembers(pool, roomId);
       const onlineEmails = new Set(Object.values(rooms[roomId] ?? {}).map((p: any) => p.email));
       io.to(roomId).emit("roomMembersUpdated", {
         roomId,
@@ -471,7 +483,7 @@ async function startServer() {
     const { roomId } = req.params;
     const { maxWorkers } = req.body ?? {};
     try {
-      const requesterRole = await getMemberRole(roomId, user.email);
+      const requesterRole = await getMemberRole(pool, roomId, user.email);
       if (requesterRole !== 'admin') {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -491,28 +503,9 @@ async function startServer() {
   });
 
   // Player state grouped by room
-const rooms: Record<string, Record<string, any>> = {};
+  const rooms: Record<string, Record<string, any>> = {};
 
-const OFFICE_COLORS = [
-  "#4f46e5", // Indigo
-  "#059669", // Emerald
-  "#d97706", // Amber
-  "#dc2626", // Red
-  "#7c3aed", // Violet
-  "#2563eb", // Blue
-  "#db2777", // Pink
-  "#0891b2", // Cyan
-];
-
-const getDeterministicColor = (name: string) => {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return OFFICE_COLORS[Math.abs(hash) % OFFICE_COLORS.length];
-};
-
-io.on("connection", (socket) => {
+  io.on("connection", (socket) => {
     console.log("New socket connection attempt:", socket.id);
     const user = getIAPUser((socket.request as any).headers);
 
@@ -551,13 +544,13 @@ io.on("connection", (socket) => {
       );
 
       // Ensure room exists; first joiner (or first joiner with no existing members) becomes admin
-      await ensureRoom(room);
-      const existingMembers = await getRoomMembers(room);
+      await ensureRoom(pool, room);
+      const existingMembers = await getRoomMembers(pool, room);
       if (existingMembers.length === 0) {
-        await upsertMember(room, user.email, 'admin');
+        await upsertMember(pool, room, user.email, 'admin');
       }
 
-      const role = await getMemberRole(room, user.email);
+      const role = await getMemberRole(pool, room, user.email);
       const isMember = role !== null;
 
       // Initialize player using authenticated user info
@@ -589,10 +582,10 @@ io.on("connection", (socket) => {
       socket.to(room).emit("newPlayer", rooms[room][socket.id]);
 
       // Send persisted paper reams and avatar config to this player
-      getPaperReams(user.email).then((count) => {
+      getPaperReams(pool, user.email).then((count) => {
         socket.emit("paperReamsLoaded", count);
       });
-      getAvatarConfig(user.email).then((config) => {
+      getAvatarConfig(pool, user.email).then((config) => {
         if (config) {
           rooms[room][socket.id].avatarConfig = config;
           socket.emit("avatarConfigLoaded", config);
@@ -603,7 +596,7 @@ io.on("connection", (socket) => {
 
       // Desk: only for members (admin/manager/worker)
       if (isMember) {
-        ensurePlayerDesk(room, user.email, user.name).then((layout) => {
+        ensurePlayerDesk(pool, room, user.email, user.name).then((layout) => {
           socket.emit("roomLayoutLoaded", layout);
           socket.to(room).emit("roomLayoutUpdated", layout);
         }).catch((err) => {
@@ -612,7 +605,7 @@ io.on("connection", (socket) => {
         });
       } else {
         // Visitor: send current layout read-only, no desk created
-        getRoomLayout(room).then((layout) => {
+        getRoomLayout(pool, room).then((layout) => {
           socket.emit("roomLayoutLoaded", layout);
         });
       }
@@ -620,7 +613,7 @@ io.on("connection", (socket) => {
       // Send room info to joining socket
       try {
         const [members, roomRow] = await Promise.all([
-          getRoomMembers(room),
+          getRoomMembers(pool, room),
           pool.query('SELECT max_workers FROM rooms WHERE room_id = $1', [room])
         ]);
         const onlineEmails = new Set(
@@ -642,7 +635,7 @@ io.on("connection", (socket) => {
 
     socket.on("savePaperReams", (count: number) => {
       if (typeof count === 'number' && count >= 0) {
-        savePaperReams(user.email, Math.floor(count));
+        savePaperReams(pool, user.email, Math.floor(count));
       }
     });
 
@@ -651,7 +644,7 @@ io.on("connection", (socket) => {
       const { shirtColor, skinTone, pantColor } = config;
       if (typeof shirtColor !== 'string' || typeof skinTone !== 'string' || typeof pantColor !== 'string') return;
       const sanitized: AvatarConfig = { shirtColor, skinTone, pantColor };
-      saveAvatarConfig(user.email, sanitized);
+      saveAvatarConfig(pool, user.email, sanitized);
       // Update in-memory state and broadcast to room
       let playerRoom = "";
       for (const roomId in rooms) {
@@ -681,7 +674,7 @@ io.on("connection", (socket) => {
           text: messageText,
           time: Date.now()
         };
-        
+
         // Store last message on player for bubbles
         player.lastMessage = messageText;
         player.lastMessageTime = message.time;
@@ -728,7 +721,7 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
-      
+
       if (user?.email && activeUsers.get(user.email) === socket.id) {
         activeUsers.delete(user.email);
       }
@@ -737,7 +730,7 @@ io.on("connection", (socket) => {
         if (rooms[roomId][socket.id]) {
           delete rooms[roomId][socket.id];
           io.to(roomId).emit("playerDisconnected", socket.id);
-          
+
           // Clean up empty rooms
           if (Object.keys(rooms[roomId]).length === 0) {
             delete rooms[roomId];
@@ -748,41 +741,49 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Vite middleware for development; skipped in test (NODE_ENV=test) and production
+  if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (process.env.NODE_ENV === "production") {
     const distPath = path.join(__dirname, "dist");
     const publicPath = path.join(__dirname, "public");
     console.log(`Serving static files from: ${distPath}`);
     console.log(`dist/index.html exists: ${fs.existsSync(path.join(distPath, "index.html"))}`);
     console.log(`dist/assets/dwight_bobblehead.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dwight_bobblehead.glb"))}`);
     console.log(`dist/assets/dundie.glb exists: ${fs.existsSync(path.join(distPath, "assets", "dundie.glb"))}`);
-    // Serve dist/ first (hashed JS/CSS bundles), then fall back to public/ for
-    // assets that Vite copies as-is (GLB files). This ensures large binary assets
-    // are reachable even if the dist/ copy was incomplete during build.
     app.use(express.static(distPath));
     app.use(express.static(publicPath));
     app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
-    // Log the exact error from express.static so we know why files are failing
     app.use((err: any, req: any, res: any, _next: any) => {
       console.error(`[static error] ${req.method} ${req.url} → code=${err.code} status=${err.status} msg=${err.message}`);
       res.status(err.status || 500).send(err.message || 'Internal Server Error');
     });
   }
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  return { app, httpServer, io };
 }
 
-startServer().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+// ── Auto-start (only when run directly, not when imported by tests) ───────────
+
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
+  initDb(pool)
+    .then(() => createApp(pool))
+    .then(({ httpServer }) => {
+      httpServer.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to start server:", err);
+      process.exit(1);
+    });
+}

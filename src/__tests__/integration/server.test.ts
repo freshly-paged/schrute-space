@@ -1,136 +1,479 @@
 /**
- * Integration tests for server.ts
+ * Integration tests for server.ts REST API + Socket.IO
  *
- * STATUS: Skeleton — all tests are marked TODO pending a server refactor.
+ * Strategy: inject a mock pg.Pool into createApp() so no real database is
+ * needed. The mock pool records every query call and returns pre-configured
+ * rows. Auth is handled via the DEV_USER_EMAIL env variable (no IAP header
+ * needed) — server.ts falls back to it automatically.
  *
- * BLOCKER (TODO #1): server.ts auto-executes on import (calls startServer() at
- * module evaluation time). To make it testable, refactor it to export a
- * createApp(pool?) factory function and guard the auto-start behind:
- *
- *   if (process.argv[1] === fileURLToPath(import.meta.url)) {
- *     createApp().then(({ httpServer }) => httpServer.listen(8080));
- *   }
- *
- * Once that's done, integration tests can:
- *   - Inject a mock pg.Pool to avoid needing a real database in unit mode
- *   - Spin up the real server with a test PostgreSQL database in CI
- *     (see .github/workflows/ci.yml — integration-tests job with postgres service)
- *
- * HOW TO UNBLOCK:
- *   1. Refactor server.ts as described above
- *   2. Replace the placeholder `expect(true).toBe(true)` assertions below with
- *      actual supertest / socket.io-client calls
- *   3. Uncomment the integration-tests job in ci.yml
+ * Socket.IO tests spin up the httpServer on a random port (listen(0)) and
+ * connect a real socket.io-client so that the full event pipeline is exercised.
  */
 
-// import request from 'supertest';
-// import { io as ioc } from 'socket.io-client';
-// import { createApp } from '../../../server';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import request from 'supertest';
+import { io as ioc, type Socket } from 'socket.io-client';
+import type { AddressInfo } from 'net';
+import type pg from 'pg';
 
-// Mock pg.Pool — swap for a real test DB when running integration-tests in CI
-// vi.mock('pg', () => {
-//   const mockQuery = vi.fn().mockResolvedValue({ rows: [] });
-//   const MockPool = vi.fn().mockImplementation(() => ({ query: mockQuery }));
-//   return { default: { Pool: MockPool }, Pool: MockPool };
-// });
+// Static import so that dotenv.config() in server.ts runs exactly once (at
+// file load time), before any test manipulates process.env. Dynamic
+// await import() inside tests would re-trigger dotenv on the first call.
+import { createApp } from '../../../server.js';
 
-// Mock google-auth-library — Google OAuth requires real credentials and cannot
-// be tested in CI without a live authorization code (TODO #4)
-// vi.mock('google-auth-library', () => ({
-//   OAuth2Client: vi.fn().mockImplementation(() => ({
-//     getToken: vi.fn(),
-//     setCredentials: vi.fn(),
-//     verifyIdToken: vi.fn(),
-//   })),
-// }));
+// ── Mock pool factory ─────────────────────────────────────────────────────────
+//
+// makePool() returns a fake pg.Pool whose .query() resolves with the rows
+// registered via the chainable .on(sqlFragment, rows) helper.  Unrecognised
+// queries resolve with { rows: [], rowCount: 0 } so every DB call succeeds
+// without throwing.
+
+type QueryResult = { rows: any[]; rowCount?: number };
+
+function makePool(defaults: Array<{ match: string; result: QueryResult }> = []) {
+  const handlers = [...defaults];
+
+  const query = vi.fn(async (sql: string, _params?: any[]): Promise<QueryResult> => {
+    for (const h of handlers) {
+      if (sql.includes(h.match)) return h.result;
+    }
+    return { rows: [], rowCount: 0 };
+  });
+
+  return { query } as unknown as pg.Pool;
+}
+
+// ── Auth helper ───────────────────────────────────────────────────────────────
+// server.ts falls back to process.env.DEV_USER_EMAIL when the IAP header is
+// absent, so we set/clear it around each test suite.
+
+const TEST_EMAIL = 'test@example.com';
+const TEST_NAME = 'Test'; // derived from email: test@example.com → "Test"
+
+// ── REST API ─────────────────────────────────────────────────────────────────
 
 describe('REST API — GET /api/auth/me', () => {
-  it.todo('returns null (not 401) when no auth token is provided', async () => {
-    // const { app } = await createApp(mockPool);
-    // const res = await request(app).get('/api/auth/me');
-    // expect(res.status).toBe(200);
-    // expect(res.body).toBeNull();
+  it('returns null when no auth is provided', async () => {
+    // vi.stubEnv safely overrides and auto-restores env vars after each test
+    vi.stubEnv('DEV_USER_EMAIL', '');
+
+    const { app } = await createApp(makePool());
+
+    const res = await request(app).get('/api/auth/me');
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+
+    vi.unstubAllEnvs();
   });
 
-  it.todo('returns the user object when a valid JWT is provided', async () => {
-    // Sign a JWT with SESSION_SECRET, attach as Authorization: Bearer <token>
-    // const res = await request(app)
-    //   .get('/api/auth/me')
-    //   .set('Authorization', `Bearer ${validJwt}`);
-    // expect(res.status).toBe(200);
-    // expect(res.body).toMatchObject({ email: 'test@example.com' });
-  });
-});
+  it('returns the user object when DEV_USER_EMAIL is set', async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
 
-describe('REST API — POST /api/room-layout', () => {
-  it.todo('returns 401 without a valid JWT', async () => {
-    // const { app } = await createApp(mockPool);
-    // const res = await request(app)
-    //   .post('/api/room-layout')
-    //   .send({ roomId: 'test-room', layout: [] });
-    // expect(res.status).toBe(401);
+    const { app } = await createApp(makePool());
+
+    const res = await request(app).get('/api/auth/me');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ email: TEST_EMAIL });
   });
 
-  it.todo('saves layout and broadcasts roomLayoutUpdated to room members', async () => {
-    // Authenticate, then POST layout, then verify mockPool.query was called
-    // and that connected socket clients received roomLayoutUpdated event
+  it('returns the user from X-Goog-Authenticated-User-Email header', async () => {
+    const prev = process.env.DEV_USER_EMAIL;
+    delete process.env.DEV_USER_EMAIL;
+
+    const { app } = await createApp(makePool());
+
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('x-goog-authenticated-user-email', `accounts.google.com:${TEST_EMAIL}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ email: TEST_EMAIL });
+
+    process.env.DEV_USER_EMAIL = prev;
   });
 });
 
 describe('REST API — GET /api/player', () => {
-  it.todo('returns 401 without auth', async () => {
-    // const res = await request(app).get('/api/player');
-    // expect(res.status).toBe(401);
+  beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
+  afterEach(() => { delete process.env.DEV_USER_EMAIL; });
+
+  it('returns 401 without auth', async () => {
+    vi.stubEnv('DEV_USER_EMAIL', '');
+    const { app } = await createApp(makePool());
+    const res = await request(app).get('/api/player');
+    expect(res.status).toBe(401);
+    vi.unstubAllEnvs();
   });
 
-  it.todo('returns paperReams and avatarConfig for authenticated user', async () => {
-    // mockPool.query resolves with { rows: [{ paper_reams: 5, avatar_config: null }] }
-    // Verify res.body contains { paperReams: 5 }
+  it('returns paperReams and avatarConfig for authenticated user', async () => {
+    const pool = makePool([
+      { match: 'SELECT paper_reams', result: { rows: [{ paper_reams: 42 }], rowCount: 1 } },
+      { match: 'SELECT avatar_config', result: { rows: [{ avatar_config: { shirtColor: '#ff0000', skinTone: '#ffcc99', pantColor: '#0000ff' } }], rowCount: 1 } },
+    ]);
+
+    const { app } = await createApp(pool);
+
+    const res = await request(app).get('/api/player');
+    expect(res.status).toBe(200);
+    expect(res.body.paperReams).toBe(42);
+    expect(res.body.avatarConfig).toMatchObject({ shirtColor: '#ff0000' });
+  });
+
+  it('returns avatarConfig=null when avatar_config is empty object', async () => {
+    const pool = makePool([
+      { match: 'SELECT paper_reams', result: { rows: [{ paper_reams: 0 }] } },
+      { match: 'SELECT avatar_config', result: { rows: [{ avatar_config: {} }] } },
+    ]);
+
+    const { app } = await createApp(pool);
+
+    const res = await request(app).get('/api/player');
+    expect(res.status).toBe(200);
+    expect(res.body.avatarConfig).toBeNull();
   });
 });
 
-describe('Socket.IO — joinRoom', () => {
-  it.todo('emits roomLayoutLoaded with the room layout on join', async () => {
-    // const { httpServer } = await createApp(mockPool);
-    // httpServer.listen(0); // random port
-    // const port = (httpServer.address() as AddressInfo).port;
-    // const client = ioc(`http://localhost:${port}`, { auth: { token: validJwt } });
-    // await expect(new Promise(resolve => client.on('roomLayoutLoaded', resolve)))
-    //   .resolves.toMatchObject({ layout: [] });
-    // client.disconnect();
-    // httpServer.close();
+describe('REST API — POST /api/room-layout', () => {
+  beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
+  afterEach(() => { delete process.env.DEV_USER_EMAIL; });
+
+  it('returns 401 without auth', async () => {
+    vi.stubEnv('DEV_USER_EMAIL', '');
+    const { app } = await createApp(makePool());
+    const res = await request(app).post('/api/room-layout').send({ roomId: 'test-room', layout: [] });
+    expect(res.status).toBe(401);
+    vi.unstubAllEnvs();
   });
 
-  it.todo('single-session enforcement: second connect with same email disconnects first socket', async () => {
-    // Connect client1 with email A, then connect client2 with same email A
-    // Expect client1 to receive forceDisconnect and disconnect
+  it('returns 400 when roomId is missing', async () => {
+    const { app } = await createApp(makePool());
+
+    const res = await request(app)
+      .post('/api/room-layout')
+      .send({ layout: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('saves layout and returns ok:true', async () => {
+    const pool = makePool();
+
+    const { app } = await createApp(pool);
+
+    const layout = [{ id: 'desk-1', type: 'desk', position: [0, 0, 0], rotation: [0, 0, 0], config: {} }];
+    const res = await request(app)
+      .post('/api/room-layout')
+      .send({ roomId: 'test-room', layout });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    // Verify the pool was queried to persist the layout
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO room_layouts'),
+      expect.arrayContaining(['test-room'])
+    );
+  });
+});
+
+describe('REST API — POST /api/avatar', () => {
+  beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
+  afterEach(() => { delete process.env.DEV_USER_EMAIL; });
+
+  it('returns 400 when avatar fields are missing', async () => {
+    const { app } = await createApp(makePool());
+
+    const res = await request(app)
+      .post('/api/avatar')
+      .send({ shirtColor: '#ff0000' }); // missing skinTone + pantColor
+    expect(res.status).toBe(400);
+  });
+
+  it('saves avatar config and returns ok:true', async () => {
+    const pool = makePool();
+    const { app } = await createApp(pool);
+
+    const res = await request(app)
+      .post('/api/avatar')
+      .send({ shirtColor: '#ff0000', skinTone: '#ffcc99', pantColor: '#0000ff' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO users'),
+      expect.arrayContaining([TEST_EMAIL])
+    );
+  });
+});
+
+describe('REST API — GET /api/room/:roomId/leaderboard', () => {
+  beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
+  afterEach(() => { delete process.env.DEV_USER_EMAIL; });
+
+  it('returns 401 without auth', async () => {
+    vi.stubEnv('DEV_USER_EMAIL', '');
+    const { app } = await createApp(makePool());
+    const res = await request(app).get('/api/room/my-room/leaderboard');
+    expect(res.status).toBe(401);
+    vi.unstubAllEnvs();
+  });
+
+  it('returns leaderboard rows', async () => {
+    const pool = makePool([
+      {
+        match: 'COALESCE(u.paper_reams',
+        result: {
+          rows: [
+            { email: 'a@test.com', name: 'Alice', role: 'admin', paperReams: 100 },
+            { email: 'b@test.com', name: 'Bob', role: 'worker', paperReams: 50 },
+          ]
+        }
+      }
+    ]);
+
+    const { app } = await createApp(pool);
+
+    const res = await request(app).get('/api/room/my-room/leaderboard');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0]).toMatchObject({ email: 'a@test.com', paperReams: 100 });
+  });
+});
+
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
+//
+// Each test spins up the server on a random port, connects clients, runs the
+// scenario, then tears down. A generous timeout is set per test to accommodate
+// async socket handshake + DB round-trips.
+
+/**
+ * Wait for a socket event and return its payload, or reject after `timeout` ms.
+ */
+function waitFor<T = unknown>(socket: Socket, event: string, timeout = 3000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for "${event}"`)), timeout);
+    socket.once(event, (data: T) => {
+      clearTimeout(timer);
+      resolve(data);
+    });
+  });
+}
+
+/**
+ * Returns a pool whose query responses are tailored to a successful joinRoom
+ * flow: ensureRoom (insert), getRoomMembers (empty → caller becomes admin),
+ * upsertMember (admin), getMemberRole (returns 'admin'), getRoomLayout (empty),
+ * saveRoomLayout (noop), getPaperReams (0), getAvatarConfig (null),
+ * SELECT max_workers (20).
+ */
+function makeJoinRoomPool() {
+  return makePool([
+    // INSERT INTO users ... ON CONFLICT ...
+    { match: 'INSERT INTO users (email, display_name)', result: { rows: [], rowCount: 1 } },
+    // ensureRoom: INSERT INTO rooms
+    { match: 'INSERT INTO rooms', result: { rows: [], rowCount: 0 } },
+    // getRoomMembers: returns empty so first joiner becomes admin
+    { match: 'FROM room_members rm', result: { rows: [], rowCount: 0 } },
+    // upsertMember
+    { match: 'INSERT INTO room_members', result: { rows: [], rowCount: 1 } },
+    // getMemberRole
+    { match: 'SELECT role FROM room_members', result: { rows: [{ role: 'admin' }], rowCount: 1 } },
+    // getRoomLayout
+    { match: 'SELECT layout FROM room_layouts', result: { rows: [], rowCount: 0 } },
+    // saveRoomLayout (ensurePlayerDesk)
+    { match: 'INSERT INTO room_layouts', result: { rows: [], rowCount: 1 } },
+    // getPaperReams
+    { match: 'SELECT paper_reams', result: { rows: [{ paper_reams: 0 }], rowCount: 1 } },
+    // getAvatarConfig
+    { match: 'SELECT avatar_config', result: { rows: [], rowCount: 0 } },
+    // SELECT max_workers
+    { match: 'SELECT max_workers', result: { rows: [{ max_workers: 20 }], rowCount: 1 } },
+  ]);
+}
+
+describe('Socket.IO — joinRoom', () => {
+  let httpServer: any;
+  let client: Socket;
+  let port: number;
+
+  beforeEach(async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
+    ({ httpServer } = await createApp(makeJoinRoomPool()));
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    delete process.env.DEV_USER_EMAIL;
+    client?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+  });
+
+  it('emits roomLayoutLoaded after joinRoom', async () => {
+    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    const layoutPromise = waitFor<any[]>(client, 'roomLayoutLoaded');
+    client.emit('joinRoom', { roomId: 'test-room' });
+    const layout = await layoutPromise;
+    // Layout may contain the auto-created desk for the admin
+    expect(Array.isArray(layout)).toBe(true);
+  });
+
+  it('emits currentPlayers after joinRoom with the joining player included', async () => {
+    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    const playersPromise = waitFor<Record<string, any>>(client, 'currentPlayers');
+    client.emit('joinRoom', { roomId: 'test-room' });
+    const players = await playersPromise;
+    const playerList = Object.values(players);
+    expect(playerList.length).toBeGreaterThan(0);
+    expect(playerList[0]).toMatchObject({ email: TEST_EMAIL, name: TEST_NAME });
+  });
+
+  it('emits roomInfoLoaded with role=admin for the first joiner', async () => {
+    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    const infoPromise = waitFor<any>(client, 'roomInfoLoaded');
+    client.emit('joinRoom', { roomId: 'test-room' });
+    const info = await infoPromise;
+    expect(info).toMatchObject({ roomId: 'test-room', myRole: 'admin' });
+  });
+
+  it('single-session: second connection with same email gets forceDisconnect on first', async () => {
+    // Connect first client
+    const client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    await waitFor(client1, 'connect');
+    client1.emit('joinRoom', { roomId: 'test-room' });
+    await waitFor(client1, 'currentPlayers');
+
+    // Connect second client (same email via DEV_USER_EMAIL)
+    const forceDisconnectPromise = waitFor(client1, 'forceDisconnect');
+    const client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    client2.emit('joinRoom', { roomId: 'test-room' });
+
+    await forceDisconnectPromise;
+    client = client2; // afterEach will clean up client2
+    client1.disconnect();
   });
 });
 
 describe('Socket.IO — playerMovement', () => {
-  it.todo('broadcasts playerMoved to other clients in same room', async () => {
-    // Two clients join the same room
-    // client1 emits playerMovement
-    // Expect client2 receives playerMoved with client1's position
+  let httpServer: any;
+  let client1: Socket;
+  let client2: Socket;
+  let port: number;
+
+  beforeEach(async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
+    ({ httpServer } = await createApp(makeJoinRoomPool()));
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    delete process.env.DEV_USER_EMAIL;
+    client1?.disconnect();
+    client2?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+  });
+
+  it('broadcasts playerMoved to other clients in the same room', async () => {
+    // Both clients share DEV_USER_EMAIL — but single-session kicks in,
+    // so we simulate two different users via the IAP header on client2.
+    // For simplicity, use two sequential connections and override auth for client2.
+    const OTHER_EMAIL = 'other@example.com';
+
+    client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    await waitFor(client1, 'connect');
+    client1.emit('joinRoom', { roomId: 'test-room' });
+    await waitFor(client1, 'currentPlayers');
+
+    // Switch DEV_USER_EMAIL so the second connection is a different user
+    process.env.DEV_USER_EMAIL = OTHER_EMAIL;
+    client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    await waitFor(client2, 'connect');
+
+    const playerMovedPromise = waitFor<any>(client1, 'playerMoved');
+    client2.emit('joinRoom', { roomId: 'test-room' });
+    await waitFor(client2, 'currentPlayers');
+
+    const newPosition = [1, 0, 2];
+    client2.emit('playerMovement', { position: newPosition, rotation: [0, 0, 0], isRolling: false, rollTimer: 0 });
+
+    const moved = await playerMovedPromise;
+    expect(moved.position).toEqual(newPosition);
+    expect(moved.email).toBe(OTHER_EMAIL);
   });
 });
 
 describe('Socket.IO — chatMessage', () => {
-  it.todo('broadcasts chatMessage to all clients in the room', async () => {
-    // client1 sends chatMessage 'Hello'
-    // client2 receives chatMessage event with text='Hello' and playerName
+  let httpServer: any;
+  let client1: Socket;
+  let client2: Socket;
+  let port: number;
+
+  beforeEach(async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
+    ({ httpServer } = await createApp(makeJoinRoomPool()));
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    delete process.env.DEV_USER_EMAIL;
+    client1?.disconnect();
+    client2?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+  });
+
+  it('broadcasts chatMessage to all clients in the room', async () => {
+    const OTHER_EMAIL = 'chatter@example.com';
+
+    client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    await waitFor(client1, 'connect');
+    client1.emit('joinRoom', { roomId: 'chat-room' });
+    await waitFor(client1, 'currentPlayers');
+
+    process.env.DEV_USER_EMAIL = OTHER_EMAIL;
+    client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    await waitFor(client2, 'connect');
+    client2.emit('joinRoom', { roomId: 'chat-room' });
+    await waitFor(client2, 'currentPlayers');
+
+    const chatPromise = waitFor<any>(client1, 'chatMessage');
+    client2.emit('chatMessage', 'Bears. Beets. Battlestar Galactica.');
+
+    const msg = await chatPromise;
+    expect(msg.text).toBe('Bears. Beets. Battlestar Galactica.');
+    expect(msg.playerName).toBeTruthy();
+    expect(msg.id).toBeTruthy();
+    expect(typeof msg.time).toBe('number');
   });
 });
 
 describe('Socket.IO — ensurePlayerDesk', () => {
-  it.todo('auto-creates a desk for a new player joining a room', async () => {
-    // mockPool.query returns empty layout on first call (getRoomLayout)
-    // After joinRoom, verify saveRoomLayout was called with a layout containing
-    // a DeskItem whose config.ownerEmail matches the test user
+  let httpServer: any;
+  let client: Socket;
+  let port: number;
+  let pool: pg.Pool;
+
+  beforeEach(async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
+    pool = makeJoinRoomPool();
+    ({ httpServer } = await createApp(pool));
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
   });
 
-  it.todo('does not create duplicate desks if player already has one', async () => {
-    // mockPool.query returns layout that already has a desk for the test email
-    // After joinRoom, verify saveRoomLayout was NOT called again (no new desk added)
+  afterEach(async () => {
+    delete process.env.DEV_USER_EMAIL;
+    client?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+  });
+
+  it('auto-creates a desk for the first joiner (admin)', async () => {
+    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    const layoutPromise = waitFor<any[]>(client, 'roomLayoutLoaded');
+    client.emit('joinRoom', { roomId: 'desk-room' });
+    const layout = await layoutPromise;
+
+    // The admin joining an empty room triggers ensurePlayerDesk which creates a desk
+    const desk = layout.find((f: any) => f.type === 'desk' && f.config?.ownerEmail === TEST_EMAIL);
+    expect(desk).toBeDefined();
+    expect(desk.id).toBe(`desk-${TEST_EMAIL}`);
   });
 });
