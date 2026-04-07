@@ -6,8 +6,9 @@ import { RoomRole } from '../../types';
 interface LeaderboardEntry {
   email: string;
   name: string | null;
+  jobTitle?: string | null;
   role: RoomRole;
-  paperReams: number;
+  totalReamsEarned: number;
 }
 
 interface RoomLeaderboardProps {
@@ -54,16 +55,19 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
     return () => clearInterval(interval);
   }, [roomId]);
 
-  const displayName = (entry: LeaderboardEntry) =>
+  const primaryName = (entry: LeaderboardEntry) =>
     entry.name ?? entry.email.split('@')[0];
 
   return (
     <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl w-72 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-amber-400" />
-          <h2 className="text-white font-bold text-sm">Leaderboard</h2>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+            <h2 className="text-white font-bold text-sm">Leaderboard</h2>
+          </div>
+          <p className="text-[9px] text-slate-400 leading-tight pl-6">Total reams earned (all-time)</p>
         </div>
         <button
           onClick={onClose}
@@ -97,17 +101,21 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
                   }`}>
                     {i + 1}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       <span className={`text-xs font-semibold truncate ${isMe ? 'text-indigo-200' : 'text-white'}`}>
-                        {displayName(entry)}
+                        {primaryName(entry)}
                         {isMe && <span className="text-indigo-400 ml-1">(you)</span>}
                       </span>
+                      {entry.jobTitle ? (
+                        <span className="text-[9px] text-slate-400 truncate leading-tight">{entry.jobTitle}</span>
+                      ) : null}
                     </div>
                     <RoleBadge role={entry.role} />
                   </div>
-                  <span className="text-xs font-bold text-white whitespace-nowrap">
-                    {entry.paperReams.toLocaleString()} <span className="text-slate-400">reams</span>
+                  <span className="text-xs font-bold text-white whitespace-nowrap text-right">
+                    {entry.totalReamsEarned.toLocaleString()}
+                    <span className="text-slate-400 font-normal block text-[9px] leading-tight">total earned</span>
                   </span>
                 </div>
               );
@@ -117,7 +125,7 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
       </div>
 
       <div className="px-4 pb-3 text-[10px] text-slate-500 text-center">
-        Updates every 60s
+        Updates every 5 min
       </div>
     </div>
   );

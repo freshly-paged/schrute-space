@@ -43,6 +43,28 @@ https://schrute-space.com (with restricted access).
    ```
    App runs at `http://localhost:8080`.
 
+### Local test mode (no PostgreSQL)
+
+For quick debugging without Docker or `DATABASE_URL`:
+
+```bash
+npm run dev:local-test
+```
+
+- Uses an in-memory database (data is lost when the process exits).
+- Each browser profile gets its own mock user via an HttpOnly cookie (`mock-xxxxxxxx@local.test`, `Player xxxxxxxx`).
+
+**Process auto-shutdown (3 minutes):** In this mode the dev server **stops by default after 3 minutes** (180 seconds) so a forgotten process does not hold the port. To **keep it running**, run this.
+
+Windows **CMD**
+
+```bat
+set LOCAL_TEST_TTL_MS=0&& npm run dev:local-test
+```
+
+**Multiple players in the same room:** Mock identity is stored in a cookie **per browser profile**. Extra tabs in the same profile share one user—you cannot simulate two players that way. Use **Incognito / private** alongside a normal window (or two different browsers, or two Chrome profiles), and open the **same** URL including the same `?room=...` query on both.
+
+Normal `npm run dev` is unchanged and still requires PostgreSQL.
 
 ### Stopping / restarting the database
 

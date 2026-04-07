@@ -53,42 +53,33 @@ const TEST_NAME = 'Test'; // derived from email: test@example.com → "Test"
 // ── REST API ─────────────────────────────────────────────────────────────────
 
 describe('REST API — GET /api/auth/me', () => {
-  it('returns null when no auth is provided', async () => {
-    // vi.stubEnv safely overrides and auto-restores env vars after each test
+  it('returns the dev@local.test fallback in non-production dev mode (no IAP, no DEV_USER_EMAIL)', async () => {
+    // In test mode (NODE_ENV=test, not production), getIAPUser falls back to
+    // { email: "dev@local.test" } when no IAP header or DEV_USER_EMAIL is set.
     vi.stubEnv('DEV_USER_EMAIL', '');
-
     const { app } = await createApp(makePool());
-
     const res = await request(app).get('/api/auth/me');
     expect(res.status).toBe(200);
-    expect(res.body).toBeNull();
-
+    expect(res.body).toMatchObject({ email: 'dev@local.test' });
     vi.unstubAllEnvs();
   });
 
   it('returns the user object when DEV_USER_EMAIL is set', async () => {
     process.env.DEV_USER_EMAIL = TEST_EMAIL;
-
     const { app } = await createApp(makePool());
-
     const res = await request(app).get('/api/auth/me');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ email: TEST_EMAIL });
   });
 
-  it('returns the user from X-Goog-Authenticated-User-Email header', async () => {
-    const prev = process.env.DEV_USER_EMAIL;
-    delete process.env.DEV_USER_EMAIL;
-
+  it('returns the user from X-Goog-Authenticated-User-Email header (IAP takes priority)', async () => {
+    const iapEmail = 'iap-user@example.com';
     const { app } = await createApp(makePool());
-
     const res = await request(app)
       .get('/api/auth/me')
-      .set('x-goog-authenticated-user-email', `accounts.google.com:${TEST_EMAIL}`);
+      .set('x-goog-authenticated-user-email', `accounts.google.com:${iapEmail}`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ email: TEST_EMAIL });
-
-    process.env.DEV_USER_EMAIL = prev;
+    expect(res.body).toMatchObject({ email: iapEmail });
   });
 });
 
@@ -96,11 +87,16 @@ describe('REST API — GET /api/player', () => {
   beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
   afterEach(() => { delete process.env.DEV_USER_EMAIL; });
 
-  it('returns 401 without auth', async () => {
+  it('returns player data for the dev@local.test fallback user when no DEV_USER_EMAIL is set', async () => {
+    // In non-production mode getIAPUser always returns at least dev@local.test.
     vi.stubEnv('DEV_USER_EMAIL', '');
-    const { app } = await createApp(makePool());
+    const pool = makePool([
+      { match: 'SELECT paper_reams', result: { rows: [{ paper_reams: 0 }] } },
+      { match: 'SELECT avatar_config', result: { rows: [] } },
+    ]);
+    const { app } = await createApp(pool);
     const res = await request(app).get('/api/player');
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
     vi.unstubAllEnvs();
   });
 
@@ -136,12 +132,11 @@ describe('REST API — POST /api/room-layout', () => {
   beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
   afterEach(() => { delete process.env.DEV_USER_EMAIL; });
 
-  it('returns 401 without auth', async () => {
-    vi.stubEnv('DEV_USER_EMAIL', '');
+  it('returns 400 when layout field is not an array', async () => {
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
     const { app } = await createApp(makePool());
-    const res = await request(app).post('/api/room-layout').send({ roomId: 'test-room', layout: [] });
-    expect(res.status).toBe(401);
-    vi.unstubAllEnvs();
+    const res = await request(app).post('/api/room-layout').send({ roomId: 'test-room', layout: 'bad' });
+    expect(res.status).toBe(400);
   });
 
   it('returns 400 when roomId is missing', async () => {
@@ -207,22 +202,23 @@ describe('REST API — GET /api/room/:roomId/leaderboard', () => {
   beforeEach(() => { process.env.DEV_USER_EMAIL = TEST_EMAIL; });
   afterEach(() => { delete process.env.DEV_USER_EMAIL; });
 
-  it('returns 401 without auth', async () => {
-    vi.stubEnv('DEV_USER_EMAIL', '');
+  it('returns empty array when room has no members', async () => {
+    // The leaderboard query returns empty rows when no members exist.
+    process.env.DEV_USER_EMAIL = TEST_EMAIL;
     const { app } = await createApp(makePool());
-    const res = await request(app).get('/api/room/my-room/leaderboard');
-    expect(res.status).toBe(401);
-    vi.unstubAllEnvs();
+    const res = await request(app).get('/api/room/empty-room/leaderboard');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
   });
 
   it('returns leaderboard rows', async () => {
     const pool = makePool([
       {
-        match: 'COALESCE(u.paper_reams',
+        match: 'COALESCE(u.total_paper_reams_earned',
         result: {
           rows: [
-            { email: 'a@test.com', name: 'Alice', role: 'admin', paperReams: 100 },
-            { email: 'b@test.com', name: 'Bob', role: 'worker', paperReams: 50 },
+            { email: 'a@test.com', name: 'Alice', jobTitle: null, role: 'admin', totalReamsEarned: 100 },
+            { email: 'b@test.com', name: 'Bob', jobTitle: null, role: 'worker', totalReamsEarned: 50 },
           ]
         }
       }
@@ -233,7 +229,7 @@ describe('REST API — GET /api/room/:roomId/leaderboard', () => {
     const res = await request(app).get('/api/room/my-room/leaderboard');
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
-    expect(res.body[0]).toMatchObject({ email: 'a@test.com', paperReams: 100 });
+    expect(res.body[0]).toMatchObject({ email: 'a@test.com', totalReamsEarned: 100 });
   });
 });
 

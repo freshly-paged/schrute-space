@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Shield } from 'lucide-react';
+import { FocusEnergyBar } from './FocusEnergyBar';
 import { RoomRole } from '../../types';
 
 interface HUDPanelProps {
@@ -7,6 +8,7 @@ interface HUDPanelProps {
   isConnected: boolean;
   currentRoom: string;
   paperReams: number;
+  focusEnergy: number;
   onExitRoom: () => void;
   onCustomizeOffice: () => void;
   myRole?: RoomRole | null;
@@ -17,6 +19,7 @@ export const HUDPanel = ({
   isConnected,
   currentRoom,
   paperReams,
+  focusEnergy,
   onExitRoom,
   onCustomizeOffice,
   myRole,
@@ -36,6 +39,7 @@ export const HUDPanel = ({
       </p>
 
       <div className="space-y-3">
+        <FocusEnergyBar focusEnergy={focusEnergy} showDecayHint />
         <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
           <Briefcase className="w-4 h-4 text-amber-400" />
           <span>

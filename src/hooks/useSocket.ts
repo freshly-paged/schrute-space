@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { Player, ChatMessage, AvatarConfig, FurnitureItem, RoomInfo, RoomRole, RoomMember } from '../types';
 import { AuthUser } from './useAuth';
 import { useGameStore } from '../store/useGameStore';
+import { MS_BODY_THROWABLE_ID } from '../propIds';
 
 export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -14,6 +15,28 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       .filter((p) => p.activeDeskId)
       .map((p) => p.activeDeskId as string);
     useGameStore.getState().setOccupiedDeskIds(ids);
+  };
+
+  const syncRemoteWornThrowableIds = (playerMap: Record<string, Player>) => {
+    const worn: string[] = [];
+    for (const p of Object.values(playerMap)) {
+      if (p.wornPropId) worn.push(p.wornPropId);
+    }
+    useGameStore.getState().setRemoteWornThrowableIds(worn);
+  };
+
+  const syncRemoteHeldThrowableIds = (playerMap: Record<string, Player>) => {
+    const held: string[] = [];
+    for (const p of Object.values(playerMap)) {
+      if (p.heldThrowableId) held.push(p.heldThrowableId);
+    }
+    useGameStore.getState().setRemoteHeldThrowableIds(held);
+  };
+
+  const syncFromPlayerMap = (playerMap: Record<string, Player>) => {
+    syncOccupiedDesks(playerMap);
+    syncRemoteWornThrowableIds(playerMap);
+    syncRemoteHeldThrowableIds(playerMap);
   };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [lastLocalMessage, setLastLocalMessage] = useState<{ text: string; time: number } | null>(null);
@@ -71,14 +94,14 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       delete others[newSocket.id!];
       console.log(`[socket] currentPlayers: ${Object.keys(others).length} other player(s) in room`);
       setPlayers(others);
-      syncOccupiedDesks(others);
+      syncFromPlayerMap(others);
     });
 
     newSocket.on('newPlayer', (player: Player) => {
       console.log(`[socket] newPlayer: ${player.name} (${player.id})`);
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
@@ -86,7 +109,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('playerMoved', (player: Player) => {
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
@@ -111,19 +134,58 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    newSocket.on(
+      'ambientSpeech',
+      (payload: { playerId: string; text: string; time: number }) => {
+        if (!payload?.playerId || typeof payload.text !== 'string' || typeof payload.time !== 'number') return;
+        if (payload.playerId !== newSocket.id) {
+          setPlayers((prev) => {
+            if (!prev[payload.playerId]) return prev;
+            return {
+              ...prev,
+              [payload.playerId]: {
+                ...prev[payload.playerId],
+                lastMessage: payload.text,
+                lastMessageTime: payload.time,
+              },
+            };
+          });
+        } else {
+          setLastLocalMessage({ text: payload.text, time: payload.time });
+        }
+      }
+    );
+
     newSocket.on('playerDisconnected', (id: string) => {
       console.log(`[socket] playerDisconnected: ${id}`);
       setPlayers((prev) => {
         const next = { ...prev };
         delete next[id];
-        syncOccupiedDesks(next);
+        syncFromPlayerMap(next);
         return next;
       });
     });
 
+    newSocket.on(
+      'throwableRestSync',
+      (data: { throwableId: string; position: number[]; rotation: number[] }) => {
+        if (!data || data.throwableId !== MS_BODY_THROWABLE_ID) return;
+        const { position, rotation } = data;
+        if (!Array.isArray(position) || position.length !== 3) return;
+        if (!Array.isArray(rotation) || rotation.length !== 3) return;
+        useGameStore.getState().setThrowableRest(data.throwableId, position as [number, number, number], rotation as [number, number, number]);
+      }
+    );
+
     newSocket.on('paperReamsLoaded', (count: number) => {
       console.log(`[socket] paperReamsLoaded: ${count}`);
       useGameStore.getState().setPaperReams(count);
+    });
+
+    newSocket.on('focusEnergyLoaded', (energy: number) => {
+      if (typeof energy === 'number' && Number.isFinite(energy)) {
+        useGameStore.getState().setFocusEnergy(energy);
+      }
     });
 
     newSocket.on('avatarConfigLoaded', (config: AvatarConfig) => {
@@ -139,6 +201,26 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('roomLayoutUpdated', (layout: FurnitureItem[]) => {
       console.log(`[socket] roomLayoutUpdated: ${layout.length} item(s)`);
       useGameStore.getState().setRoomLayout(layout);
+    });
+
+    newSocket.on('deskChairLevels', (map: Record<string, number>) => {
+      if (map && typeof map === 'object') useGameStore.getState().setDeskChairLevels(map);
+    });
+
+    newSocket.on('deskMonitorLevels', (map: Record<string, number>) => {
+      if (map && typeof map === 'object') useGameStore.getState().setDeskMonitorLevels(map);
+    });
+
+    newSocket.on('chairLevelUpdated', (payload: { email: string; level: number }) => {
+      if (payload?.email && typeof payload.level === 'number') {
+        useGameStore.getState().patchChairLevel(payload.email, payload.level);
+      }
+    });
+
+    newSocket.on('monitorLevelUpdated', (payload: { email: string; level: number }) => {
+      if (payload?.email && typeof payload.level === 'number') {
+        useGameStore.getState().patchMonitorLevel(payload.email, payload.level);
+      }
     });
 
     newSocket.on('roomInfoLoaded', (info: RoomInfo) => {
@@ -173,10 +255,46 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    let focusSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    const emitFocusEnergy = () => {
+      if (!newSocket.connected) return;
+      const s = useGameStore.getState();
+      const mode =
+        s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
+      newSocket.emit('saveFocusEnergy', { energy: s.focusEnergy, mode });
+    };
+    const scheduleFocusSave = () => {
+      if (focusSaveTimer) clearTimeout(focusSaveTimer);
+      focusSaveTimer = setTimeout(() => {
+        focusSaveTimer = null;
+        emitFocusEnergy();
+      }, 4000);
+    };
+    const unsubscribeFocusEnergy = useGameStore.subscribe((state, prev) => {
+      if (
+        state.focusEnergy === prev.focusEnergy &&
+        state.isTimerActive === prev.isTimerActive &&
+        state.timerMode === prev.timerMode &&
+        state.isTimerPaused === prev.isTimerPaused
+      ) {
+        return;
+      }
+      scheduleFocusSave();
+    });
+
     return () => {
       console.log(`[socket] cleaning up, disconnecting from room=${currentRoom}`);
+      if (focusSaveTimer) clearTimeout(focusSaveTimer);
+      emitFocusEnergy();
+      unsubscribeFocusEnergy();
       unsubscribeReams();
+      useGameStore.getState().resetChairLevels();
+      useGameStore.getState().resetMonitorLevels();
       useGameStore.getState().setRoomInfo(null);
+      useGameStore.getState().setRemoteWornThrowableIds([]);
+      useGameStore.getState().clearWornProp();
+      useGameStore.getState().setNearWaterCooler(false);
+      useGameStore.getState().setWaterBuffExpiresAt(null);
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

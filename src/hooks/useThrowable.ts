@@ -31,7 +31,7 @@ const CEIL_Y       = 7.5;
 const BOUNCE       = 0.35; // velocity retained after each wall/ceiling bounce
 const PLAY_BOUNDS  = 22;   // matches LocalPlayer BOUNDS — hard perimeter safety net
 
-export type ThrowablePhase = 'idle' | 'held' | 'thrown';
+export type ThrowablePhase = 'idle' | 'held' | 'thrown' | 'worn';
 
 interface UseThrowableOptions {
   id: string;
@@ -41,6 +41,8 @@ interface UseThrowableOptions {
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
+  /** When true: [E] while held wears the prop; no throw. World mesh hidden while worn (local or remote). */
+  wearable?: boolean;
 }
 
 interface UseThrowableResult {
@@ -57,6 +59,7 @@ export function useThrowable({
   restPosition,
   restRotation = [0, 0, 0],
   proximityRadius = 2.5,
+  wearable = false,
 }: UseThrowableOptions): UseThrowableResult {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -100,32 +103,101 @@ export function useThrowable({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [id, label, description, assetKey]);
 
+  // Apply server-broadcast rest pose when another client drops / removes wear
+  useEffect(
+    () =>
+      useGameStore.subscribe((state, prev) => {
+        const next = state.throwableRest[id];
+        const was = prev?.throwableRest?.[id];
+        if (!next || next === was) return;
+        if (
+          was &&
+          next.position[0] === was.position[0] &&
+          next.position[1] === was.position[1] &&
+          next.position[2] === was.position[2] &&
+          next.rotation[0] === was.rotation[0] &&
+          next.rotation[1] === was.rotation[1] &&
+          next.rotation[2] === was.rotation[2]
+        ) {
+          return;
+        }
+        restPosRef.current.set(...next.position);
+        restRotRef.current.set(...next.rotation);
+      }),
+    [id]
+  );
+
   useFrame((rfState, delta) => {
     if (!groupRef.current) return;
 
     const store = useGameStore.getState();
-    const { heldObjectId, throwVelocity } = store;
+    const { heldObjectId, throwVelocity, wornPropId, remoteWornThrowableIds, remoteHeldThrowableIds } =
+      store;
 
     const playerGroup = rfState.scene.getObjectByName('localPlayer');
     const playerPos = new THREE.Vector3();
     if (playerGroup) playerGroup.getWorldPosition(playerPos);
+
+    const hiddenBecauseWornElsewhere =
+      wearable &&
+      remoteWornThrowableIds.includes(id) &&
+      wornPropId !== id &&
+      phaseRef.current !== 'held' &&
+      phaseRef.current !== 'worn';
+
+    const hiddenBecauseHeldElsewhere =
+      remoteHeldThrowableIds.includes(id) &&
+      heldObjectId !== id &&
+      phaseRef.current === 'idle';
 
     // ── Transitions ───────────────────────────────────────────────────────
 
     if (heldObjectId === id && phaseRef.current === 'idle') {
       transitionTo('held');
     } else if (prevHeldIdRef.current === id && heldObjectId !== id && phaseRef.current === 'held') {
-      if (store.droppingObjectId === id) {
+      if (wearable && wornPropId === id) {
+        transitionTo('worn');
+      } else if (store.droppingObjectId === id) {
         // Put down: place at player feet, no physics
         posRef.current.copy(playerPos).setY(FLOOR_Y);
         restPosRef.current.copy(posRef.current);
         restRotRef.current.set(0, groupRef.current.rotation.y, 0);
+        if (wearable) {
+          store.setThrowableRest(id, [posRef.current.x, posRef.current.y, posRef.current.z], [
+            restRotRef.current.x,
+            restRotRef.current.y,
+            restRotRef.current.z,
+          ]);
+        }
         store.setNearThrowable(null); // clear so prompt reappears after a step away
+        transitionTo('idle');
+      } else if (wearable) {
+        // Wearable props cannot be thrown — treat release as drop at feet
+        posRef.current.copy(playerPos).setY(FLOOR_Y);
+        restPosRef.current.copy(posRef.current);
+        restRotRef.current.set(0, playerGroup ? playerGroup.rotation.y : 0, 0);
+        store.setThrowableRest(id, [posRef.current.x, posRef.current.y, posRef.current.z], [
+          restRotRef.current.x,
+          restRotRef.current.y,
+          restRotRef.current.z,
+        ]);
+        store.setNearThrowable(null);
         transitionTo('idle');
       } else {
         velRef.current.set(throwVelocity[0], throwVelocity[1], throwVelocity[2]);
         transitionTo('thrown');
       }
+    } else if (phaseRef.current === 'worn' && wornPropId !== id) {
+      posRef.current.copy(playerPos).setY(FLOOR_Y);
+      restPosRef.current.copy(posRef.current);
+      restRotRef.current.set(0, playerGroup ? playerGroup.rotation.y : 0, 0);
+      store.setThrowableRest(id, [posRef.current.x, posRef.current.y, posRef.current.z], [
+        restRotRef.current.x,
+        restRotRef.current.y,
+        restRotRef.current.z,
+      ]);
+      store.setNearThrowable(null);
+      transitionTo('idle');
     }
     prevHeldIdRef.current = heldObjectId;
 
@@ -135,11 +207,22 @@ export function useThrowable({
       posRef.current.copy(restPosRef.current);
       groupRef.current.rotation.copy(restRotRef.current);
 
-      const near = posRef.current.distanceTo(playerPos) < proximityRadius;
-      if (near && store.nearThrowableId !== id) store.setNearThrowable(id);
-      else if (!near && store.nearThrowableId === id) store.setNearThrowable(null);
+      if (hiddenBecauseWornElsewhere || hiddenBecauseHeldElsewhere) {
+        groupRef.current.visible = false;
+        if (store.nearThrowableId === id) store.setNearThrowable(null);
+      } else {
+        groupRef.current.visible = true;
+        const near = posRef.current.distanceTo(playerPos) < proximityRadius;
+        if (near && store.nearThrowableId !== id) store.setNearThrowable(id);
+        else if (!near && store.nearThrowableId === id) store.setNearThrowable(null);
+      }
+
+    } else if (phaseRef.current === 'worn') {
+      groupRef.current.visible = false;
+      if (store.nearThrowableId === id) store.setNearThrowable(null);
 
     } else if (phaseRef.current === 'held') {
+      groupRef.current.visible = true;
       // Use the player mesh's own rotation (set by LocalPlayer, which tracks camera
       // direction when holding) so the object stays glued to the player regardless
       // of how the camera orbits.
@@ -152,6 +235,7 @@ export function useThrowable({
       groupRef.current.rotation.set(0, facingY, 0);
 
     } else if (phaseRef.current === 'thrown') {
+      groupRef.current.visible = true;
       prevPosRef.current.copy(posRef.current);
 
       velRef.current.y -= GRAVITY * delta;

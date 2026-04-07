@@ -1,7 +1,13 @@
-import { useRef } from 'react';
+import { useRef, useCallback, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { COLLISION_BOXES } from '../constants';
 import { Player } from '../types';
+
+/** Values derived from physics refs that must trigger React re-renders (refs alone do not). */
+export type PlayerPhysicsAvatarSnapshot = Readonly<{
+  grounded: boolean;
+  rolling: boolean;
+}>;
 
 // Pre-allocated objects to avoid per-frame GC pressure
 const _playerBox = new THREE.Box3();
@@ -27,7 +33,31 @@ export function usePlayerPhysics() {
   const prevJumpPressed = useRef(false);
   const prevForwardPressed = useRef(false);
 
-  function processJump(jump: boolean, onDoubleJump?: () => void) {
+  const avatarSnapshotRef = useRef<PlayerPhysicsAvatarSnapshot>({ grounded: true, rolling: false });
+  const avatarListenersRef = useRef(new Set<() => void>());
+
+  function pushAvatarSnapshot() {
+    const g = isGrounded.current;
+    const r = isRolling.current;
+    const s = avatarSnapshotRef.current;
+    if (s.grounded === g && s.rolling === r) return;
+    avatarSnapshotRef.current = { grounded: g, rolling: r };
+    avatarListenersRef.current.forEach((l) => l());
+  }
+
+  const subscribeAvatar = useCallback((onStoreChange: () => void) => {
+    avatarListenersRef.current.add(onStoreChange);
+    return () => {
+      avatarListenersRef.current.delete(onStoreChange);
+    };
+  }, []);
+
+  const getAvatarSnapshot = useCallback(() => avatarSnapshotRef.current, []);
+
+  function processJump(
+    jump: boolean,
+    opts?: { onDoubleJump?: () => void; tryConsumeParkourEnergy?: () => boolean }
+  ) {
     const justPressed = jump && !prevJumpPressed.current;
     prevJumpPressed.current = jump;
 
@@ -39,14 +69,23 @@ export function usePlayerPhysics() {
       isGrounded.current = false;
       jumpCount.current = 1;
     } else if (jumpCount.current === 1) {
+      if (opts?.tryConsumeParkourEnergy && !opts.tryConsumeParkourEnergy()) {
+        lastJumpTime.current = now;
+        pushAvatarSnapshot();
+        return;
+      }
       yVelocity.current = JUMP_FORCE;
       jumpCount.current = 2;
-      onDoubleJump?.();
+      opts?.onDoubleJump?.();
     }
     lastJumpTime.current = now;
+    pushAvatarSnapshot();
   }
 
-  function processRoll(forward: boolean, onRoll?: () => void) {
+  function processRoll(
+    forward: boolean,
+    opts?: { onRoll?: () => void; tryConsumeParkourEnergy?: () => boolean }
+  ) {
     const justPressed = forward && !prevForwardPressed.current;
     prevForwardPressed.current = forward;
 
@@ -54,11 +93,17 @@ export function usePlayerPhysics() {
 
     const now = Date.now();
     if (now - lastForwardTime.current < DOUBLE_TAP_MS && !isRolling.current) {
+      if (opts?.tryConsumeParkourEnergy && !opts.tryConsumeParkourEnergy()) {
+        lastForwardTime.current = now;
+        pushAvatarSnapshot();
+        return;
+      }
       isRolling.current = true;
       rollTimer.current = ROLL_DURATION;
-      onRoll?.();
+      opts?.onRoll?.();
     }
     lastForwardTime.current = now;
+    pushAvatarSnapshot();
   }
 
   function tickRoll(delta: number) {
@@ -66,6 +111,7 @@ export function usePlayerPhysics() {
       rollTimer.current -= delta;
       if (rollTimer.current <= 0) isRolling.current = false;
     }
+    pushAvatarSnapshot();
   }
 
   // Returns the new Y position after applying gravity and landing
@@ -110,6 +156,7 @@ export function usePlayerPhysics() {
       }
     }
 
+    pushAvatarSnapshot();
     return newY;
   }
 
@@ -142,12 +189,25 @@ export function usePlayerPhysics() {
     isGrounded,
     isRolling,
     rollTimer,
+    subscribeAvatar,
+    getAvatarSnapshot,
     processJump,
     processRoll,
     tickRoll,
     applyGravity,
     applyMovement,
   };
+}
+
+/**
+ * Subscribe to physics flags that affect React-rendered UI (avatar pose, etc.).
+ * Physics uses refs for the sim; this bridges ref updates to re-renders without ad-hoc useState per flag.
+ */
+export function usePlayerPhysicsAvatarSync(physics: {
+  subscribeAvatar: (onStoreChange: () => void) => () => void;
+  getAvatarSnapshot: () => PlayerPhysicsAvatarSnapshot;
+}) {
+  return useSyncExternalStore(physics.subscribeAvatar, physics.getAvatarSnapshot);
 }
 
 function hasCollision(position: [number, number, number], otherPlayers: Record<string, Player>, extraBoxes: THREE.Box3[] = []): boolean {

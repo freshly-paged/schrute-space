@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Monitor, Info } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
+import { useFocusSessionCompleteFeedback } from './hooks/useFocusSessionCompleteFeedback';
 import { useSocket } from './hooks/useSocket';
 import { useGameStore } from './store/useGameStore';
 
@@ -12,12 +13,15 @@ import { LandingPage } from './components/ui/LandingPage';
 import { HUDPanel } from './components/ui/HUDPanel';
 import { ChatPanel } from './components/ui/ChatPanel';
 import { PomodoroUI } from './components/ui/PomodoroUI';
+import { ParkourEnergyHint } from './components/ui/ParkourEnergyHint';
+import { WaterEnergyBuffOverlay } from './components/ui/WaterEnergyBuffOverlay';
 import { PaperBurst } from './components/ui/PaperBurst';
 import { AvatarCustomizationPage } from './components/ui/AvatarCustomizationPage';
 import { OfficeCustomizationPage } from './components/ui/OfficeCustomizationPage';
 import { RoomLeaderboard } from './components/ui/RoomLeaderboard';
 import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
 import { ComputerInterface } from './components/ui/ComputerInterface';
+import { VendingMenu } from './components/ui/VendingMenu';
 import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
@@ -48,8 +52,36 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const { isTimerActive, paperReams, avatarConfig, setAvatarConfig, setPaperReams, roomLayout, setRoomLayout, roomInfo, showLeaderboard, setShowLeaderboard, showAdminPanel, setShowAdminPanel, showComputerInterface, setShowComputerInterface, setUser } = useGameStore();
+  const {
+    isTimerActive,
+    paperReams,
+    avatarConfig,
+    setAvatarConfig,
+    setPaperReams,
+    roomLayout,
+    setRoomLayout,
+    roomInfo,
+    showLeaderboard,
+    setShowLeaderboard,
+    showAdminPanel,
+    setShowAdminPanel,
+    showComputerInterface,
+    setShowComputerInterface,
+    showVendingMenu,
+    setShowVendingMenu,
+    setHeldIceCream,
+    setUser,
+    playerProfileLoaded,
+    playerProfileDisplayName,
+    playerProfileJobTitle,
+    setPlayerProfileFromServer,
+    focusEnergy,
+    setFocusEnergy,
+    tickFocusEnergyWallClock,
+  } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+
+  useFocusSessionCompleteFeedback();
 
   useEffect(() => {
     setUser(user ?? null);
@@ -70,6 +102,9 @@ export default function App() {
     setShowLeaderboard(false);
     setShowAdminPanel(false);
     setShowComputerInterface(false);
+    setShowVendingMenu(false);
+    setHeldIceCream(null);
+    socket?.emit('playerIceCream', { flavorIndex: null, expiresAt: null });
     window.location.search = '';
   };
 
@@ -83,16 +118,66 @@ export default function App() {
     }
   }, [user, currentRoom]);
 
-  // Load player stats from DB when on landing page
+  // Load paper, avatar, profile, and focus energy from DB whenever the authenticated user is known
   useEffect(() => {
-    if (!user || currentRoom) return;
+    if (!user) return;
     fetch('/api/player', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         if (typeof data.paperReams === 'number') setPaperReams(data.paperReams);
+        if (typeof data.focusEnergy === 'number' && Number.isFinite(data.focusEnergy)) {
+          setFocusEnergy(data.focusEnergy);
+        }
         if (data.avatarConfig) setAvatarConfig(data.avatarConfig);
+        setPlayerProfileFromServer({
+          displayName: data.displayName ?? null,
+          jobTitle: data.jobTitle ?? null,
+        });
       })
       .catch(() => {});
+  }, [user, setPaperReams, setAvatarConfig, setPlayerProfileFromServer, setFocusEnergy]);
+
+  const storeUser = useGameStore((s) => s.user);
+
+  useEffect(() => {
+    if (!storeUser) {
+      useGameStore.setState({ focusEnergyLastTickAt: 0 });
+      return;
+    }
+    const syncEnergy = () => tickFocusEnergyWallClock();
+    const id = setInterval(syncEnergy, 1000);
+    const onVis = () => syncEnergy();
+    window.addEventListener('focus', onVis);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('focus', onVis);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [storeUser, tickFocusEnergyWallClock]);
+
+  // Persist focus energy on the hub (no socket). In-room saves use `saveFocusEnergy` in useSocket.
+  useEffect(() => {
+    if (!user || currentRoom) return;
+    const persistFocusEnergy = () => {
+      const s = useGameStore.getState();
+      const mode =
+        s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
+      void fetch('/api/player/focus-energy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ energy: s.focusEnergy, mode }),
+      }).catch(() => {});
+    };
+    const intervalId = setInterval(persistFocusEnergy, 4000);
+    const onUnload = () => persistFocusEnergy();
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      persistFocusEnergy();
+      clearInterval(intervalId);
+      window.removeEventListener('beforeunload', onUnload);
+    };
   }, [user, currentRoom]);
 
   const handleSaveOfficeLayout = useCallback(async (layout: FurnitureItem[]) => {
@@ -105,16 +190,36 @@ export default function App() {
     });
   }, [currentRoom, setRoomLayout]);
 
-  const handleSaveAvatar = useCallback(async (config: typeof avatarConfig) => {
-    setAvatarConfig(config);
-    await fetch('/api/avatar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(config),
-    });
-    setView('landing');
-  }, [setAvatarConfig]);
+  const handleSaveAvatar = useCallback(
+    async (payload: {
+      config: typeof avatarConfig;
+      displayName: string;
+      jobTitle: string;
+    }) => {
+      setAvatarConfig(payload.config);
+      setPlayerProfileFromServer({
+        displayName: payload.displayName,
+        jobTitle: payload.jobTitle ? payload.jobTitle : null,
+      });
+      await fetch('/api/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...payload.config,
+          displayName: payload.displayName,
+          jobTitle: payload.jobTitle || null,
+        }),
+      });
+      setView('landing');
+    },
+    [setAvatarConfig, setPlayerProfileFromServer]
+  );
+
+  const visibleDisplayName =
+    playerProfileLoaded && user
+      ? (playerProfileDisplayName?.trim() || user.name)
+      : user?.name ?? '';
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -146,8 +251,11 @@ export default function App() {
     );
   }
 
-  // ── Not authenticated (IAP misconfigured or session missing) ────────────
+  // ── Not authenticated (IAP in prod, or /api/auth/me failed) ───────────────
   if (!user) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isLocal =
+      host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-50 p-6">
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-10 rounded-3xl shadow-2xl max-w-md text-center">
@@ -155,7 +263,17 @@ export default function App() {
             <Monitor className="text-red-400 w-10 h-10" />
           </div>
           <h2 className="text-white text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="text-slate-300 mb-8">Access is managed by Identity-Aware Proxy. Please ensure you are signed in.</p>
+          <p className="text-slate-300 mb-8">
+            {isLocal ? (
+              <>
+                The app could not load your session from <code className="text-indigo-300">/api/auth/me</code>. Make sure
+                the dev server is running and you are opening the same origin (e.g.{' '}
+                <code className="text-indigo-300">http://localhost:8080</code>), not a static preview on another port.
+              </>
+            ) : (
+              <>Access is managed by Google Identity-Aware Proxy. Sign in with your allowed Google account, then retry.</>
+            )}
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-xl transition-all"
@@ -172,6 +290,8 @@ export default function App() {
     return (
       <AvatarCustomizationPage
         config={avatarConfig}
+        initialDisplayName={visibleDisplayName}
+        initialJobTitle={playerProfileJobTitle ?? ''}
         onSave={handleSaveAvatar}
         onBack={() => setView('landing')}
       />
@@ -192,7 +312,16 @@ export default function App() {
 
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
-    return <LandingPage onJoin={handleJoin} userName={user.name} onLogout={logout} onCustomize={() => setView('customize')} avatarConfig={avatarConfig} paperReams={paperReams} />;
+    return (
+      <LandingPage
+        onJoin={handleJoin}
+        userName={visibleDisplayName}
+        onLogout={logout}
+        onCustomize={() => setView('customize')}
+        avatarConfig={avatarConfig}
+        paperReams={paperReams}
+      />
+    );
   }
 
   // ── Game ─────────────────────────────────────────────────────────────────
@@ -211,6 +340,7 @@ export default function App() {
               isConnected={isConnected}
               currentRoom={currentRoom}
               paperReams={paperReams}
+              focusEnergy={focusEnergy}
               onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
@@ -220,6 +350,8 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
+      <ParkourEnergyHint />
+      <WaterEnergyBuffOverlay />
       <PaperBurst />
       <InspectOverlay />
 
@@ -257,6 +389,10 @@ export default function App() {
         />
       )}
 
+      {showVendingMenu && currentRoom && (
+        <VendingMenu socket={socket} onClose={() => setShowVendingMenu(false)} />
+      )}
+
       {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
           <RoomAdminPanel roomId={currentRoom} onClose={() => setShowAdminPanel(false)} />
@@ -287,7 +423,7 @@ export default function App() {
               socket={socket}
               lastMessage={lastLocalMessage?.text}
               lastMessageTime={lastLocalMessage?.time}
-              playerName={user.name}
+              playerName={visibleDisplayName}
               players={players}
             />
             {Object.values(players).map((player) => (

@@ -17,11 +17,13 @@
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| C1 | **In-game currency (paper reams)** | Passive income during focus sessions (1 ream/30s) — already implemented | `[x]` |
+| C1 | **In-game currency (paper reams)** | Passive income during focus sessions; rate scales with monitor upgrade level and focus energy (energy-scaled multiplier from `focusEnergyModel.ts`) | `[x]` |
 | C2 | **Level progression** | XP from focus time, tasks completed, activities; visible level badge on avatar | `[ ]` |
 | C3 | **Shop** | Spend reams on premium outfits, desk items, office decorations | `[ ]` |
-| C4 | **Upgrades** | Better chair, dual monitor, bobblehead, Dwight's beet farm poster, etc. | `[ ]` |
+| C4 | **Upgrades** | Chair upgrades (boost seated energy regen, up to max level) and monitor upgrades (boost ream earn rate) — purchased at vending machine; levels stored in DB and synced per room | `[x]` |
 | C5 | **Dundie Awards** | Long-term achievement trophies (e.g. "100 Hours Focused") displayed on desk; grant stat boosts | `[ ]` |
+| C6 | **Leaderboard** | Per-room leaderboard ranked by all-time reams earned (`total_paper_reams_earned` in DB); polls every 5 min; shows display name, job title, and role badge | `[x]` |
+| C7 | **Focus energy stamina** | Desk stamina (0–100) drains during focus, regens while idle; chair level boosts seated regen; low energy reduces walk speed and earn rate; parkour costs energy | `[x]` |
 
 ---
 
@@ -29,9 +31,9 @@
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| P1 | **Pomodoro timer** | 25-min focus sessions with desk locking — already implemented | `[x]` |
+| P1 | **Pomodoro timer** | 25-min focus sessions with desk locking; notifies via toast when session completes naturally | `[x]` |
 | P2 | **Todo list** | Personal per-player task list; completing tasks awards XP/reams | `[ ]` |
-| P3 | **Break activities** | Triggered when pomodoro ends: visit break room for coffee buff, water cooler chat for team synergy buff | `[ ]` |
+| P3 | **Break activities** | Water cooler grants 5-min energy buff; vending machine gives ice cream treat with chair-regen hint; coffee machine present in break room | `[~]` |
 
 ---
 
@@ -39,10 +41,11 @@
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| S1 | **Team rooms with player limits** | Fixed assigned seats per room; unlimited visitors; room assignment persists in DB | `[ ]` |
+| S1 | **Team rooms with player limits** | Rooms exist with role system (admin/manager/worker) and member limits; room admin panel for management | `[x]` |
 | S2 | **Shared team progress bar** | Collective goal tracking (e.g. team focus hours, tasks closed) visible in HUD | `[ ]` |
 | S3 | **Team synergy buffs** | Reward coordinated breaks, water cooler interactions, shared goals with passive bonuses | `[ ]` |
-| S4 | **Chat / emotes** | Basic chat + emotes already implemented | `[x]` |
+| S4 | **Chat / emotes** | Basic chat + emotes; auto-scrolls to latest messages | `[x]` |
+| S5 | **Display name & job title** | Players set custom display name and job title (stored in DB); shown on desk nameplates, above avatar, and in leaderboard | `[x]` |
 
 ---
 
@@ -59,10 +62,12 @@
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| W1 | **Office visual revamp** | Current Three.js scene is bare; needs proper textures, furniture models, lighting, and The Office set dressing | `[~]` |
-| W2 | **Break room** | Separate area / sub-room with coffee machine, couch, fridge; triggers break activity buffs | `[ ]` |
-| W3 | **Water cooler** | Interactable prop near common area for team synergy interactions | `[ ]` |
-| W4 | **Conference room** | Dedicated space for meeting state (R1) and potential minigames | `[ ]` |
+| W1 | **Office visual revamp** | Sub-rooms, props, and set dressing in progress; multiple rooms with distinct layouts | `[~]` |
+| W2 | **Break room** | Break room with vending machine (ice cream), water cooler, coffee machine, plants, and chairs | `[x]` |
+| W3 | **Water cooler** | Interactable; grants 5-min energy buff on approach | `[x]` |
+| W4 | **Conference room** | Conference room with interactive whiteboard | `[x]` |
+| W5 | **Manager's office** | Manager's office with boss desk, Dwight bobblehead, Dundie award, and wearable Michael Scott body suit prop | `[x]` |
+| W6 | **Throwable / wearable props** | Players can pick up, throw, and wear props (e.g. Michael Scott body suit); state synced to all room members | `[x]` |
 
 ---
 

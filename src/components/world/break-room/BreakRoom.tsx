@@ -2,6 +2,11 @@ import React from 'react';
 import { Box, Cylinder, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { FloorPlanRect } from '../../../types';
+import {
+  BREAK_ROOM_GROUP_POSITION,
+  VENDING_MACHINE_LOCAL_POSITION,
+  WATER_COOLER_LOCAL_POSITION,
+} from '../../../officeLayout';
 import { WallDef, wallsToBoxes } from '../../../utils/walls';
 import { Chair } from '../shared/props/Chair';
 import { WaterCooler } from './props/WaterCooler';
@@ -9,9 +14,9 @@ import { CoffeeMachine } from './props/CoffeeMachine';
 import { VendingMachine } from './props/VendingMachine';
 import { Plant } from '../shared/props/Plant';
 
-// Room: 32 wide × 14 deep, group at world [6, 0, -16]
+// Room: 32 wide × 14 deep; group position shared via officeLayout (server + client).
 // World extents: X[-9, +23], Z[-23, -9]
-const GROUP_OFFSET: [number, number, number] = [6, 0, -16];
+const GROUP_OFFSET = BREAK_ROOM_GROUP_POSITION;
 
 export const FLOOR_PLAN_RECT: FloorPlanRect = {
   label: 'Break Room', x1: -9, z1: -23, x2: 23, z2: -9, color: '#d1fae5',
@@ -83,10 +88,10 @@ export const BreakRoom = () => (
     <Chair position={[1.2, 0, 1]} rotation={[0, -Math.PI / 2, 0]} />
 
     {/* ── Water cooler (NW corner) ── */}
-    <WaterCooler position={[-13, 0, -5]} />
+    <WaterCooler position={WATER_COOLER_LOCAL_POSITION} />
 
     {/* ── Vending machine (east side) ── */}
-    <VendingMachine position={[13, 0, 0]} rotation={[0, -Math.PI / 2, 0]} />
+    <VendingMachine position={VENDING_MACHINE_LOCAL_POSITION} rotation={[0, -Math.PI / 2, 0]} />
 
     {/* ── Plants ── */}
     <Plant position={[-13, 0, 5]} />

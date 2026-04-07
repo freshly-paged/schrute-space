@@ -1,0 +1,117 @@
+name: Fix GitHub Issues with Claude Code
+
+on:
+  # Manual: processes all open issues currently labelled 'claude-fix'
+  workflow_dispatch:
+    inputs:
+      extra_instructions:
+        description: "Optional extra instructions injected into Claude's prompt (e.g. 'Prefer early returns', 'Use Tailwind, not inline styles')"
+        required: false
+        type: string
+        default: ""
+      auto_merge:
+        description: "Automatically merge the PR and delete the branch after creation"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  fix-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write   # needed to remove the 'claude-fix' label after fixing
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install project dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Cache Claude Code CLI
+        id: cache-claude
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm-global
+          key: claude-code-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Claude Code CLI
+        if: steps.cache-claude.outputs.cache-hit != 'true'
+        run: |
+          npm config set prefix ~/.npm-global
+          npm install -g @anthropic-ai/claude-code@latest
+
+      - name: Add Claude CLI to PATH
+        run: echo "$HOME/.npm-global/bin" >> $GITHUB_PATH
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve issue numbers
+        id: issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NUMBERS=$(gh issue list --label "claude-fix" --state open --json number --jq '[.[].number] | join(",")')
+          if [ -z "$NUMBERS" ]; then
+            echo "No open issues labelled 'claude-fix' found."
+            exit 1
+          fi
+          echo "numbers=$NUMBERS" >> $GITHUB_OUTPUT
+
+      - name: Create fix branch
+        id: branch
+        run: |
+          SORTED=$(echo "${{ steps.issues.outputs.numbers }}" | tr ',' '\n' | sort -n | tr '\n' '-' | sed 's/-$//')
+          BRANCH="fix/issues-${SORTED}"
+          git checkout -b "$BRANCH"
+          echo "name=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Run Claude issue fixer
+        id: fixer
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBERS: ${{ steps.issues.outputs.numbers }}
+          EXTRA_INSTRUCTIONS: ${{ inputs.extra_instructions }}
+          REPO: ${{ github.repository }}
+        run: node .github/scripts/fix-issues.mjs
+
+      - name: Push branch
+        run: git push origin "${{ steps.branch.outputs.name }}"
+
+      - name: Open pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "${{ steps.fixer.outputs.pr_title }}" \
+            --body "${{ steps.fixer.outputs.pr_body }}" \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}")
+          echo "url=$PR_URL" >> $GITHUB_OUTPUT
+
+      - name: Auto-merge PR
+        if: inputs.auto_merge == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ steps.pr.outputs.url }}" --merge --delete-branch

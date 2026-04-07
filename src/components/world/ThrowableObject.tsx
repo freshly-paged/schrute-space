@@ -15,6 +15,7 @@
 import React from 'react';
 import { Billboard, Text } from '@react-three/drei';
 import { useThrowable } from '../../hooks/useThrowable';
+import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
 interface ThrowableObjectProps {
   id: string;
@@ -24,6 +25,8 @@ interface ThrowableObjectProps {
   restPosition: [number, number, number];
   restRotation?: [number, number, number];
   proximityRadius?: number;
+  /** Upper-body wearables: [E] while held equips; [G] puts down (no throw). */
+  wearable?: boolean;
   children: React.ReactNode;
 }
 
@@ -35,9 +38,19 @@ export function ThrowableObject({
   restPosition,
   restRotation,
   proximityRadius,
+  wearable,
   children,
 }: ThrowableObjectProps) {
-  const { groupRef, phase, isNear } = useThrowable({ id, label, description, assetKey, restPosition, restRotation, proximityRadius });
+  const { groupRef, phase, isNear } = useThrowable({
+    id,
+    label,
+    description,
+    assetKey,
+    restPosition,
+    restRotation,
+    proximityRadius,
+    wearable,
+  });
 
   return (
     <group ref={groupRef}>
@@ -53,6 +66,7 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.012}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
             {label}
           </Text>
@@ -69,6 +83,7 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.01}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
             [E] Pick Up    [F] Inspect
           </Text>
@@ -84,8 +99,9 @@ export function ThrowableObject({
             anchorY="middle"
             outlineWidth={0.01}
             outlineColor="black"
+            onSync={onOverlayTextSync}
           >
-            [E] Put Down    [G] Throw
+            {wearable ? '[E] Wear    [G] Put Down' : '[E] Put Down    [G] Throw'}
           </Text>
         </Billboard>
       )}

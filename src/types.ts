@@ -22,8 +22,18 @@ export interface Player {
   rollTimer?: number;
   isFocused?: boolean;
   focusProgress?: number; // 0-1
+  /** Index into seated leg presets; set when focused. */
+  focusSitPoseIndex?: number;
   activeDeskId?: string | null;
   avatarConfig?: AvatarConfig;
+  /** Prop id from ThrowableObject (e.g. ms_body) worn on the torso; synced for multiplayer. */
+  wornPropId?: string | null;
+  /** Throwable id currently held in hands; synced for multiplayer. */
+  heldThrowableId?: string | null;
+  /** Vend-O-Matic ice cream flavor index (0..4); only shown while not expired. */
+  iceCreamFlavorIndex?: number | null;
+  /** Wall-clock ms when the ice cream prop disappears (client + server validated). */
+  iceCreamExpiresAt?: number | null;
 }
 
 export interface FurnitureItem {
@@ -63,6 +73,8 @@ export type RoomRole = 'admin' | 'manager' | 'worker';
 export interface RoomMember {
   email: string;
   name: string | null;
+  /** Job title from `users.job_title`; optional for older API payloads. */
+  jobTitle?: string | null;
   role: RoomRole;
   isOnline?: boolean;
 }

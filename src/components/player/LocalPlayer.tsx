@@ -4,17 +4,35 @@ import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-thre
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
-import { getDeterministicColor, COLLISION_BOXES } from '../../constants';
+import { getDeterministicColor, COLLISION_BOXES, ROLL_PIVOT_Y } from '../../constants';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
-import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
+import { usePlayerPhysics, usePlayerPhysicsAvatarSync } from '../../hooks/usePlayerPhysics';
+import { MS_BODY_THROWABLE_ID } from '../../propIds';
+import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
+import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import {
+  PARKOUR_FOCUS_ENERGY_COST,
+  PARKOUR_MIN_ENERGY_REQUIRED,
+  focusWalkSpeedMultiplier,
+} from '../../focusEnergyModel';
+import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
+import { onOverlayTextSync } from '../../utils/overlayTextSync';
+
+function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
+  if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
+}
 
 const BOUNDS = 22;
 const CAMERA_BOUNDS = 22;
 // Camera is clamped within this radius of the player to prevent wall-clipping
 const CAMERA_ORBIT_LEASH = 13;
+
+const WALK_MOVE_SPEED = 6;
+const ROLL_MOVE_SPEED = 18;
+const MOVE_SPEED_SCALE = 1;
 
 interface LocalPlayerProps {
   socket: Socket | null;
@@ -49,6 +67,7 @@ export const LocalPlayer = ({
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
   const physics = usePlayerPhysics();
+  const avatarPhysics = usePlayerPhysicsAvatarSync(physics);
 
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
   const activeDeskId = useGameStore((state) => state.activeDeskId);
@@ -56,9 +75,14 @@ export const LocalPlayer = ({
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const isChatFocused = useGameStore((state) => state.isChatFocused);
   const isInspecting = useGameStore((state) => state.inspectedObject !== null);
+  const showVendingMenu = useGameStore((state) => state.showVendingMenu);
   const timeLeft = useGameStore((state) => state.timeLeft);
+  const focusSitPoseIndex = useGameStore((state) => state.focusSitPoseIndex);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
+  const wornPropId = useGameStore((state) => state.wornPropId);
+  const heldIceCream = useGameStore((state) => state.heldIceCream);
+  const heldObjectId = useGameStore((state) => state.heldObjectId);
 
   // Build AABB collision boxes for each desk based on its current position/rotation
   const deskBoxes = useMemo(() =>
@@ -91,12 +115,19 @@ export const LocalPlayer = ({
       isFocused: isTimerActive,
       focusProgress,
       activeDeskId: isTimerActive ? activeDeskId : null,
+      focusSitPoseIndex: isTimerActive ? focusSitPoseIndex : undefined,
     });
-  }, [socket, isTimerActive, timeLeft, activeDeskId]);
+  }, [socket, isTimerActive, timeLeft, activeDeskId, focusSitPoseIndex]);
 
   useFrame((state, delta) => {
     // Keep camera below roof
     if (state.camera.position.y > 7.5) state.camera.position.y = 7.5;
+
+    const ice = useGameStore.getState().heldIceCream;
+    if (ice && Date.now() >= ice.expiresAt) {
+      useGameStore.getState().setHeldIceCream(null);
+      socket?.connected && socket.emit('playerIceCream', { flavorIndex: null, expiresAt: null });
+    }
 
     // Track active desk while session is running
     if (isTimerActive && activeDeskId) {
@@ -130,7 +161,7 @@ export const LocalPlayer = ({
     const rawKeys = get();
 
     const keys =
-      isChatFocused || isTimerActive || isInspecting
+      isChatFocused || isTimerActive || isInspecting || showVendingMenu
         ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, computer: false, drop: false }
         : rawKeys;
     const { forward, backward, left, right, jump, interact, computer, drop } = keys;
@@ -148,26 +179,71 @@ export const LocalPlayer = ({
     // Throwable object interactions take priority over desk interactions
     let interactConsumed = false;
     if (interactEdge) {
-      const { heldObjectId, nearThrowableId, pickUpObject, dropObject } = useGameStore.getState();
-      if (heldObjectId !== null) {
-        // Put down at player feet
-        dropObject();
+      const {
+        heldObjectId,
+        nearThrowableId,
+        pickUpObject,
+        dropObject,
+        wearHeldProp,
+        clearWornProp,
+        wornPropId: wornId,
+      } = useGameStore.getState();
+
+      if (wornId === MS_BODY_THROWABLE_ID) {
+        const feet: [number, number, number] = [positionRef.current[0], 0.15, positionRef.current[2]];
+        const rot: [number, number, number] = [0, rotationRef.current[1], 0];
+        clearWornProp();
+        socket?.emit('playerWornProp', { propId: null });
+        socket?.emit('throwableRestSync', {
+          throwableId: MS_BODY_THROWABLE_ID,
+          position: feet,
+          rotation: rot,
+        });
+        interactConsumed = true;
+      } else if (heldObjectId !== null) {
+        if (heldObjectId === MS_BODY_THROWABLE_ID) {
+          wearHeldProp(MS_BODY_THROWABLE_ID);
+          emitHeldThrowableSync(socket, null);
+          socket?.emit('playerWornProp', { propId: MS_BODY_THROWABLE_ID });
+          socket?.connected &&
+            socket.emit(
+              'chatMessage',
+              'Am I a hero？I really can\'t say, but yes.'
+            );
+        } else {
+          dropObject();
+          emitHeldThrowableSync(socket, null);
+        }
         interactConsumed = true;
       } else if (nearThrowableId !== null) {
         pickUpObject(nearThrowableId);
+        emitHeldThrowableSync(socket, nearThrowableId);
         interactConsumed = true;
       }
     }
 
-    // Throw in the camera's forward direction with a fixed upward arc
+    // Throw in the camera's forward direction with a fixed upward arc (wearables put down with G instead)
     if (dropEdge) {
-      const { heldObjectId, throwObject } = useGameStore.getState();
+      const { heldObjectId, throwObject, dropObject } = useGameStore.getState();
       if (heldObjectId !== null) {
-        const camDir = new THREE.Vector3();
-        state.camera.getWorldDirection(camDir);
-        camDir.y = 0;
-        camDir.normalize();
-        throwObject([camDir.x * 10, 5, camDir.z * 10]);
+        if (heldObjectId === MS_BODY_THROWABLE_ID) {
+          dropObject();
+          emitHeldThrowableSync(socket, null);
+          const feet: [number, number, number] = [positionRef.current[0], 0.15, positionRef.current[2]];
+          const rot: [number, number, number] = [0, rotationRef.current[1], 0];
+          socket?.emit('throwableRestSync', {
+            throwableId: MS_BODY_THROWABLE_ID,
+            position: feet,
+            rotation: rot,
+          });
+        } else {
+          const camDir = new THREE.Vector3();
+          state.camera.getWorldDirection(camDir);
+          camDir.y = 0;
+          camDir.normalize();
+          throwObject([camDir.x * 10, 5, camDir.z * 10]);
+          emitHeldThrowableSync(socket, null);
+        }
       }
     }
 
@@ -176,6 +252,14 @@ export const LocalPlayer = ({
       const { nearWhiteboard, setShowLeaderboard } = useGameStore.getState();
       if (nearWhiteboard) {
         setShowLeaderboard(true);
+        interactConsumed = true;
+      }
+    }
+
+    if (!interactConsumed && interactEdge) {
+      const { nearVendingMachine, setShowVendingMenu } = useGameStore.getState();
+      if (nearVendingMachine) {
+        setShowVendingMenu(true);
         interactConsumed = true;
       }
     }
@@ -190,6 +274,7 @@ export const LocalPlayer = ({
 
     // Desk focus (E) — unchanged, works at any desk including own
     if (!interactConsumed && interact && nearestDeskId && !isTimerActive && !occupiedDeskIds.includes(nearestDeskId)) {
+      requestFocusNotificationPermissionIfNeeded();
       startTimer('focus');
     }
 
@@ -227,14 +312,78 @@ export const LocalPlayer = ({
               rollTimer: 0,
             });
         }
+
+        // Apply camera follow and bounds clamping during focus session
+        if (controlsRef.current) {
+          const focusPos = positionRef.current;
+          const focusTarget = new THREE.Vector3(
+            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[0])),
+            Math.max(0, Math.min(7.5, focusPos[1] + 1.5)),
+            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[2]))
+          );
+          controlsRef.current.target.lerp(focusTarget, 0.08);
+          controlsRef.current.update();
+
+          const cam = state.camera;
+          const px = focusPos[0];
+          const pz = focusPos[2];
+          cam.position.x = Math.max(
+            Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+          );
+          cam.position.z = Math.max(
+            Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+          );
+          cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+
+          const orbitTarget = controlsRef.current.target;
+          cameraRayRef.current.origin.copy(orbitTarget);
+          cameraRayRef.current.direction
+            .subVectors(cam.position, orbitTarget)
+            .normalize();
+          const desiredDist = cam.position.distanceTo(orbitTarget);
+          let nearestDist = desiredDist;
+
+          for (const box of COLLISION_BOXES) {
+            if (cameraRayRef.current.intersectBox(box, cameraHitRef.current)) {
+              const d = orbitTarget.distanceTo(cameraHitRef.current);
+              if (d < nearestDist) nearestDist = d;
+            }
+          }
+
+          if (nearestDist < desiredDist) {
+            cam.position
+              .copy(orbitTarget)
+              .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
+          }
+        }
+
         return;
       }
     }
 
-    const speed = (physics.isRolling.current ? 12 : 5) * delta;
+    const rolling = physics.isRolling.current;
+    const walkEnergyMult = rolling ? 1 : focusWalkSpeedMultiplier(useGameStore.getState().focusEnergy);
+    const speed =
+      (rolling ? ROLL_MOVE_SPEED : WALK_MOVE_SPEED) * walkEnergyMult * MOVE_SPEED_SCALE * delta;
 
-    physics.processJump(jump, () => socket?.emit('chatMessage', 'PARKOUR!'));
-    physics.processRoll(forward, () => socket?.emit('chatMessage', 'PARKOUR!'));
+    const tryParkourEnergy = () => {
+      const s = useGameStore.getState();
+      if (s.focusEnergy < PARKOUR_MIN_ENERGY_REQUIRED) {
+        s.flashParkourEnergyInsufficientHint();
+        return false;
+      }
+      return s.consumeFocusEnergy(PARKOUR_FOCUS_ENERGY_COST);
+    };
+    physics.processJump(jump, {
+      onDoubleJump: () => socket?.emit('chatMessage', 'PARKOUR!'),
+      tryConsumeParkourEnergy: tryParkourEnergy,
+    });
+    physics.processRoll(forward, {
+      onRoll: () => socket?.emit('chatMessage', 'PARKOUR!'),
+      tryConsumeParkourEnergy: tryParkourEnergy,
+    });
     physics.tickRoll(delta);
 
     let newPosition: [number, number, number] = [...positionRef.current];
@@ -359,21 +508,51 @@ export const LocalPlayer = ({
         makeDefault
       />
       <group ref={playerRef} name="localPlayer">
-        <group ref={rollGroupRef}>
-          <CharacterAvatar
-            color={playerColor}
-            isMoving={isMoving}
-            isGrounded={physics.isGrounded.current}
-            isRolling={physics.isRolling.current}
-            skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
-            pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
-          />
+        <group position={[0, ROLL_PIVOT_Y, 0]}>
+          <group ref={rollGroupRef}>
+            <group position={[0, -ROLL_PIVOT_Y, 0]}>
+              <WaterEnergyAura />
+              <CharacterAvatar
+                color={playerColor}
+                isMoving={isMoving}
+                isGrounded={avatarPhysics.grounded}
+                isRolling={avatarPhysics.rolling}
+                skinTone={avatarConfig?.skinTone ?? DEFAULT_AVATAR_CONFIG.skinTone}
+                pantColor={avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
+                wornUpperPropId={wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
+                heldIceCreamColor={
+                  heldIceCream &&
+                  Date.now() < heldIceCream.expiresAt &&
+                  heldObjectId === null
+                    ? iceCreamColorForIndex(heldIceCream.flavorIndex)
+                    : null
+                }
+                isFocused={isTimerActive}
+                focusSitPoseIndex={focusSitPoseIndex}
+              />
+            </group>
+          </group>
         </group>
         <Billboard position={[0, 2.2, 0]}>
           <Text fontSize={0.3} color="yellow" anchorX="center" anchorY="middle">
             {playerName}
           </Text>
         </Billboard>
+        {wornPropId === MS_BODY_THROWABLE_ID && (
+          <Billboard position={[0, 1.18, 0.42]}>
+            <Text
+              fontSize={0.14}
+              color="#a5f3fc"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.008}
+              outlineColor="black"
+              onSync={onOverlayTextSync}
+            >
+              [E] Take off Michael Suit
+            </Text>
+          </Billboard>
+        )}
         {isTimerActive && (
           <Billboard position={[0, 3.0, 0]}>
             {/* Outer background */}

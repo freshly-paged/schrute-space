@@ -51,7 +51,7 @@ describe('usePlayerPhysics — processJump', () => {
     });
     act(() => {
       result.current.processJump(false);       // release
-      result.current.processJump(true, onDoubleJump); // second jump
+      result.current.processJump(true, { onDoubleJump }); // second jump
     });
     expect(onDoubleJump).toHaveBeenCalledTimes(1);
   });
@@ -63,9 +63,9 @@ describe('usePlayerPhysics — processJump', () => {
       result.current.isGrounded.current = true;
       result.current.processJump(true);
       result.current.processJump(false);
-      result.current.processJump(true, onDoubleJump); // 2nd jump
+      result.current.processJump(true, { onDoubleJump }); // 2nd jump
       result.current.processJump(false);
-      result.current.processJump(true, onDoubleJump); // 3rd attempt — should be ignored
+      result.current.processJump(true, { onDoubleJump }); // 3rd attempt — should be ignored
     });
     expect(onDoubleJump).toHaveBeenCalledTimes(1); // only the 2nd jump
   });
@@ -99,12 +99,12 @@ describe('usePlayerPhysics — processRoll', () => {
     const onRoll = vi.fn();
 
     act(() => {
-      result.current.processRoll(true, onRoll);  // first tap — press
-      result.current.processRoll(false, onRoll); // release
+      result.current.processRoll(true, { onRoll });  // first tap — press
+      result.current.processRoll(false, { onRoll }); // release
     });
     vi.advanceTimersByTime(200); // 200ms later — within DOUBLE_TAP_MS=300
     act(() => {
-      result.current.processRoll(true, onRoll);  // second tap
+      result.current.processRoll(true, { onRoll });  // second tap
     });
 
     expect(onRoll).toHaveBeenCalledTimes(1);
@@ -116,12 +116,12 @@ describe('usePlayerPhysics — processRoll', () => {
     const onRoll = vi.fn();
 
     act(() => {
-      result.current.processRoll(true, onRoll);
-      result.current.processRoll(false, onRoll);
+      result.current.processRoll(true, { onRoll });
+      result.current.processRoll(false, { onRoll });
     });
     vi.advanceTimersByTime(400); // 400ms later — past DOUBLE_TAP_MS=300
     act(() => {
-      result.current.processRoll(true, onRoll);
+      result.current.processRoll(true, { onRoll });
     });
 
     expect(onRoll).not.toHaveBeenCalled();

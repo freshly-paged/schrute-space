@@ -13,8 +13,18 @@ function InspectModel({ assetKey }: { assetKey: string }) {
 
   // Re-fit after model geometry is available — handles the case where the GLB
   // wasn't already cached and Bounds measured an empty scene on first render.
+  // Double RAF ensures Two.js has finished computing bounding boxes before we
+  // ask Bounds to fit — a single frame is not always enough for complex models
+  // (e.g. the Michael Scott suit), causing the sporadic "model too small" bug.
   useEffect(() => {
-    bounds.refresh().fit();
+    let id1: number, id2: number;
+    id1 = requestAnimationFrame(() => {
+      id2 = requestAnimationFrame(() => bounds.refresh().fit());
+    });
+    return () => {
+      cancelAnimationFrame(id1);
+      cancelAnimationFrame(id2);
+    };
   }, [scene, bounds]);
 
   return <primitive object={scene.clone()} />;

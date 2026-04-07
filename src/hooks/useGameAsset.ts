@@ -20,6 +20,7 @@ import { useGLTF } from '@react-three/drei';
 const ASSETS = {
   dundie:            '/assets/dundie.glb',
   dwight_bobblehead: '/assets/dwight_bobblehead.glb',
+  ms_body:           '/assets/ms_body.glb',
 } as const;
 
 export type AssetKey = keyof typeof ASSETS;

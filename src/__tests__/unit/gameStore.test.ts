@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useGameStore } from '../../store/useGameStore';
 
 // useGameStore is a Zustand module-level singleton, so we must reset relevant
 // slices before each test to prevent state leakage between tests.
+// timerEndsAt, sessionPaperAccruedFloat, and lastFocusPaperTickAt are required
+// by the wall-clock based tickTimer added in the main branch.
 function resetStore() {
   useGameStore.setState({
     paperReams: 0,
@@ -14,6 +16,12 @@ function resetStore() {
     lastPaperEarnedAt: 0,
     nearestDeskId: null,
     activeDeskId: null,
+    timerEndsAt: null,
+    sessionPaperAccruedFloat: 0,
+    lastFocusPaperTickAt: 0,
+    focusEnergy: 100,
+    monitorLevelByEmail: {},
+    user: undefined,
   });
 }
 
@@ -95,9 +103,19 @@ describe('useGameStore — timer lifecycle', () => {
 });
 
 // ── tickTimer ─────────────────────────────────────────────────────────────────
+//
+// tickTimer is wall-clock based: timeLeft = ceil((timerEndsAt - Date.now()) / 1000).
+// Paper accrual is dt-based: addFloat = (reamsPerMin / 60) * dtSec.
+// Baseline: focusReamsPerMinute(0) = 2 reams/min, focusReamMultiplier(100) = 1.
+// So: 2/60 reams/sec → 1 whole ream per 30 seconds (same threshold, different mechanism).
+// Tests use vi.useFakeTimers() so Date.now() is fully controlled.
 
 describe('useGameStore — tickTimer', () => {
-  beforeEach(resetStore);
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetStore();
+  });
+  afterEach(() => vi.useRealTimers());
 
   it('does nothing when timer is not active', () => {
     useGameStore.getState().tickTimer();
@@ -108,60 +126,67 @@ describe('useGameStore — tickTimer', () => {
   it('does nothing when timer is paused', () => {
     useGameStore.getState().startTimer('focus');
     useGameStore.getState().togglePause();
-    const before = useGameStore.getState().timeLeft;
+    vi.advanceTimersByTime(2000);
     useGameStore.getState().tickTimer();
-    expect(useGameStore.getState().timeLeft).toBe(before);
+    // timeLeft should still reflect the original 1500 since we're paused
+    expect(useGameStore.getState().timeLeft).toBe(1500);
   });
 
-  it('decrements timeLeft by 1 each call', () => {
+  it('decrements timeLeft as wall clock advances', () => {
     useGameStore.getState().startTimer('focus');
+    vi.advanceTimersByTime(1000); // advance 1 second
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().timeLeft).toBe(1499);
+    vi.advanceTimersByTime(1000);
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().timeLeft).toBe(1498);
   });
 
-  it('stops timer when timeLeft is already 0 (called with timeLeft=0)', () => {
-    // tickTimer guard: if (state.timeLeft <= 0) stop immediately
-    useGameStore.setState({ isTimerActive: true, isTimerPaused: false, timerMode: 'focus', timeLeft: 0 });
+  it('stops timer when the end time is reached', () => {
+    useGameStore.getState().startTimer('focus');
+    vi.advanceTimersByTime(25 * 60 * 1000 + 1000); // past full 25 minutes
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().isTimerActive).toBe(false);
     expect(useGameStore.getState().activeDeskId).toBeNull();
   });
 
-  it('awards 1 paper at tick 30 (timeLeft drops to 1470)', () => {
-    // Paper logic: (1500 - newTimeLeft) % 30 === 0 && newTimeLeft < 1500
-    // At tick 30: newTimeLeft=1470, (1500-1470)=30, 30%30===0 → award
+  it('awards paper after 30 seconds of focus (baseline 2 reams/min)', () => {
+    // 2 reams/min = 1 ream/30s. Advance 30s, call tickTimer to trigger accrual.
     useGameStore.getState().startTimer('focus');
-    for (let i = 0; i < 30; i++) useGameStore.getState().tickTimer();
+    vi.advanceTimersByTime(30 * 1000); // 30 seconds
+    useGameStore.getState().tickTimer();
     expect(useGameStore.getState().sessionPaper).toBe(1);
     expect(useGameStore.getState().paperReams).toBe(1);
   });
 
-  it('awards 2 papers total at tick 60 (timeLeft=1440)', () => {
+  it('awards 2 papers after 60 seconds of focus', () => {
     useGameStore.getState().startTimer('focus');
-    for (let i = 0; i < 60; i++) useGameStore.getState().tickTimer();
+    vi.advanceTimersByTime(60 * 1000); // 60 seconds
+    useGameStore.getState().tickTimer();
     expect(useGameStore.getState().sessionPaper).toBe(2);
     expect(useGameStore.getState().paperReams).toBe(2);
   });
 
   it('does NOT award paper during break mode', () => {
     useGameStore.getState().startTimer('break');
-    for (let i = 0; i < 30; i++) useGameStore.getState().tickTimer();
+    vi.advanceTimersByTime(60 * 1000);
+    useGameStore.getState().tickTimer();
     expect(useGameStore.getState().paperReams).toBe(0);
     expect(useGameStore.getState().sessionPaper).toBe(0);
   });
 
   it('updates lastPaperEarnedAt when paper is awarded', () => {
     useGameStore.getState().startTimer('focus');
-    for (let i = 0; i < 30; i++) useGameStore.getState().tickTimer();
+    vi.advanceTimersByTime(30 * 1000);
+    useGameStore.getState().tickTimer();
     expect(useGameStore.getState().lastPaperEarnedAt).toBeGreaterThan(0);
   });
 
   it('paper earned accumulates on top of existing paperReams', () => {
     useGameStore.setState({ paperReams: 100 });
     useGameStore.getState().startTimer('focus');
-    for (let i = 0; i < 30; i++) useGameStore.getState().tickTimer();
+    vi.advanceTimersByTime(30 * 1000);
+    useGameStore.getState().tickTimer();
     expect(useGameStore.getState().paperReams).toBe(101);
   });
 });
