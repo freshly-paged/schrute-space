@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
+import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
 import { useGameStore } from '../../store/useGameStore';
+import { FocusEnergyBar } from './FocusEnergyBar';
 
 export const PomodoroUI = () => {
   const {
@@ -17,11 +19,14 @@ export const PomodoroUI = () => {
     sessionPaper,
     user,
     monitorLevelByEmail,
+    focusEnergy,
   } = useGameStore();
-  const focusEarnPerMin =
+  const baseFocusPerMin =
     user?.email !== undefined
       ? focusReamsPerMinute(monitorLevelByEmail[user.email] ?? 0)
       : focusReamsPerMinute(0);
+  const focusEarnPerMin =
+    Math.round(baseFocusPerMin * focusReamMultiplier(focusEnergy) * 10) / 10;
 
   useEffect(() => {
     if (!isTimerActive || isTimerPaused) return;
@@ -75,7 +80,8 @@ export const PomodoroUI = () => {
             </div>
 
             {timerMode === 'focus' && (
-              <div className="flex flex-col items-center gap-1 mb-6">
+              <div className="flex flex-col items-center gap-1 mb-6 w-full max-w-[220px]">
+                <FocusEnergyBar focusEnergy={focusEnergy} className="w-full mb-3" showDecayHint />
                 <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold animate-pulse text-center">
                   {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
                 </div>

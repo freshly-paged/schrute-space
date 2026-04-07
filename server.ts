@@ -29,6 +29,13 @@ import {
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
 import { totalPaperReamsEarnedFloor } from "./src/paperReamsLifetime.js";
+import {
+  FOCUS_ENERGY_MAX,
+  clampFocusEnergy,
+  settleFocusEnergy,
+  parseFocusEnergyMode,
+  type FocusEnergyMode,
+} from "./src/focusEnergyModel.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -119,6 +126,19 @@ async function initDb() {
   await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS total_paper_reams_earned INTEGER NOT NULL DEFAULT 0
   `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy DOUBLE PRECISION NOT NULL DEFAULT 100
+  `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy_updated_at BIGINT
+  `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy_mode TEXT NOT NULL DEFAULT 'idle'
+  `);
+  await pool!.query(`
+    UPDATE users SET focus_energy_updated_at = (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
+    WHERE focus_energy_updated_at IS NULL
+  `);
   await backfillTotalPaperReamsEarned();
 }
 
@@ -167,6 +187,81 @@ async function savePaperReams(email: string, count: number): Promise<void> {
        paper_reams = EXCLUDED.paper_reams,
        total_paper_reams_earned = users.total_paper_reams_earned + GREATEST(0, EXCLUDED.paper_reams - users.paper_reams)`,
     [email, c]
+  );
+}
+
+async function loadAndSettleFocusEnergy(email: string): Promise<number> {
+  if (isLocalTest()) return mem.memLoadAndSettleFocusEnergy(email);
+  await ensureUserRow(email);
+  const { rows } = await pool!.query<{
+    focus_energy: number;
+    focus_energy_updated_at: string | number | null;
+    focus_energy_mode: string;
+    chair_upgrade_level: number;
+  }>(
+    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
+            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
+     FROM users WHERE email = $1`,
+    [email]
+  );
+  const r = rows[0];
+  const now = Date.now();
+  const fromMs =
+    r?.focus_energy_updated_at != null ? Number(r.focus_energy_updated_at) : now;
+  const rawStored = Number(r?.focus_energy);
+  const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
+  const mode = parseFocusEnergyMode(r?.focus_energy_mode);
+  const chairLv = Number(r?.chair_upgrade_level ?? 0);
+  const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
+  await pool!.query(
+    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3 WHERE email = $4`,
+    [settled, now, mode, email]
+  );
+  return settled;
+}
+
+async function saveFocusEnergy(
+  email: string,
+  energy: number,
+  mode: FocusEnergyMode
+): Promise<void> {
+  if (isLocalTest()) return mem.memSaveFocusEnergy(email, energy, mode);
+  await ensureUserRow(email);
+  const now = Date.now();
+  const e = clampFocusEnergy(energy);
+  const m: FocusEnergyMode = mode === "focus" ? "focus" : "idle";
+  await pool!.query(
+    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3 WHERE email = $4`,
+    [e, now, m, email]
+  );
+}
+
+async function settleFocusEnergyOnDisconnect(email: string): Promise<void> {
+  if (isLocalTest()) return mem.memSettleFocusEnergyOnDisconnect(email);
+  const { rows } = await pool!.query<{
+    focus_energy: number;
+    focus_energy_updated_at: string | number | null;
+    focus_energy_mode: string;
+    chair_upgrade_level: number;
+  }>(
+    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
+            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
+     FROM users WHERE email = $1`,
+    [email]
+  );
+  if (!rows[0]) return;
+  const r = rows[0];
+  const now = Date.now();
+  const fromMs =
+    r.focus_energy_updated_at != null ? Number(r.focus_energy_updated_at) : now;
+  const rawStored = Number(r.focus_energy);
+  const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
+  const mode = parseFocusEnergyMode(r.focus_energy_mode);
+  const chairLv = Number(r.chair_upgrade_level ?? 0);
+  const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
+  await pool!.query(
+    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = 'idle' WHERE email = $3`,
+    [settled, now, email]
   );
 }
 
@@ -734,17 +829,33 @@ async function startServer() {
   app.get("/api/player", async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const [paperReams, avatarConfig, profile] = await Promise.all([
+    const [paperReams, avatarConfig, profile, focusEnergy] = await Promise.all([
       getPaperReams(user.email),
       getAvatarConfig(user.email),
       getUserProfileFields(user.email),
+      loadAndSettleFocusEnergy(user.email),
     ]);
     res.json({
       paperReams,
       avatarConfig,
       displayName: profile.display_name,
       jobTitle: profile.job_title,
+      focusEnergy,
     });
+  });
+
+  app.post("/api/player/focus-energy", express.json(), async (req, res) => {
+    const user = (req as any).user;
+    if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
+    const body = req.body ?? {};
+    const e = body.energy;
+    const m = body.mode;
+    if (typeof e !== "number" || !Number.isFinite(e)) {
+      return res.status(400).json({ error: "Invalid energy" });
+    }
+    const mode: FocusEnergyMode = m === "focus" ? "focus" : "idle";
+    await saveFocusEnergy(user.email, e, mode);
+    res.json({ ok: true });
   });
 
   app.post("/api/avatar", express.json(), async (req, res) => {
@@ -1071,6 +1182,9 @@ io.on("connection", (socket) => {
       getPaperReams(user.email).then((count) => {
         socket.emit("paperReamsLoaded", count);
       });
+      loadAndSettleFocusEnergy(user.email).then((energy) => {
+        socket.emit("focusEnergyLoaded", energy);
+      });
       getAvatarConfig(user.email).then((config) => {
         if (config) {
           rooms[room][socket.id].avatarConfig = config;
@@ -1131,6 +1245,14 @@ io.on("connection", (socket) => {
       if (typeof count === 'number' && count >= 0) {
         savePaperReams(user.email, Math.floor(count));
       }
+    });
+
+    socket.on("saveFocusEnergy", (payload: { energy?: unknown; mode?: unknown }) => {
+      const e = payload?.energy;
+      const m = payload?.mode;
+      if (typeof e !== "number" || !Number.isFinite(e)) return;
+      const mode: FocusEnergyMode = m === "focus" ? "focus" : "idle";
+      void saveFocusEnergy(user.email, e, mode);
     });
 
     socket.on(
@@ -1381,7 +1503,11 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
-      
+
+      if (user?.email) {
+        void settleFocusEnergyOnDisconnect(user.email);
+      }
+
       if (user?.email && activeUsers.get(user.email) === socket.id) {
         activeUsers.delete(user.email);
       }

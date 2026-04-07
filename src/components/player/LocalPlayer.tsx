@@ -13,6 +13,11 @@ import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import {
+  PARKOUR_FOCUS_ENERGY_COST,
+  PARKOUR_MIN_ENERGY_REQUIRED,
+  focusWalkSpeedMultiplier,
+} from '../../focusEnergyModel';
 import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
@@ -24,6 +29,10 @@ const BOUNDS = 22;
 const CAMERA_BOUNDS = 22;
 // Camera is clamped within this radius of the player to prevent wall-clipping
 const CAMERA_ORBIT_LEASH = 13;
+
+const WALK_MOVE_SPEED = 6;
+const ROLL_MOVE_SPEED = 18;
+const MOVE_SPEED_SCALE = 1;
 
 interface LocalPlayerProps {
   socket: Socket | null;
@@ -307,10 +316,27 @@ export const LocalPlayer = ({
       }
     }
 
-    const speed = (physics.isRolling.current ? 12 : 5) * delta;
+    const rolling = physics.isRolling.current;
+    const walkEnergyMult = rolling ? 1 : focusWalkSpeedMultiplier(useGameStore.getState().focusEnergy);
+    const speed =
+      (rolling ? ROLL_MOVE_SPEED : WALK_MOVE_SPEED) * walkEnergyMult * MOVE_SPEED_SCALE * delta;
 
-    physics.processJump(jump, () => socket?.emit('chatMessage', 'PARKOUR!'));
-    physics.processRoll(forward, () => socket?.emit('chatMessage', 'PARKOUR!'));
+    const tryParkourEnergy = () => {
+      const s = useGameStore.getState();
+      if (s.focusEnergy < PARKOUR_MIN_ENERGY_REQUIRED) {
+        s.flashParkourEnergyInsufficientHint();
+        return false;
+      }
+      return s.consumeFocusEnergy(PARKOUR_FOCUS_ENERGY_COST);
+    };
+    physics.processJump(jump, {
+      onDoubleJump: () => socket?.emit('chatMessage', 'PARKOUR!'),
+      tryConsumeParkourEnergy: tryParkourEnergy,
+    });
+    physics.processRoll(forward, {
+      onRoll: () => socket?.emit('chatMessage', 'PARKOUR!'),
+      tryConsumeParkourEnergy: tryParkourEnergy,
+    });
     physics.tickRoll(delta);
 
     let newPosition: [number, number, number] = [...positionRef.current];

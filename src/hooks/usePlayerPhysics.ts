@@ -54,7 +54,10 @@ export function usePlayerPhysics() {
 
   const getAvatarSnapshot = useCallback(() => avatarSnapshotRef.current, []);
 
-  function processJump(jump: boolean, onDoubleJump?: () => void) {
+  function processJump(
+    jump: boolean,
+    opts?: { onDoubleJump?: () => void; tryConsumeParkourEnergy?: () => boolean }
+  ) {
     const justPressed = jump && !prevJumpPressed.current;
     prevJumpPressed.current = jump;
 
@@ -66,15 +69,23 @@ export function usePlayerPhysics() {
       isGrounded.current = false;
       jumpCount.current = 1;
     } else if (jumpCount.current === 1) {
+      if (opts?.tryConsumeParkourEnergy && !opts.tryConsumeParkourEnergy()) {
+        lastJumpTime.current = now;
+        pushAvatarSnapshot();
+        return;
+      }
       yVelocity.current = JUMP_FORCE;
       jumpCount.current = 2;
-      onDoubleJump?.();
+      opts?.onDoubleJump?.();
     }
     lastJumpTime.current = now;
     pushAvatarSnapshot();
   }
 
-  function processRoll(forward: boolean, onRoll?: () => void) {
+  function processRoll(
+    forward: boolean,
+    opts?: { onRoll?: () => void; tryConsumeParkourEnergy?: () => boolean }
+  ) {
     const justPressed = forward && !prevForwardPressed.current;
     prevForwardPressed.current = forward;
 
@@ -82,9 +93,14 @@ export function usePlayerPhysics() {
 
     const now = Date.now();
     if (now - lastForwardTime.current < DOUBLE_TAP_MS && !isRolling.current) {
+      if (opts?.tryConsumeParkourEnergy && !opts.tryConsumeParkourEnergy()) {
+        lastForwardTime.current = now;
+        pushAvatarSnapshot();
+        return;
+      }
       isRolling.current = true;
       rollTimer.current = ROLL_DURATION;
-      onRoll?.();
+      opts?.onRoll?.();
     }
     lastForwardTime.current = now;
     pushAvatarSnapshot();

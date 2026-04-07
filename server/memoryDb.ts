@@ -2,6 +2,12 @@
 
 import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
 import { totalPaperReamsEarnedFloor } from "../src/paperReamsLifetime.js";
+import {
+  clampFocusEnergy,
+  settleFocusEnergy,
+  parseFocusEnergyMode,
+  type FocusEnergyMode,
+} from "../src/focusEnergyModel.js";
 
 /** Starting paper reams for each mock player in local test mode. */
 export const LOCAL_TEST_INITIAL_PAPER_REAMS = 1000;
@@ -31,6 +37,9 @@ interface UserRow {
   job_title: string | null;
   chair_upgrade_level: number;
   monitor_upgrade_level: number;
+  focus_energy: number;
+  focus_energy_updated_at: number;
+  focus_energy_mode: FocusEnergyMode;
 }
 
 interface RoomRow {
@@ -60,6 +69,7 @@ export async function memGetPaperReams(email: string): Promise<number> {
 }
 
 function defaultUserRow(): UserRow {
+  const now = Date.now();
   return {
     paper_reams: LOCAL_TEST_INITIAL_PAPER_REAMS,
     total_paper_reams_earned: LOCAL_TEST_INITIAL_PAPER_REAMS,
@@ -68,6 +78,9 @@ function defaultUserRow(): UserRow {
     job_title: null,
     chair_upgrade_level: 0,
     monitor_upgrade_level: 0,
+    focus_energy: 100,
+    focus_energy_updated_at: now,
+    focus_energy_mode: "idle",
   };
 }
 
@@ -219,6 +232,61 @@ export async function memGetRoomMemberCount(roomId: string): Promise<number> {
 export async function memEnsureUser(email: string): Promise<void> {
   if (users.has(email)) return;
   users.set(email, defaultUserRow());
+}
+
+function patchFocusEnergyFields(u: UserRow): void {
+  if (typeof u.focus_energy !== "number" || !Number.isFinite(u.focus_energy)) {
+    u.focus_energy = 100;
+  }
+  if (typeof u.focus_energy_updated_at !== "number" || !Number.isFinite(u.focus_energy_updated_at)) {
+    u.focus_energy_updated_at = Date.now();
+  }
+  if (u.focus_energy_mode !== "focus" && u.focus_energy_mode !== "idle") {
+    u.focus_energy_mode = "idle";
+  }
+}
+
+/** Settle from stored row to now, persist snapshot, return display energy. */
+export async function memLoadAndSettleFocusEnergy(email: string): Promise<number> {
+  const u = users.get(email) ?? defaultUserRow();
+  patchFocusEnergyFields(u);
+  const now = Date.now();
+  const mode = parseFocusEnergyMode(u.focus_energy_mode);
+  const chairLv = mode === "focus" ? u.chair_upgrade_level : 0;
+  const settled = settleFocusEnergy(u.focus_energy, u.focus_energy_updated_at, now, mode, chairLv);
+  u.focus_energy = settled;
+  u.focus_energy_updated_at = now;
+  u.focus_energy_mode = mode;
+  users.set(email, u);
+  return settled;
+}
+
+export async function memSaveFocusEnergy(
+  email: string,
+  energy: number,
+  mode: FocusEnergyMode
+): Promise<void> {
+  const u = users.get(email) ?? defaultUserRow();
+  patchFocusEnergyFields(u);
+  u.focus_energy = clampFocusEnergy(energy);
+  u.focus_energy_updated_at = Date.now();
+  u.focus_energy_mode = mode === "focus" ? "focus" : "idle";
+  users.set(email, u);
+}
+
+/** On socket disconnect: settle to now with last mode, then force idle for offline regen. */
+export async function memSettleFocusEnergyOnDisconnect(email: string): Promise<void> {
+  const u = users.get(email);
+  if (!u) return;
+  patchFocusEnergyFields(u);
+  const now = Date.now();
+  const mode = parseFocusEnergyMode(u.focus_energy_mode);
+  const chairLv = mode === "focus" ? u.chair_upgrade_level : 0;
+  const settled = settleFocusEnergy(u.focus_energy, u.focus_energy_updated_at, now, mode, chairLv);
+  u.focus_energy = settled;
+  u.focus_energy_updated_at = now;
+  u.focus_energy_mode = "idle";
+  users.set(email, u);
 }
 
 /** Sets display_name from auth only when the user has no display_name yet (matches PG COALESCE seed). */
