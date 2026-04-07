@@ -13,23 +13,12 @@ The **Fix GitHub Issues with Claude Code** workflow automatically generates code
 
 ## Triggering a fix
 
-There are two ways to queue issues for fixing:
+1. Apply the `claude-fix` label to any open issues you want fixed
+2. Go to **Actions → "Fix GitHub Issues with Claude Code" → Run workflow**
+3. Optionally fill in **Extra instructions** to inject guidance into Claude's prompt for that run (e.g. `Prefer early returns`, `Use Tailwind, not inline styles`)
+4. Click **Run workflow**
 
-### Option A — Label an issue (automatic)
-
-Apply the `claude-fix` label to any open issue. The workflow fires automatically within seconds.
-
-- Works on one issue at a time
-- No extra configuration needed
-- The label is automatically removed after the fix is committed
-
-### Option B — Manual batch run
-
-Go to **Actions → "Fix GitHub Issues with Claude Code" → Run workflow**.
-
-The workflow picks up **all** open issues currently labelled `claude-fix` and processes them in one run. An optional **Extra instructions** field lets you inject guidance into Claude's prompt for that run (e.g. `Prefer early returns`, `Use Tailwind, not inline styles`).
-
-Use this when you've queued up several issues and want to fix them all at once.
+The workflow picks up all open issues currently labelled `claude-fix` and processes them in one run. The label is automatically removed from each issue after it is successfully fixed.
 
 ---
 

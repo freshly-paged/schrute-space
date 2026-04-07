@@ -1,10 +1,7 @@
 name: Fix GitHub Issues with Claude Code
 
 on:
-  # Automatic: fires when the 'claude-fix' label is applied to any issue
-  issues:
-    types: [labeled]
-  # Manual: batch-processes all open issues currently labelled 'claude-fix'
+  # Manual: processes all open issues currently labelled 'claude-fix'
   workflow_dispatch:
     inputs:
       extra_instructions:
@@ -15,8 +12,6 @@ on:
 
 jobs:
   fix-issues:
-    # For label events, only run when the applied label is 'claude-fix'
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'claude-fix'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,18 +44,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" == "issues" ]; then
-            # Single issue from the label event
-            echo "numbers=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          else
-            # All open issues with the claude-fix label
-            NUMBERS=$(gh issue list --label "claude-fix" --state open --json number --jq '[.[].number] | join(",")')
-            if [ -z "$NUMBERS" ]; then
-              echo "No open issues labelled 'claude-fix' found."
-              exit 1
-            fi
-            echo "numbers=$NUMBERS" >> $GITHUB_OUTPUT
+          NUMBERS=$(gh issue list --label "claude-fix" --state open --json number --jq '[.[].number] | join(",")')
+          if [ -z "$NUMBERS" ]; then
+            echo "No open issues labelled 'claude-fix' found."
+            exit 1
           fi
+          echo "numbers=$NUMBERS" >> $GITHUB_OUTPUT
 
       - name: Create fix branch
         id: branch
