@@ -1,7 +1,7 @@
 name: Bug Report
 description: File a bug for the auto-fix workflow to work on
 title: "[Bug] "
-labels: ["bug"]
+labels: ["bug", "claude-fix"]
 body:
   - type: textarea
     id: summary
