@@ -1,0 +1,59 @@
+name: Bug Report
+description: File a bug for the auto-fix workflow to work on
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What's wrong?
+      description: One or two sentences describing the bug clearly.
+      placeholder: "The CW button in the office layout editor rotates the desk counterclockwise instead of clockwise."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to trigger the bug. The more specific, the better Claude can target the fix.
+      placeholder: |
+        1. Open the office customization page
+        2. Click a desk to select it
+        3. Click "CW ↻"
+        4. The desk rotates counterclockwise
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead?
+      placeholder: "Clicking CW ↻ should rotate the desk clockwise in the 2D preview."
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Where in the UI / which feature?
+      description: |
+        Name the screen, component, or feature area. Optionally paste the relevant file path
+        if you know it — this helps Claude navigate directly to the right code.
+      placeholder: |
+        Office Customization Page — the 2D SVG desk editor
+        Likely file: src/components/ui/OfficeCustomizationPage.tsx
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context (optional)
+      description: |
+        Screenshots, console errors, relevant socket events, or any hypothesis about the root cause.
+        Paste error text as plain text, not screenshots — Claude can read text but not images.
+      placeholder: "The SVG uses a negated rotation angle (rotDeg = -rotation[1]), so the button directions may be inverted."
+    validations:
+      required: false
