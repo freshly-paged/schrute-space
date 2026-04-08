@@ -10,6 +10,7 @@ import {
 import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
 import { POMODORO_FOCUS_DURATION_SEC, POMODORO_BREAK_DURATION_SEC } from '../gameConfig';
+import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
 
 interface GameState {
@@ -249,9 +250,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Passive generation during focus: dt-based; rate scales with monitors and current focus energy.
     if (state.timerMode === 'focus') {
       const now = Date.now();
-      const email = state.user?.email;
+      const upgradeEmail = getEffectiveDeskUpgradeEmail(
+        state.roomLayout,
+        state.activeDeskId,
+        state.user?.email
+      );
       const rawLv =
-        email !== undefined ? (state.monitorLevelByEmail[email] ?? 0) : 0;
+        upgradeEmail !== undefined ? (state.monitorLevelByEmail[upgradeEmail] ?? 0) : 0;
       const monitorLv = Math.min(
         MONITOR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawLv))
@@ -313,9 +318,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       const inSeatedFocus =
         state.isTimerActive && state.timerMode === 'focus' && !state.isTimerPaused;
       const mode = inSeatedFocus ? 'focus' : 'idle';
-      const email = state.user?.email;
+      const upgradeEmail = inSeatedFocus
+        ? getEffectiveDeskUpgradeEmail(
+            state.roomLayout,
+            state.activeDeskId,
+            state.user?.email
+          )
+        : undefined;
       const rawChair =
-        inSeatedFocus && email !== undefined ? (state.chairLevelByEmail[email] ?? 0) : 0;
+        upgradeEmail !== undefined ? (state.chairLevelByEmail[upgradeEmail] ?? 0) : 0;
       const chairLv = Math.min(
         CHAIR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawChair))

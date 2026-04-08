@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
+import { getEffectiveDeskUpgradeEmail } from '../../deskOwner';
 import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
 import { useGameStore } from '../../store/useGameStore';
@@ -16,14 +17,21 @@ export const PomodoroUI = () => {
     stopTimer,
     togglePause,
     nearestDeskId,
+    activeDeskId,
+    roomLayout,
     sessionPaper,
     user,
     monitorLevelByEmail,
     focusEnergy,
   } = useGameStore();
+  const upgradeEmail = getEffectiveDeskUpgradeEmail(
+    roomLayout,
+    activeDeskId,
+    user?.email
+  );
   const baseFocusPerMin =
-    user?.email !== undefined
-      ? focusReamsPerMinute(monitorLevelByEmail[user.email] ?? 0)
+    upgradeEmail !== undefined
+      ? focusReamsPerMinute(monitorLevelByEmail[upgradeEmail] ?? 0)
       : focusReamsPerMinute(0);
   const focusEarnPerMin =
     Math.round(baseFocusPerMin * focusReamMultiplier(focusEnergy) * 10) / 10;

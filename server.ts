@@ -137,6 +137,9 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy_mode TEXT NOT NULL DEFAULT 'idle'
   `);
   await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy_desk_owner_email TEXT
+  `);
+  await pool!.query(`
     UPDATE users SET focus_energy_updated_at = (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
     WHERE focus_energy_updated_at IS NULL
   `);
@@ -191,6 +194,13 @@ async function savePaperReams(email: string, count: number): Promise<void> {
   );
 }
 
+function normalizeFocusDeskOwnerEmail(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (t.length === 0 || t.length > 320 || !t.includes("@")) return null;
+  return t;
+}
+
 async function loadAndSettleFocusEnergy(email: string): Promise<number> {
   if (isLocalTest()) return mem.memLoadAndSettleFocusEnergy(email);
   await ensureUserRow(email);
@@ -199,10 +209,14 @@ async function loadAndSettleFocusEnergy(email: string): Promise<number> {
     focus_energy_updated_at: string | number | null;
     focus_energy_mode: string;
     chair_upgrade_level: number;
+    effective_focus_chair: number;
   }>(
-    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
-            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
-     FROM users WHERE email = $1`,
+    `SELECT u.focus_energy, u.focus_energy_updated_at, u.focus_energy_mode,
+            COALESCE(u.chair_upgrade_level, 0) AS chair_upgrade_level,
+            COALESCE(o.chair_upgrade_level, u.chair_upgrade_level) AS effective_focus_chair
+     FROM users u
+     LEFT JOIN users o ON o.email = u.focus_energy_desk_owner_email
+     WHERE u.email = $1`,
     [email]
   );
   const r = rows[0];
@@ -212,7 +226,10 @@ async function loadAndSettleFocusEnergy(email: string): Promise<number> {
   const rawStored = Number(r?.focus_energy);
   const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
   const mode = parseFocusEnergyMode(r?.focus_energy_mode);
-  const chairLv = Number(r?.chair_upgrade_level ?? 0);
+  const chairLv =
+    mode === "focus"
+      ? Number(r?.effective_focus_chair ?? r?.chair_upgrade_level ?? 0)
+      : Number(r?.chair_upgrade_level ?? 0);
   const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
   await pool!.query(
     `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3 WHERE email = $4`,
@@ -224,16 +241,20 @@ async function loadAndSettleFocusEnergy(email: string): Promise<number> {
 async function saveFocusEnergy(
   email: string,
   energy: number,
-  mode: FocusEnergyMode
+  mode: FocusEnergyMode,
+  focusDeskOwnerEmail: string | null = null
 ): Promise<void> {
-  if (isLocalTest()) return mem.memSaveFocusEnergy(email, energy, mode);
+  if (isLocalTest()) return mem.memSaveFocusEnergy(email, energy, mode, focusDeskOwnerEmail);
   await ensureUserRow(email);
   const now = Date.now();
   const e = clampFocusEnergy(energy);
   const m: FocusEnergyMode = mode === "focus" ? "focus" : "idle";
+  const deskRef = m === "focus" ? focusDeskOwnerEmail : null;
   await pool!.query(
-    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3 WHERE email = $4`,
-    [e, now, m, email]
+    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3,
+            focus_energy_desk_owner_email = $5
+     WHERE email = $4`,
+    [e, now, m, email, deskRef]
   );
 }
 
@@ -244,10 +265,14 @@ async function settleFocusEnergyOnDisconnect(email: string): Promise<void> {
     focus_energy_updated_at: string | number | null;
     focus_energy_mode: string;
     chair_upgrade_level: number;
+    effective_focus_chair: number;
   }>(
-    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
-            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
-     FROM users WHERE email = $1`,
+    `SELECT u.focus_energy, u.focus_energy_updated_at, u.focus_energy_mode,
+            COALESCE(u.chair_upgrade_level, 0) AS chair_upgrade_level,
+            COALESCE(o.chair_upgrade_level, u.chair_upgrade_level) AS effective_focus_chair
+     FROM users u
+     LEFT JOIN users o ON o.email = u.focus_energy_desk_owner_email
+     WHERE u.email = $1`,
     [email]
   );
   if (!rows[0]) return;
@@ -258,10 +283,15 @@ async function settleFocusEnergyOnDisconnect(email: string): Promise<void> {
   const rawStored = Number(r.focus_energy);
   const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
   const mode = parseFocusEnergyMode(r.focus_energy_mode);
-  const chairLv = Number(r.chair_upgrade_level ?? 0);
+  const chairLv =
+    mode === "focus"
+      ? Number(r.effective_focus_chair ?? r.chair_upgrade_level ?? 0)
+      : Number(r.chair_upgrade_level ?? 0);
   const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
   await pool!.query(
-    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = 'idle' WHERE email = $3`,
+    `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = 'idle',
+            focus_energy_desk_owner_email = NULL
+     WHERE email = $3`,
     [settled, now, email]
   );
 }
@@ -858,7 +888,9 @@ export async function createApp(injectedPool?: pg.Pool) {
       return res.status(400).json({ error: "Invalid energy" });
     }
     const mode: FocusEnergyMode = m === "focus" ? "focus" : "idle";
-    await saveFocusEnergy(user.email, e, mode);
+    const deskOwner =
+      mode === "focus" ? normalizeFocusDeskOwnerEmail(body.deskOwnerEmail) : null;
+    await saveFocusEnergy(user.email, e, mode, deskOwner);
     res.json({ ok: true });
   });
 
@@ -1251,13 +1283,18 @@ io.on("connection", (socket) => {
       }
     });
 
-    socket.on("saveFocusEnergy", (payload: { energy?: unknown; mode?: unknown }) => {
-      const e = payload?.energy;
-      const m = payload?.mode;
-      if (typeof e !== "number" || !Number.isFinite(e)) return;
-      const mode: FocusEnergyMode = m === "focus" ? "focus" : "idle";
-      void saveFocusEnergy(user.email, e, mode);
-    });
+    socket.on(
+      "saveFocusEnergy",
+      (payload: { energy?: unknown; mode?: unknown; deskOwnerEmail?: unknown }) => {
+        const e = payload?.energy;
+        const m = payload?.mode;
+        if (typeof e !== "number" || !Number.isFinite(e)) return;
+        const mode: FocusEnergyMode = m === "focus" ? "focus" : "idle";
+        const deskOwner =
+          mode === "focus" ? normalizeFocusDeskOwnerEmail(payload?.deskOwnerEmail) : null;
+        void saveFocusEnergy(user.email, e, mode, deskOwner);
+      }
+    );
 
     socket.on(
       "purchaseChairUpgrade",

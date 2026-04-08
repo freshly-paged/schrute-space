@@ -21,6 +21,7 @@ function resetStore() {
     lastFocusPaperTickAt: 0,
     focusEnergy: 100,
     monitorLevelByEmail: {},
+    roomLayout: [],
     user: undefined,
   });
 }
@@ -188,5 +189,28 @@ describe('useGameStore — tickTimer', () => {
     vi.advanceTimersByTime(30 * 1000);
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().paperReams).toBe(101);
+  });
+
+  it('uses desk owner monitor level for paper while focusing (not sitter)', () => {
+    useGameStore.setState({
+      nearestDeskId: 'desk-alice',
+      roomLayout: [
+        {
+          id: 'desk-alice',
+          type: 'desk',
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          config: { ownerEmail: 'alice@test', ownerName: 'Alice' },
+        },
+      ],
+      monitorLevelByEmail: { 'alice@test': 3 },
+      user: { email: 'bob@test', name: 'Bob' },
+    });
+    useGameStore.getState().startTimer('focus');
+    vi.advanceTimersByTime(30 * 1000);
+    useGameStore.getState().tickTimer();
+    // Owner monitor L3 → 5 reams/min → 2.5 in 30s → 2 whole reams (sitter bob has no upgrades)
+    expect(useGameStore.getState().sessionPaper).toBe(2);
+    expect(useGameStore.getState().paperReams).toBe(2);
   });
 });

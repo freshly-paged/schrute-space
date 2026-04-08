@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Player, ChatMessage, AvatarConfig, FurnitureItem, RoomInfo, RoomRole, RoomMember } from '../types';
 import { AuthUser } from './useAuth';
+import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { useGameStore } from '../store/useGameStore';
 import { MS_BODY_THROWABLE_ID } from '../propIds';
 
@@ -261,7 +262,15 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       const s = useGameStore.getState();
       const mode =
         s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
-      newSocket.emit('saveFocusEnergy', { energy: s.focusEnergy, mode });
+      const deskOwnerEmail =
+        mode === 'focus'
+          ? getEffectiveDeskUpgradeEmail(s.roomLayout, s.activeDeskId, s.user?.email) ?? null
+          : null;
+      newSocket.emit('saveFocusEnergy', {
+        energy: s.focusEnergy,
+        mode,
+        deskOwnerEmail,
+      });
     };
     const scheduleFocusSave = () => {
       if (focusSaveTimer) clearTimeout(focusSaveTimer);
@@ -275,7 +284,9 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
         state.focusEnergy === prev.focusEnergy &&
         state.isTimerActive === prev.isTimerActive &&
         state.timerMode === prev.timerMode &&
-        state.isTimerPaused === prev.isTimerPaused
+        state.isTimerPaused === prev.isTimerPaused &&
+        state.activeDeskId === prev.activeDeskId &&
+        state.roomLayout === prev.roomLayout
       ) {
         return;
       }

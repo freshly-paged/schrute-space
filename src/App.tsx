@@ -7,6 +7,7 @@ import { Monitor, Info } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useFocusSessionCompleteFeedback } from './hooks/useFocusSessionCompleteFeedback';
 import { useSocket } from './hooks/useSocket';
+import { getEffectiveDeskUpgradeEmail } from './deskOwner';
 import { useGameStore } from './store/useGameStore';
 
 import { LandingPage } from './components/ui/LandingPage';
@@ -163,11 +164,15 @@ export default function App() {
       const s = useGameStore.getState();
       const mode =
         s.isTimerActive && s.timerMode === 'focus' && !s.isTimerPaused ? 'focus' : 'idle';
+      const deskOwnerEmail =
+        mode === 'focus'
+          ? getEffectiveDeskUpgradeEmail(s.roomLayout, s.activeDeskId, s.user?.email) ?? null
+          : null;
       void fetch('/api/player/focus-energy', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ energy: s.focusEnergy, mode }),
+        body: JSON.stringify({ energy: s.focusEnergy, mode, deskOwnerEmail }),
       }).catch(() => {});
     };
     const intervalId = setInterval(persistFocusEnergy, 4000);
