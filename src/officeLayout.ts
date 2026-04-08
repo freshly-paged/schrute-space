@@ -36,5 +36,12 @@ export const WATER_COOLER_RADIUS = 2.5;
 /** Vending machine position local to the break room group (east side). */
 export const VENDING_MACHINE_LOCAL_POSITION: [number, number, number] = [13, 0, 0];
 
+/** Vending machine center in world space (break room group + local). */
+export const VENDING_MACHINE_WORLD_POSITION: [number, number, number] = [
+  BREAK_ROOM_GROUP_POSITION[0] + VENDING_MACHINE_LOCAL_POSITION[0],
+  BREAK_ROOM_GROUP_POSITION[1] + VENDING_MACHINE_LOCAL_POSITION[1],
+  BREAK_ROOM_GROUP_POSITION[2] + VENDING_MACHINE_LOCAL_POSITION[2],
+];
+
 /** Horizontal proximity radius for Vend-O-Matic interactions (meters). */
 export const VENDING_MACHINE_RADIUS = 2.5;
