@@ -1176,12 +1176,23 @@ const rooms: Record<string, Record<string, any>> = {};
 
 /** Per-room Team Pyramid buff expiry (epoch ms). In-memory only. */
 const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
+const TEAM_PYRAMID_SYSTEM_CHAT_TEXT = "Unleash the power of Pyramid!";
 
 function activeTeamPyramidBuffExpiresAt(roomId: string): number | null {
   const raw = roomTeamPyramidBuffExpiresAt[roomId];
   if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
   if (Date.now() >= raw) return null;
   return raw;
+}
+
+function systemChatMessage(text: string) {
+  return {
+    id: `system-${nanoid(10)}`,
+    playerId: "system",
+    playerName: "System",
+    text,
+    time: Date.now(),
+  };
 }
 
 const OFFICE_COLORS = [
@@ -1465,10 +1476,12 @@ io.on("connection", (socket) => {
             respond(result);
             return;
           }
-          const expiresAt = Date.now() + TEAM_PYRAMID_DURATION_MS;
+          const extensionBase = activeTeamPyramidBuffExpiresAt(playerRoom) ?? Date.now();
+          const expiresAt = extensionBase + TEAM_PYRAMID_DURATION_MS;
           roomTeamPyramidBuffExpiresAt[playerRoom] = expiresAt;
           socket.emit("paperReamsLoaded", result.paperReams);
           io.to(playerRoom).emit("teamPyramidBuffUpdated", { expiresAt });
+          io.to(playerRoom).emit("chatMessage", systemChatMessage(TEAM_PYRAMID_SYSTEM_CHAT_TEXT));
           respond({
             ok: true,
             paperReams: result.paperReams,
