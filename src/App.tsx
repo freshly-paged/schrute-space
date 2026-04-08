@@ -6,6 +6,7 @@ import { Monitor, Info } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
 import { useFocusSessionCompleteFeedback } from './hooks/useFocusSessionCompleteFeedback';
+import { useOfficeTutorial } from './hooks/useOfficeTutorial';
 import { useSocket } from './hooks/useSocket';
 import { getEffectiveDeskUpgradeEmail } from './deskOwner';
 import { useGameStore } from './store/useGameStore';
@@ -28,6 +29,8 @@ import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
 import { OtherPlayer } from './components/player/OtherPlayer';
+import { TutorialBanner } from './components/tutorial/TutorialBanner';
+import { TutorialPathGuide } from './components/tutorial/TutorialPathGuide';
 
 const KEYBOARD_MAP = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
@@ -226,6 +229,8 @@ export default function App() {
       ? (playerProfileDisplayName?.trim() || user.name)
       : user?.name ?? '';
 
+  const officeTutorial = useOfficeTutorial(user?.email, Boolean(currentRoom));
+
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
     return (
@@ -404,6 +409,10 @@ export default function App() {
         </div>
       )}
 
+      {officeTutorial.active && officeTutorial.phase && (
+        <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
+      )}
+
       <KeyboardControls map={keyboardMap}>
         <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 2, 5], fov: 50 }}>
           <color attach="background" args={['#1e293b']} />
@@ -434,6 +443,10 @@ export default function App() {
             {Object.values(players).map((player) => (
               <OtherPlayer key={player.id} player={player} />
             ))}
+            <TutorialPathGuide
+              visible={officeTutorial.active}
+              target={officeTutorial.targetPosition}
+            />
             <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
           </React.Suspense>
         </Canvas>
