@@ -28,6 +28,10 @@ import {
   MONITOR_UPGRADE_MAX_LEVEL,
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
+import {
+  TEAM_PYRAMID_COST_REAMS,
+  TEAM_PYRAMID_DURATION_MS,
+} from "./src/gameConfig.js";
 import { totalPaperReamsEarnedFloor } from "./src/paperReamsLifetime.js";
 import {
   FOCUS_ENERGY_MAX,
@@ -483,6 +487,57 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
     );
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper, monitorUpgradeLevel: newLevel };
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+type TeamPyramidPurchaseResult =
+  | { ok: true; paperReams: number }
+  | { ok: false; error: "insufficient" };
+
+async function purchaseTeamPyramidTxn(email: string): Promise<TeamPyramidPurchaseResult> {
+  if (isLocalTest()) {
+    return mem.memPurchaseTeamPyramid(email);
+  }
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const sel = await client.query(
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
+      [email]
+    );
+    if (sel.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const paper = sel.rows[0].paper_reams as number;
+    if (paper < TEAM_PYRAMID_COST_REAMS) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const newPaper = paper - TEAM_PYRAMID_COST_REAMS;
+    const chairLv = Number(sel.rows[0].chair_upgrade_level);
+    const monitorLv = Number(sel.rows[0].monitor_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, chairLv, monitorLv);
+    await client.query(
+      `UPDATE users SET paper_reams = $1,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $3)
+       WHERE email = $2`,
+      [newPaper, email, floor]
+    );
+    await client.query("COMMIT");
+    return { ok: true, paperReams: newPaper };
   } catch (err) {
     try {
       await client.query("ROLLBACK");
@@ -1119,6 +1174,16 @@ export async function createApp(injectedPool?: pg.Pool) {
   // Player state grouped by room
 const rooms: Record<string, Record<string, any>> = {};
 
+/** Per-room Team Pyramid buff expiry (epoch ms). In-memory only. */
+const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
+
+function activeTeamPyramidBuffExpiresAt(roomId: string): number | null {
+  const raw = roomTeamPyramidBuffExpiresAt[roomId];
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  if (Date.now() >= raw) return null;
+  return raw;
+}
+
 const OFFICE_COLORS = [
   "#4f46e5", // Indigo
   "#059669", // Emerald
@@ -1210,6 +1275,10 @@ io.on("connection", (socket) => {
 
       // Send current players in this room to the new player
       socket.emit("currentPlayers", rooms[room]);
+
+      socket.emit("teamPyramidBuffLoaded", {
+        expiresAt: activeTeamPyramidBuffExpiresAt(room),
+      });
 
       // Broadcast new player to others in the same room
       socket.to(room).emit("newPlayer", rooms[room][socket.id]);
@@ -1369,6 +1438,44 @@ io.on("connection", (socket) => {
           });
         } catch (e) {
           console.error("purchaseMonitorUpgrade:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
+    socket.on(
+      "purchaseTeamPyramid",
+      async (ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        let playerRoom = "";
+        for (const roomId in rooms) {
+          if (rooms[roomId][socket.id]) {
+            playerRoom = roomId;
+            break;
+          }
+        }
+        if (!playerRoom) {
+          respond({ ok: false, error: "not_in_room" });
+          return;
+        }
+        try {
+          await ensureUserRow(user.email);
+          const result = await purchaseTeamPyramidTxn(user.email);
+          if (!result.ok) {
+            respond(result);
+            return;
+          }
+          const expiresAt = Date.now() + TEAM_PYRAMID_DURATION_MS;
+          roomTeamPyramidBuffExpiresAt[playerRoom] = expiresAt;
+          socket.emit("paperReamsLoaded", result.paperReams);
+          io.to(playerRoom).emit("teamPyramidBuffUpdated", { expiresAt });
+          respond({
+            ok: true,
+            paperReams: result.paperReams,
+            expiresAt,
+          });
+        } catch (e) {
+          console.error("purchaseTeamPyramid:", e);
           respond({ ok: false, error: "server_error" });
         }
       }

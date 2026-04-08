@@ -105,3 +105,16 @@ export const ICE_CREAM_COST_REAMS = 2;
 
 /** Duration of the ice cream prop in milliseconds. */
 export const ICE_CREAM_DURATION_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// Vending machine — Team Pyramid (room buff)
+// ---------------------------------------------------------------------------
+
+/** Paper reams required to purchase the Team Pyramid room buff. */
+export const TEAM_PYRAMID_COST_REAMS = 80;
+
+/** How long the Team Pyramid buff lasts after purchase (milliseconds). */
+export const TEAM_PYRAMID_DURATION_MS = 3 * 60 * 60 * 1000;
+
+/** Multiplier applied to focus-session ream earn rate while the buff is active. */
+export const TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER = 1.5;

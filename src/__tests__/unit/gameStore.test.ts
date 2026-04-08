@@ -23,6 +23,7 @@ function resetStore() {
     monitorLevelByEmail: {},
     roomLayout: [],
     user: undefined,
+    teamPyramidBuffExpiresAt: null,
   });
 }
 
@@ -158,6 +159,16 @@ describe('useGameStore — tickTimer', () => {
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().sessionPaper).toBe(1);
     expect(useGameStore.getState().paperReams).toBe(1);
+  });
+
+  it('applies Team Pyramid buff (+50% reams/min) during focus', () => {
+    useGameStore.setState({ teamPyramidBuffExpiresAt: 1e15 });
+    useGameStore.getState().startTimer('focus');
+    vi.advanceTimersByTime(20 * 1000);
+    useGameStore.getState().tickTimer();
+    // Baseline 2/min → 0 whole reams in 20s; with ×1.5 → 3/min → 1 whole ream in 20s.
+    expect(useGameStore.getState().paperReams).toBe(1);
+    expect(useGameStore.getState().sessionPaper).toBe(1);
   });
 
   it('awards 2 papers after 60 seconds of focus', () => {

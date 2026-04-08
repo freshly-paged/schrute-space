@@ -224,6 +224,23 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    const applyTeamPyramidBuff = (payload: { expiresAt?: unknown }) => {
+      const raw = payload?.expiresAt;
+      if (raw == null) {
+        useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
+        return;
+      }
+      const n = typeof raw === 'number' ? raw : Number(raw);
+      if (!Number.isFinite(n) || Date.now() >= n) {
+        useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
+        return;
+      }
+      useGameStore.getState().setTeamPyramidBuffExpiresAt(n);
+    };
+
+    newSocket.on('teamPyramidBuffLoaded', applyTeamPyramidBuff);
+    newSocket.on('teamPyramidBuffUpdated', applyTeamPyramidBuff);
+
     newSocket.on('roomInfoLoaded', (info: RoomInfo) => {
       console.log(`[socket] roomInfoLoaded: role=${info.myRole ?? 'visitor'} members=${info.memberCount}`);
       useGameStore.getState().setRoomInfo(info);
@@ -306,6 +323,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().clearWornProp();
       useGameStore.getState().setNearWaterCooler(false);
       useGameStore.getState().setWaterBuffExpiresAt(null);
+      useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
       newSocket.disconnect();
     };
   }, [user, currentRoom]);

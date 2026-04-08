@@ -16,7 +16,11 @@ import {
   FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN,
 } from '../../focusEnergyModel';
 
-import { ICE_CREAM_COST_REAMS, ICE_CREAM_DURATION_MS } from '../../gameConfig';
+import {
+  ICE_CREAM_COST_REAMS,
+  ICE_CREAM_DURATION_MS,
+  TEAM_PYRAMID_COST_REAMS,
+} from '../../gameConfig';
 
 interface VendingMenuProps {
   onClose: () => void;
@@ -31,6 +35,10 @@ type MonitorPurchaseAck =
   | { ok: true; paperReams: number; monitorUpgradeLevel: number }
   | { ok: false; error: 'max_level' | 'insufficient' | 'not_in_room' | 'server_error' };
 
+type TeamPyramidPurchaseAck =
+  | { ok: true; paperReams: number; expiresAt: number }
+  | { ok: false; error: 'insufficient' | 'not_in_room' | 'server_error' };
+
 export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const paperReams = useGameStore((s) => s.paperReams);
   const addPaper = useGameStore((s) => s.addPaper);
@@ -41,6 +49,7 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const patchChairLevel = useGameStore((s) => s.patchChairLevel);
   const monitorLevelByEmail = useGameStore((s) => s.monitorLevelByEmail);
   const patchMonitorLevel = useGameStore((s) => s.patchMonitorLevel);
+  const setTeamPyramidBuffExpiresAt = useGameStore((s) => s.setTeamPyramidBuffExpiresAt);
   const [subView, setSubView] = useState<'main' | 'flavor'>('main');
   const [selectedFlavor, setSelectedFlavor] = useState(0);
   const [feedback, setFeedback] = useState<'insufficient' | 'offline' | null>(null);
@@ -51,6 +60,10 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const [monitorBusy, setMonitorBusy] = useState(false);
   const [monitorFeedback, setMonitorFeedback] = useState<
     'insufficient' | 'max_level' | 'offline' | 'not_in_room' | 'server_error' | null
+  >(null);
+  const [pyramidBusy, setPyramidBusy] = useState(false);
+  const [pyramidFeedback, setPyramidFeedback] = useState<
+    'insufficient' | 'offline' | 'not_in_room' | 'server_error' | null
   >(null);
 
   useEffect(() => {
@@ -79,6 +92,7 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const monitorMaxed = myMonitorLevel >= MONITOR_UPGRADE_MAX_LEVEL;
   const nextMonitorCost = monitorMaxed ? 0 : monitorUpgradeCostForNextLevel(myMonitorLevel);
   const canAffordMonitor = !monitorMaxed && paperReams >= nextMonitorCost;
+  const canAffordPyramid = paperReams >= TEAM_PYRAMID_COST_REAMS;
 
   const openFlavorSubmenu = () => {
     setFeedback(null);
@@ -180,6 +194,41 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
     });
   };
 
+  const handleBuyTeamPyramid = () => {
+    setPyramidFeedback(null);
+    if (!socket?.connected) {
+      setPyramidFeedback('offline');
+      return;
+    }
+    if (!canAffordPyramid) {
+      setPyramidFeedback('insufficient');
+      return;
+    }
+    setPyramidBusy(true);
+    socket.timeout(12_000).emit('purchaseTeamPyramid', (socketErr: Error | null, res: unknown) => {
+      setPyramidBusy(false);
+      if (socketErr) {
+        setPyramidFeedback('server_error');
+        return;
+      }
+      const r = res as TeamPyramidPurchaseAck;
+      if (!r || typeof r !== 'object' || !('ok' in r)) {
+        setPyramidFeedback('server_error');
+        return;
+      }
+      if (r.ok === true) {
+        setPaperReams(r.paperReams);
+        setTeamPyramidBuffExpiresAt(r.expiresAt);
+        onClose();
+        return;
+      }
+      const fail = r.error;
+      if (fail === 'insufficient') setPyramidFeedback('insufficient');
+      else if (fail === 'not_in_room') setPyramidFeedback('not_in_room');
+      else setPyramidFeedback('server_error');
+    });
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
@@ -233,6 +282,48 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
             >
               Buy ice cream
             </button>
+
+            <div className="border-2 border-fuchsia-600/45 bg-fuchsia-950/30 p-4 mb-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-fuchsia-100 mb-1">Team Pyramid</p>
+                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
+                    Team-wide buff: 3 hours of +50% paper reams for everyone while focusing. A floating
+                    sabre pyramid tablet appears above the office. Unleash the power of the pyramid!
+                  </p>
+                </div>
+                <span className="font-mono text-fuchsia-300 text-sm shrink-0">
+                  {TEAM_PYRAMID_COST_REAMS} reams
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBuyTeamPyramid}
+              disabled={!socketOk || pyramidBusy}
+              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full mb-5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {pyramidBusy ? 'Processing…' : `Buy Team Pyramid (${TEAM_PYRAMID_COST_REAMS} reams)`}
+            </button>
+            {pyramidFeedback === 'insufficient' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">Not enough reams.</p>
+            )}
+            {pyramidFeedback === 'not_in_room' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
+                Join the office room first.
+              </p>
+            )}
+            {pyramidFeedback === 'server_error' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
+                Could not complete purchase — try again.
+              </p>
+            )}
+            {pyramidFeedback === 'offline' && (
+              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
+                Not connected — try again when online.
+              </p>
+            )}
 
             <div className="border-2 border-amber-600/40 bg-amber-950/25 p-4 mb-4">
               <div className="flex items-center justify-between gap-4">
