@@ -11,30 +11,38 @@ import { ChatBubble } from '../ui/ChatBubble';
 import { getSyncedIceCreamState, iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { useGameStore } from '../../store/useGameStore';
 
+export function getFocusedDeskTransform(
+  player: Player,
+  roomLayout: { type: string; id: string; position: [number, number, number]; rotation: [number, number, number] }[]
+): { position: [number, number, number]; rotation: [number, number, number] } | null {
+  if (!player.isFocused || !player.activeDeskId) return null;
+  const desk = roomLayout.find(
+    (item): item is DeskItem => item.type === 'desk' && item.id === player.activeDeskId
+  );
+  if (!desk) return null;
+  const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    desk.rotation[1]
+  );
+  const position: [number, number, number] = [
+    desk.position[0] + chairOffset.x,
+    desk.position[1],
+    desk.position[2] + chairOffset.z,
+  ];
+  const rotation: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
+  return { position, rotation };
+}
+
 export const OtherPlayer = ({ player }: { player: Player }) => {
   const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
   const [, setIceCreamTick] = useState(0);
   const roomLayout = useGameStore((state) => state.roomLayout);
 
-  const focusedDeskTransform = useMemo(() => {
-    if (!player.isFocused || !player.activeDeskId) return null;
-    const desk = roomLayout.find(
-      (item): item is DeskItem => item.type === 'desk' && item.id === player.activeDeskId
-    );
-    if (!desk) return null;
-    const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      desk.rotation[1]
-    );
-    const position: [number, number, number] = [
-      desk.position[0] + chairOffset.x,
-      desk.position[1],
-      desk.position[2] + chairOffset.z,
-    ];
-    const rotation: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
-    return { position, rotation };
-  }, [player.isFocused, player.activeDeskId, roomLayout]);
+  const focusedDeskTransform = useMemo(
+    () => getFocusedDeskTransform(player, roomLayout),
+    [player, roomLayout]
+  );
 
   const syncedIce = getSyncedIceCreamState(player);
   const iceExp = syncedIce?.expiresAt ?? null;
