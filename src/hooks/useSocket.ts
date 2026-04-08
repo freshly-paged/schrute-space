@@ -59,7 +59,10 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       setIsConnected(true);
       setConnectionError(null);
       console.log(`[socket] connected id=${newSocket.id}, joining room=${currentRoom}`);
-      newSocket.emit('joinRoom', { roomId: currentRoom });
+      newSocket.emit('joinRoom', {
+        roomId: currentRoom,
+        focusEnergy: useGameStore.getState().focusEnergy,
+      });
     });
 
     newSocket.on('disconnect', (reason) => {
