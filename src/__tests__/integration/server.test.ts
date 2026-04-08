@@ -15,6 +15,7 @@ import request from 'supertest';
 import { io as ioc, type Socket } from 'socket.io-client';
 import type { AddressInfo } from 'net';
 import type pg from 'pg';
+import { TEAM_PYRAMID_DURATION_MS } from '../../gameConfig.js';
 
 // Static import so that dotenv.config() in server.ts runs exactly once (at
 // file load time), before any test manipulates process.env. Dynamic
@@ -252,6 +253,23 @@ function waitFor<T = unknown>(socket: Socket, event: string, timeout = 3000): Pr
   });
 }
 
+function emitWithAck<T = unknown>(
+  socket: Socket,
+  event: string,
+  timeout = 3000
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Timed out waiting for ack from "${event}"`)),
+      timeout
+    );
+    socket.emit(event, (payload: T) => {
+      clearTimeout(timer);
+      resolve(payload);
+    });
+  });
+}
+
 /**
  * Returns a pool whose query responses are tailored to a successful joinRoom
  * flow: ensureRoom (insert), getRoomMembers (empty → caller becomes admin),
@@ -438,6 +456,86 @@ describe('Socket.IO — chatMessage', () => {
     expect(msg.playerName).toBeTruthy();
     expect(msg.id).toBeTruthy();
     expect(typeof msg.time).toBe('number');
+  });
+});
+
+describe('Socket.IO — purchaseTeamPyramid', () => {
+  let httpServer: any;
+  let buyer: Socket;
+  let watcher: Socket;
+  let port: number;
+
+  const roomId = 'pyramid-room';
+  const buyerEmail = 'pyramid-buyer@example.com';
+  const watcherEmail = 'pyramid-watcher@example.com';
+
+  const connectAs = (email: string) =>
+    ioc(`http://localhost:${port}`, {
+      reconnection: false,
+      extraHeaders: {
+        'x-goog-authenticated-user-email': `accounts.google.com:${email}`,
+      },
+    });
+
+  beforeEach(async () => {
+    vi.stubEnv('LOCAL_TEST', '1');
+    delete process.env.DEV_USER_EMAIL;
+    ({ httpServer } = await createApp());
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    buyer?.disconnect();
+    watcher?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+    vi.unstubAllEnvs();
+    delete process.env.DEV_USER_EMAIL;
+  });
+
+  it('extends an already-active Team Pyramid buff by another full duration', async () => {
+    buyer = connectAs(buyerEmail);
+    await waitFor(buyer, 'connect');
+    buyer.emit('joinRoom', { roomId });
+    await waitFor(buyer, 'currentPlayers');
+
+    const first = await emitWithAck<{ ok: boolean; expiresAt?: number }>(buyer, 'purchaseTeamPyramid');
+    const second = await emitWithAck<{ ok: boolean; expiresAt?: number }>(buyer, 'purchaseTeamPyramid');
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(typeof first.expiresAt).toBe('number');
+    expect(typeof second.expiresAt).toBe('number');
+    expect((second.expiresAt as number) - (first.expiresAt as number)).toBe(TEAM_PYRAMID_DURATION_MS);
+  });
+
+  it('broadcasts the pyramid system message to chat for everyone in the room', async () => {
+    buyer = connectAs(buyerEmail);
+    await waitFor(buyer, 'connect');
+    buyer.emit('joinRoom', { roomId });
+    await waitFor(buyer, 'currentPlayers');
+
+    watcher = connectAs(watcherEmail);
+    await waitFor(watcher, 'connect');
+    watcher.emit('joinRoom', { roomId });
+    await waitFor(watcher, 'currentPlayers');
+
+    const buyerMessagePromise = waitFor<any>(buyer, 'chatMessage');
+    const watcherMessagePromise = waitFor<any>(watcher, 'chatMessage');
+    const purchase = await emitWithAck<{ ok: boolean }>(buyer, 'purchaseTeamPyramid');
+
+    expect(purchase.ok).toBe(true);
+    const [buyerMsg, watcherMsg] = await Promise.all([buyerMessagePromise, watcherMessagePromise]);
+    expect(buyerMsg).toMatchObject({
+      playerId: 'system',
+      playerName: 'System',
+      text: 'Unleash the power of Pyramid!',
+    });
+    expect(watcherMsg).toMatchObject({
+      playerId: 'system',
+      playerName: 'System',
+      text: 'Unleash the power of Pyramid!',
+    });
   });
 });
 
