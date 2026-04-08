@@ -1,19 +1,40 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
-import { Player, DEFAULT_AVATAR_CONFIG } from '../../types';
+import { Player, DEFAULT_AVATAR_CONFIG, DeskItem } from '../../types';
 import { ROLL_PIVOT_Y } from '../../constants';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
 import { getSyncedIceCreamState, iceCreamColorForIndex } from '../../iceCreamFlavors';
+import { useGameStore } from '../../store/useGameStore';
 
 export const OtherPlayer = ({ player }: { player: Player }) => {
   const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
   const [, setIceCreamTick] = useState(0);
+  const roomLayout = useGameStore((state) => state.roomLayout);
+
+  const focusedDeskTransform = useMemo(() => {
+    if (!player.isFocused || !player.activeDeskId) return null;
+    const desk = roomLayout.find(
+      (item): item is DeskItem => item.type === 'desk' && item.id === player.activeDeskId
+    );
+    if (!desk) return null;
+    const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      desk.rotation[1]
+    );
+    const position: [number, number, number] = [
+      desk.position[0] + chairOffset.x,
+      desk.position[1],
+      desk.position[2] + chairOffset.z,
+    ];
+    const rotation: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
+    return { position, rotation };
+  }, [player.isFocused, player.activeDeskId, roomLayout]);
 
   const syncedIce = getSyncedIceCreamState(player);
   const iceExp = syncedIce?.expiresAt ?? null;
@@ -31,6 +52,8 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
     !player.heldThrowableId;
 
   const heldIceCreamColor = showHeldIceCream ? iceCreamColorForIndex(syncedIce!.flavorIndex) : null;
+  const renderPosition = focusedDeskTransform?.position ?? player.position;
+  const renderRotation = focusedDeskTransform?.rotation ?? player.rotation;
 
   useFrame(() => {
     const dist = new THREE.Vector3(...player.position).distanceTo(new THREE.Vector3(...prevPos.current));
@@ -39,7 +62,7 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
   });
 
   return (
-    <group position={player.position} rotation={[0, player.rotation[1], 0]}>
+    <group position={renderPosition} rotation={[0, renderRotation[1], 0]}>
       <group position={[0, ROLL_PIVOT_Y, 0]}>
         <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
           <group position={[0, -ROLL_PIVOT_Y, 0]}>
