@@ -40,6 +40,8 @@ interface UserRow {
   focus_energy: number;
   focus_energy_updated_at: number;
   focus_energy_mode: FocusEnergyMode;
+  /** While saved mode is focus: which desk owner's chair upgrades apply for offline settlement. */
+  focus_energy_desk_owner_email: string | null;
 }
 
 interface RoomRow {
@@ -81,6 +83,7 @@ function defaultUserRow(): UserRow {
     focus_energy: 100,
     focus_energy_updated_at: now,
     focus_energy_mode: "idle",
+    focus_energy_desk_owner_email: null,
   };
 }
 
@@ -244,6 +247,21 @@ function patchFocusEnergyFields(u: UserRow): void {
   if (u.focus_energy_mode !== "focus" && u.focus_energy_mode !== "idle") {
     u.focus_energy_mode = "idle";
   }
+  if (!Object.prototype.hasOwnProperty.call(u, "focus_energy_desk_owner_email")) {
+    u.focus_energy_desk_owner_email = null;
+  }
+  if (u.focus_energy_desk_owner_email != null && typeof u.focus_energy_desk_owner_email !== "string") {
+    u.focus_energy_desk_owner_email = null;
+  }
+}
+
+function chairLevelForFocusSettlement(u: UserRow): number {
+  const ref = u.focus_energy_desk_owner_email;
+  if (typeof ref === "string" && ref.length > 0) {
+    const o = users.get(ref);
+    if (o) return o.chair_upgrade_level;
+  }
+  return u.chair_upgrade_level;
 }
 
 /** Settle from stored row to now, persist snapshot, return display energy. */
@@ -252,7 +270,7 @@ export async function memLoadAndSettleFocusEnergy(email: string): Promise<number
   patchFocusEnergyFields(u);
   const now = Date.now();
   const mode = parseFocusEnergyMode(u.focus_energy_mode);
-  const chairLv = mode === "focus" ? u.chair_upgrade_level : 0;
+  const chairLv = mode === "focus" ? chairLevelForFocusSettlement(u) : 0;
   const settled = settleFocusEnergy(u.focus_energy, u.focus_energy_updated_at, now, mode, chairLv);
   u.focus_energy = settled;
   u.focus_energy_updated_at = now;
@@ -264,13 +282,18 @@ export async function memLoadAndSettleFocusEnergy(email: string): Promise<number
 export async function memSaveFocusEnergy(
   email: string,
   energy: number,
-  mode: FocusEnergyMode
+  mode: FocusEnergyMode,
+  focusDeskOwnerEmail: string | null = null
 ): Promise<void> {
   const u = users.get(email) ?? defaultUserRow();
   patchFocusEnergyFields(u);
   u.focus_energy = clampFocusEnergy(energy);
   u.focus_energy_updated_at = Date.now();
   u.focus_energy_mode = mode === "focus" ? "focus" : "idle";
+  u.focus_energy_desk_owner_email =
+    mode === "focus" && typeof focusDeskOwnerEmail === "string" && focusDeskOwnerEmail.length > 0
+      ? focusDeskOwnerEmail
+      : null;
   users.set(email, u);
 }
 
@@ -281,11 +304,12 @@ export async function memSettleFocusEnergyOnDisconnect(email: string): Promise<v
   patchFocusEnergyFields(u);
   const now = Date.now();
   const mode = parseFocusEnergyMode(u.focus_energy_mode);
-  const chairLv = mode === "focus" ? u.chair_upgrade_level : 0;
+  const chairLv = mode === "focus" ? chairLevelForFocusSettlement(u) : 0;
   const settled = settleFocusEnergy(u.focus_energy, u.focus_energy_updated_at, now, mode, chairLv);
   u.focus_energy = settled;
   u.focus_energy_updated_at = now;
   u.focus_energy_mode = "idle";
+  u.focus_energy_desk_owner_email = null;
   users.set(email, u);
 }
 
