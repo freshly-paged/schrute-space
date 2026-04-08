@@ -1225,8 +1225,12 @@ io.on("connection", (socket) => {
     }
     activeUsers.set(user.email, socket.id);
 
-    socket.on("joinRoom", async (data: { roomId: string }) => {
+    socket.on("joinRoom", async (data: { roomId: string; focusEnergy?: number }) => {
       const { roomId } = data;
+      const clientFocusEnergy =
+        typeof data.focusEnergy === 'number' && Number.isFinite(data.focusEnergy)
+          ? clampFocusEnergy(data.focusEnergy)
+          : null;
       const room = roomId || "default";
       socket.join(room);
 
@@ -1288,7 +1292,13 @@ io.on("connection", (socket) => {
         socket.emit("paperReamsLoaded", count);
       });
       loadAndSettleFocusEnergy(user.email).then((energy) => {
-        socket.emit("focusEnergyLoaded", energy);
+        // If the client reports lower energy than the server settled (e.g. after
+        // idle-regen was applied during a brief disconnect mid-focus-session),
+        // honour the client's value so energy never jumps up on reconnect.
+        // The client can only lower the value, never raise it, so this is safe.
+        const finalEnergy =
+          clientFocusEnergy !== null ? Math.min(energy, clientFocusEnergy) : energy;
+        socket.emit("focusEnergyLoaded", finalEnergy);
       });
       getAvatarConfig(user.email).then((config) => {
         if (config) {
