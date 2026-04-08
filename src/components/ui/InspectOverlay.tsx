@@ -3,11 +3,11 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Bounds, Center, useBounds } from '@react-three/drei';
 import { useGameStore } from '../../store/useGameStore';
 import { ASSET_PATHS, AssetKey } from '../../hooks/useGameAsset';
+import { TeamPyramidTabletMesh } from '../world/working-area/TeamPyramidTabletMesh';
 
 // ─── 3D model viewer ─────────────────────────────────────────────────────────
 
-function InspectModel({ assetKey }: { assetKey: string }) {
-  const path = ASSET_PATHS[assetKey as AssetKey];
+function InspectModelInner({ path }: { path: string }) {
   const { scene } = useGLTF(path);
   const bounds = useBounds();
 
@@ -31,6 +31,7 @@ function InspectModel({ assetKey }: { assetKey: string }) {
 }
 
 function InspectScene({ assetKey }: { assetKey: string }) {
+  const path = ASSET_PATHS[assetKey as AssetKey];
   return (
     <Canvas camera={{ position: [0, 0, 5], fov: 45 }}>
       <ambientLight intensity={1.2} />
@@ -42,7 +43,33 @@ function InspectScene({ assetKey }: { assetKey: string }) {
             Center ensures the geometry sits at the world origin. */}
         <Bounds fit clip observe margin={1.2}>
           <Center>
-            <InspectModel assetKey={assetKey} />
+            {path ? <InspectModelInner path={path} /> : null}
+          </Center>
+        </Bounds>
+      </Suspense>
+      <OrbitControls
+        autoRotate
+        autoRotateSpeed={1.8}
+        enableZoom={false}
+        enablePan={false}
+        minPolarAngle={Math.PI / 6}
+        maxPolarAngle={Math.PI / 1.8}
+        makeDefault
+      />
+    </Canvas>
+  );
+}
+
+function PyramidInspectScene() {
+  return (
+    <Canvas camera={{ position: [0, 0.2, 2.6], fov: 42 }}>
+      <ambientLight intensity={1.1} />
+      <directionalLight position={[2, 5, 3]} intensity={1.8} />
+      <directionalLight position={[-2, 2, -2]} intensity={0.5} />
+      <Suspense fallback={null}>
+        <Bounds fit clip observe margin={1.2}>
+          <Center>
+            <TeamPyramidTabletMesh />
           </Center>
         </Bounds>
       </Suspense>
@@ -98,7 +125,11 @@ export function InspectOverlay() {
 
         {/* 3D canvas — left half */}
         <div className="w-1/2 h-full flex-shrink-0">
-          <InspectScene assetKey={inspectedObject.assetKey} />
+          {inspectedObject.previewKind === 'pyramid' ? (
+            <PyramidInspectScene />
+          ) : (
+            <InspectScene assetKey={inspectedObject.assetKey} />
+          )}
         </div>
 
         {/* Info — right half */}
@@ -109,6 +140,30 @@ export function InspectOverlay() {
           <p className="text-slate-300 text-sm leading-relaxed">
             {inspectedObject.description}
           </p>
+          {(inspectedObject.linkUrl || inspectedObject.secondaryLinkUrl) && (
+            <div className="flex flex-col gap-2">
+              {inspectedObject.linkUrl ? (
+                <a
+                  href={inspectedObject.linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 text-sm font-medium underline underline-offset-2"
+                >
+                  {inspectedObject.linkLabel ?? 'Open link'}
+                </a>
+              ) : null}
+              {inspectedObject.secondaryLinkUrl ? (
+                <a
+                  href={inspectedObject.secondaryLinkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 text-sm font-medium underline underline-offset-2"
+                >
+                  {inspectedObject.secondaryLinkLabel ?? 'Open link'}
+                </a>
+              ) : null}
+            </div>
+          )}
           <p className="text-slate-500 text-xs mt-auto">
             Press [F] or [Esc] to close
           </p>

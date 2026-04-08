@@ -4,6 +4,7 @@ import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
 import { getEffectiveDeskUpgradeEmail } from '../../deskOwner';
 import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
+import { TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER } from '../../gameConfig';
 import { useGameStore } from '../../store/useGameStore';
 import { FocusEnergyBar } from './FocusEnergyBar';
 
@@ -23,6 +24,7 @@ export const PomodoroUI = () => {
     user,
     monitorLevelByEmail,
     focusEnergy,
+    teamPyramidBuffExpiresAt,
   } = useGameStore();
   const upgradeEmail = getEffectiveDeskUpgradeEmail(
     roomLayout,
@@ -33,8 +35,13 @@ export const PomodoroUI = () => {
     upgradeEmail !== undefined
       ? focusReamsPerMinute(monitorLevelByEmail[upgradeEmail] ?? 0)
       : focusReamsPerMinute(0);
-  const focusEarnPerMin =
-    Math.round(baseFocusPerMin * focusReamMultiplier(focusEnergy) * 10) / 10;
+  const teamPyramidActive =
+    teamPyramidBuffExpiresAt != null &&
+    Number.isFinite(teamPyramidBuffExpiresAt) &&
+    Date.now() < teamPyramidBuffExpiresAt;
+  let focusEarnPerMin =
+    baseFocusPerMin * focusReamMultiplier(focusEnergy) * (teamPyramidActive ? TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER : 1);
+  focusEarnPerMin = Math.round(focusEarnPerMin * 10) / 10;
 
   useEffect(() => {
     if (!isTimerActive || isTimerPaused) return;
@@ -93,6 +100,16 @@ export const PomodoroUI = () => {
                 <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold animate-pulse text-center">
                   {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
                 </div>
+                {teamPyramidActive && !isTimerPaused && (
+                  <div className="flex flex-col items-center gap-0.5 text-center px-1">
+                    <div className="text-fuchsia-300/95 text-[10px] uppercase tracking-[0.18em] font-bold">
+                      Power of The Pyramid
+                    </div>
+                    <div className="text-fuchsia-200/85 text-[9px] font-medium leading-snug italic">
+                      With the pyramid you have the connection to everything, in time, and space!
+                    </div>
+                  </div>
+                )}
                 <div className="text-slate-400 font-mono text-[10px]">
                   Earn rate:{' '}
                   <span className="text-cyan-300/90">

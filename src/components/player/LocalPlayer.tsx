@@ -8,7 +8,7 @@ import { getDeterministicColor, COLLISION_BOXES, ROLL_PIVOT_Y } from '../../cons
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics, usePlayerPhysicsAvatarSync } from '../../hooks/usePlayerPhysics';
-import { MS_BODY_THROWABLE_ID } from '../../propIds';
+import { MS_BODY_THROWABLE_ID, TEAM_PYRAMID_INSPECT_ID } from '../../propIds';
 import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
@@ -217,8 +217,10 @@ export const LocalPlayer = ({
         }
         interactConsumed = true;
       } else if (nearThrowableId !== null) {
-        pickUpObject(nearThrowableId);
-        emitHeldThrowableSync(socket, nearThrowableId);
+        if (nearThrowableId !== TEAM_PYRAMID_INSPECT_ID) {
+          pickUpObject(nearThrowableId);
+          emitHeldThrowableSync(socket, nearThrowableId);
+        }
         interactConsumed = true;
       }
     }

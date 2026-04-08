@@ -9,9 +9,27 @@ import {
 } from '../focusEnergyModel';
 import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
-import { POMODORO_FOCUS_DURATION_SEC, POMODORO_BREAK_DURATION_SEC } from '../gameConfig';
+import {
+  POMODORO_FOCUS_DURATION_SEC,
+  POMODORO_BREAK_DURATION_SEC,
+  TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER,
+} from '../gameConfig';
 import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
+
+export type InspectPreviewKind = 'model' | 'pyramid';
+
+export type InspectedObjectData = {
+  id: string;
+  label: string;
+  description: string;
+  assetKey: string;
+  linkUrl?: string;
+  linkLabel?: string;
+  secondaryLinkUrl?: string;
+  secondaryLinkLabel?: string;
+  previewKind?: InspectPreviewKind;
+};
 
 interface GameState {
   // Throwable object system
@@ -25,8 +43,8 @@ interface GameState {
   droppingObjectId: string | null;
 
   // Inspect mode
-  inspectedObject: { id: string; label: string; description: string; assetKey: string } | null;
-  openInspect: (data: { id: string; label: string; description: string; assetKey: string }) => void;
+  inspectedObject: InspectedObjectData | null;
+  openInspect: (data: InspectedObjectData) => void;
   closeInspect: () => void;
 
   // Paper Clicker State
@@ -110,6 +128,10 @@ interface GameState {
   /** Local-only: epoch ms when water cooler buff ends (extra focus regen while window overlaps wall-clock ticks). */
   waterBuffExpiresAt: number | null;
   setWaterBuffExpiresAt: (expiresAt: number | null) => void;
+
+  /** Server-synced: epoch ms when room Team Pyramid buff ends (null = inactive). */
+  teamPyramidBuffExpiresAt: number | null;
+  setTeamPyramidBuffExpiresAt: (expiresAt: number | null) => void;
   showLeaderboard: boolean;
   setShowLeaderboard: (show: boolean) => void;
 
@@ -162,7 +184,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   dropObject: () => set((s) => ({ heldObjectId: null, droppingObjectId: s.heldObjectId })),
 
   inspectedObject: null,
-  openInspect: (data) => set({ inspectedObject: data, nearThrowableId: null }),
+  openInspect: (data) =>
+    set({
+      inspectedObject: { previewKind: 'model', ...data },
+      nearThrowableId: null,
+    }),
   closeInspect: () => set({ inspectedObject: null }),
 
   paperReams: 0,
@@ -263,7 +289,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       );
       const basePerMin = focusReamsPerMinute(monitorLv);
       const mult = focusReamMultiplier(state.focusEnergy);
-      const reamsPerMin = basePerMin * mult;
+      let reamsPerMin = basePerMin * mult;
+      const pyramidExp = state.teamPyramidBuffExpiresAt;
+      if (
+        typeof pyramidExp === 'number' &&
+        Number.isFinite(pyramidExp) &&
+        Date.now() < pyramidExp
+      ) {
+        reamsPerMin *= TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER;
+      }
       const lastT = state.lastFocusPaperTickAt > 0 ? state.lastFocusPaperTickAt : now;
       const dtSec = Math.min(120, Math.max(0, (now - lastT) / 1000));
       const addFloat = (reamsPerMin / 60) * dtSec;
@@ -411,6 +445,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   setNearWaterCooler: (near) => set({ nearWaterCooler: near }),
   waterBuffExpiresAt: null,
   setWaterBuffExpiresAt: (expiresAt) => set({ waterBuffExpiresAt: expiresAt }),
+
+  teamPyramidBuffExpiresAt: null,
+  setTeamPyramidBuffExpiresAt: (expiresAt) => set({ teamPyramidBuffExpiresAt: expiresAt }),
   showLeaderboard: false,
   setShowLeaderboard: (show) => set({ showLeaderboard: show }),
 

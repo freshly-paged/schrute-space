@@ -1,6 +1,7 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
 import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
+import { TEAM_PYRAMID_COST_REAMS } from "../src/gameConfig.js";
 import { totalPaperReamsEarnedFloor } from "../src/paperReamsLifetime.js";
 import {
   clampFocusEnergy,
@@ -407,6 +408,22 @@ export async function memPurchaseMonitorUpgrade(email: string): Promise<MemMonit
   );
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams, monitorUpgradeLevel: u.monitor_upgrade_level };
+}
+
+export type MemTeamPyramidPurchaseResult =
+  | { ok: true; paperReams: number }
+  | { ok: false; error: "insufficient" };
+
+export async function memPurchaseTeamPyramid(email: string): Promise<MemTeamPyramidPurchaseResult> {
+  const u = users.get(email) ?? defaultUserRow();
+  if (u.paper_reams < TEAM_PYRAMID_COST_REAMS) return { ok: false, error: "insufficient" };
+  u.paper_reams -= TEAM_PYRAMID_COST_REAMS;
+  u.total_paper_reams_earned = Math.max(
+    u.total_paper_reams_earned,
+    totalPaperReamsEarnedFloor(u.paper_reams, u.chair_upgrade_level, u.monitor_upgrade_level)
+  );
+  users.set(email, u);
+  return { ok: true, paperReams: u.paper_reams };
 }
 
 export async function memUpdateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise<void> {

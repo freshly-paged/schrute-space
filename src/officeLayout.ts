@@ -11,6 +11,25 @@ export const WORKING_AREA_BOUNDS = {
   z2: 23,
 } as const;
 
+/** Horizontal center of the working area (world X and Z). */
+export const WORKING_AREA_CENTER_XZ: [number, number] = [
+  (WORKING_AREA_BOUNDS.x1 + WORKING_AREA_BOUNDS.x2) / 2,
+  (WORKING_AREA_BOUNDS.z1 + WORKING_AREA_BOUNDS.z2) / 2,
+];
+
+/**
+ * Floating Team Pyramid prop position (working-area center, elevated).
+ * Y is meters above the floor.
+ */
+export const TEAM_PYRAMID_WORLD_POSITION: [number, number, number] = [
+  WORKING_AREA_CENTER_XZ[0],
+  4.85,
+  WORKING_AREA_CENTER_XZ[1],
+];
+
+/** Proximity radius for inspecting the floating Team Pyramid (meters). */
+export const TEAM_PYRAMID_INSPECT_RADIUS = 3;
+
 /** Minimum distance from working-area walls before placing a desk. */
 export const DESK_SPAWN_MARGIN = 3;
 
