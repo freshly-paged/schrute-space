@@ -422,52 +422,57 @@ export default function App() {
         <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
       )}
 
-      <KeyboardControls map={keyboardMap}>
-        <Canvas
-          shadows={!isFocusSavingModeActive}
-          dpr={isFocusSavingModeActive ? 1 : [1, 2]}
-          frameloop={isFocusSavingModeActive ? 'never' : 'always'}
-          camera={{ position: [0, 2, 5], fov: 50 }}
-        >
-          <color attach="background" args={['#1e293b']} />
-          <ambientLight intensity={0.7} />
-          <directionalLight
-            position={[10, 10, 10]}
-            intensity={1.5}
-            castShadow
-            shadow-mapSize={[1024, 1024]}
-          />
-          <React.Suspense
-            fallback={
-              <Html center>
-                <div className="text-white font-pixel text-[8px] whitespace-nowrap">
-                  LOADING OFFICE...
-                </div>
-              </Html>
-            }
+      {isFocusSavingModeActive ? (
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.18),transparent_50%)]" />
+        </div>
+      ) : (
+        <KeyboardControls map={keyboardMap}>
+          <Canvas
+            shadows
+            dpr={[1, 2]}
+            frameloop="always"
+            camera={{ position: [0, 2, 5], fov: 50 }}
           >
-            <OfficeEnvironment />
-            <LocalPlayer
-              socket={socket}
-              lastMessage={lastLocalMessage?.text}
-              lastMessageTime={lastLocalMessage?.time}
-              lastMessageDurationMs={lastLocalMessage?.durationMs}
-              playerName={visibleDisplayName}
-              players={players}
+            <color attach="background" args={['#1e293b']} />
+            <ambientLight intensity={0.7} />
+            <directionalLight
+              position={[10, 10, 10]}
+              intensity={1.5}
+              castShadow
+              shadow-mapSize={[1024, 1024]}
             />
-            {Object.values(players).map((player) => (
-              <OtherPlayer key={player.id} player={player} />
-            ))}
-            <TutorialPathGuide
-              visible={officeTutorial.active}
-              target={officeTutorial.targetPosition}
-            />
-            {!isFocusSavingModeActive && (
+            <React.Suspense
+              fallback={
+                <Html center>
+                  <div className="text-white font-pixel text-[8px] whitespace-nowrap">
+                    LOADING OFFICE...
+                  </div>
+                </Html>
+              }
+            >
+              <OfficeEnvironment />
+              <LocalPlayer
+                socket={socket}
+                lastMessage={lastLocalMessage?.text}
+                lastMessageTime={lastLocalMessage?.time}
+                lastMessageDurationMs={lastLocalMessage?.durationMs}
+                playerName={visibleDisplayName}
+                players={players}
+              />
+              {Object.values(players).map((player) => (
+                <OtherPlayer key={player.id} player={player} />
+              ))}
+              <TutorialPathGuide
+                visible={officeTutorial.active}
+                target={officeTutorial.targetPosition}
+              />
               <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            )}
-          </React.Suspense>
-        </Canvas>
-      </KeyboardControls>
+            </React.Suspense>
+          </Canvas>
+        </KeyboardControls>
+      )}
 
       {!isConnected && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-50">
