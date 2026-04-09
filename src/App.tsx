@@ -58,6 +58,7 @@ export default function App() {
 
   const {
     isTimerActive,
+    timerMode,
     paperReams,
     avatarConfig,
     setAvatarConfig,
@@ -82,6 +83,7 @@ export default function App() {
     focusEnergy,
     setFocusEnergy,
     tickFocusEnergyWallClock,
+    focusSavingModeEnabled,
   } = useGameStore();
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
@@ -230,6 +232,7 @@ export default function App() {
       : user?.name ?? '';
 
   const officeTutorial = useOfficeTutorial(user?.email, Boolean(currentRoom));
+  const isFocusSavingModeActive = isTimerActive && timerMode === 'focus' && focusSavingModeEnabled;
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (authLoading) {
@@ -360,17 +363,23 @@ export default function App() {
       </AnimatePresence>
 
       <PomodoroUI />
-      <ParkourEnergyHint />
-      <WaterEnergyBuffOverlay />
-      <PaperBurst />
-      <InspectOverlay />
+      {!isFocusSavingModeActive && (
+        <>
+          <ParkourEnergyHint />
+          <WaterEnergyBuffOverlay />
+          <PaperBurst />
+          <InspectOverlay />
+        </>
+      )}
 
-      <button
-        onClick={() => setShowUI((v) => !v)}
-        className="absolute bottom-6 right-6 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 p-3 rounded-full transition-all"
-      >
-        <Info className="text-white w-6 h-6" />
-      </button>
+      {!isFocusSavingModeActive && (
+        <button
+          onClick={() => setShowUI((v) => !v)}
+          className="absolute bottom-6 right-6 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 p-3 rounded-full transition-all"
+        >
+          <Info className="text-white w-6 h-6" />
+        </button>
+      )}
 
 
       <AnimatePresence>
@@ -386,72 +395,84 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {showLeaderboard && currentRoom && (
+      {!isFocusSavingModeActive && showLeaderboard && currentRoom && (
         <div className="absolute top-6 right-[22rem] z-10">
           <RoomLeaderboard roomId={currentRoom} onClose={() => setShowLeaderboard(false)} />
         </div>
       )}
 
-      {showComputerInterface && currentRoom && (
+      {!isFocusSavingModeActive && showComputerInterface && currentRoom && (
         <ComputerInterface
           onClose={() => setShowComputerInterface(false)}
           onOpenAdminPanel={() => { setShowComputerInterface(false); setShowAdminPanel(true); }}
         />
       )}
 
-      {showVendingMenu && currentRoom && (
+      {!isFocusSavingModeActive && showVendingMenu && currentRoom && (
         <VendingMenu socket={socket} onClose={() => setShowVendingMenu(false)} />
       )}
 
-      {showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
+      {!isFocusSavingModeActive && showAdminPanel && currentRoom && (roomInfo?.myRole === 'admin' || roomInfo?.myRole === 'manager') && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
           <RoomAdminPanel roomId={currentRoom} onClose={() => setShowAdminPanel(false)} />
         </div>
       )}
 
-      {officeTutorial.active && officeTutorial.phase && (
+      {!isFocusSavingModeActive && officeTutorial.active && officeTutorial.phase && (
         <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
       )}
 
-      <KeyboardControls map={keyboardMap}>
-        <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 2, 5], fov: 50 }}>
-          <color attach="background" args={['#1e293b']} />
-          <ambientLight intensity={0.7} />
-          <directionalLight
-            position={[10, 10, 10]}
-            intensity={1.5}
-            castShadow
-            shadow-mapSize={[1024, 1024]}
-          />
-          <React.Suspense
-            fallback={
-              <Html center>
-                <div className="text-white font-pixel text-[8px] whitespace-nowrap">
-                  LOADING OFFICE...
-                </div>
-              </Html>
-            }
+      {isFocusSavingModeActive ? (
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.18),transparent_50%)]" />
+        </div>
+      ) : (
+        <KeyboardControls map={keyboardMap}>
+          <Canvas
+            shadows
+            dpr={[1, 2]}
+            frameloop="always"
+            camera={{ position: [0, 2, 5], fov: 50 }}
           >
-            <OfficeEnvironment />
-            <LocalPlayer
-              socket={socket}
-              lastMessage={lastLocalMessage?.text}
-              lastMessageTime={lastLocalMessage?.time}
-              lastMessageDurationMs={lastLocalMessage?.durationMs}
-              playerName={visibleDisplayName}
-              players={players}
+            <color attach="background" args={['#1e293b']} />
+            <ambientLight intensity={0.7} />
+            <directionalLight
+              position={[10, 10, 10]}
+              intensity={1.5}
+              castShadow
+              shadow-mapSize={[1024, 1024]}
             />
-            {Object.values(players).map((player) => (
-              <OtherPlayer key={player.id} player={player} />
-            ))}
-            <TutorialPathGuide
-              visible={officeTutorial.active}
-              target={officeTutorial.targetPosition}
-            />
-            <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-          </React.Suspense>
-        </Canvas>
-      </KeyboardControls>
+            <React.Suspense
+              fallback={
+                <Html center>
+                  <div className="text-white font-pixel text-[8px] whitespace-nowrap">
+                    LOADING OFFICE...
+                  </div>
+                </Html>
+              }
+            >
+              <OfficeEnvironment />
+              <LocalPlayer
+                socket={socket}
+                lastMessage={lastLocalMessage?.text}
+                lastMessageTime={lastLocalMessage?.time}
+                lastMessageDurationMs={lastLocalMessage?.durationMs}
+                playerName={visibleDisplayName}
+                players={players}
+              />
+              {Object.values(players).map((player) => (
+                <OtherPlayer key={player.id} player={player} />
+              ))}
+              <TutorialPathGuide
+                visible={officeTutorial.active}
+                target={officeTutorial.targetPosition}
+              />
+              <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+            </React.Suspense>
+          </Canvas>
+        </KeyboardControls>
+      )}
 
       {!isConnected && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-50">

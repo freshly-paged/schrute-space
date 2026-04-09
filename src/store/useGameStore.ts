@@ -67,9 +67,13 @@ interface GameState {
   lastFocusPaperTickAt: number;
   /** Random seated leg preset index for the current focus session (set when focus starts). */
   focusSitPoseIndex: number;
+  /** Focus-only low-power UI toggle; auto-disabled outside active focus sessions. */
+  focusSavingModeEnabled: boolean;
   startTimer: (mode: 'focus' | 'break') => void;
   stopTimer: () => void;
   togglePause: () => void;
+  setFocusSavingModeEnabled: (enabled: boolean) => void;
+  toggleFocusSavingMode: () => void;
   tickTimer: () => void;
   resetTimer: () => void;
 
@@ -205,6 +209,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   sessionPaperAccruedFloat: 0,
   lastFocusPaperTickAt: 0,
   focusSitPoseIndex: 0,
+  focusSavingModeEnabled: false,
   startTimer: (mode) =>
     set((state) => {
       const durationSec = mode === 'focus' ? POMODORO_FOCUS_DURATION_SEC : POMODORO_BREAK_DURATION_SEC;
@@ -222,6 +227,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         lastFocusPaperTickAt: mode === 'focus' ? now : 0,
         focusSitPoseIndex:
           mode === 'focus' ? Math.floor(Math.random() * FOCUS_SIT_POSE_COUNT) : state.focusSitPoseIndex,
+        focusSavingModeEnabled: false,
       };
     }),
   stopTimer: () =>
@@ -233,6 +239,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       sessionPaperAccruedFloat: 0,
       lastFocusPaperTickAt: 0,
       focusSitPoseIndex: 0,
+      focusSavingModeEnabled: false,
       timerEndsAt: null,
     }),
   togglePause: () =>
@@ -248,6 +255,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         lastFocusPaperTickAt: Date.now(),
       };
     }),
+  setFocusSavingModeEnabled: (enabled) =>
+    set((state) => {
+      const inFocusSession = state.isTimerActive && state.timerMode === 'focus';
+      return { focusSavingModeEnabled: inFocusSession ? enabled : false };
+    }),
+  toggleFocusSavingMode: () =>
+    set((state) => {
+      const inFocusSession = state.isTimerActive && state.timerMode === 'focus';
+      return { focusSavingModeEnabled: inFocusSession ? !state.focusSavingModeEnabled : false };
+    }),
   tickTimer: () => set((state) => {
     if (state.isTimerPaused || !state.isTimerActive) return {};
 
@@ -261,6 +278,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         timeLeft: 0,
         activeDeskId: null,
         focusSitPoseIndex: 0,
+        focusSavingModeEnabled: false,
         timerEndsAt: null,
         sessionPaperAccruedFloat: 0,
         lastFocusPaperTickAt: 0,
@@ -333,6 +351,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       sessionPaperAccruedFloat: 0,
       lastFocusPaperTickAt: 0,
       focusSitPoseIndex: 0,
+      focusSavingModeEnabled: false,
       timerEndsAt: null,
     })),
 
