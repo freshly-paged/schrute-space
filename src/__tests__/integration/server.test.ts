@@ -459,6 +459,85 @@ describe('Socket.IO — chatMessage', () => {
   });
 });
 
+describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
+  let httpServer: any;
+  let owner: Socket;
+  let intruder: Socket;
+  let port: number;
+  const roomId = 'identity-theft-room';
+  const ownerEmail = 'desk-owner@example.com';
+  const intruderEmail = 'desk-intruder@example.com';
+  const expectedText =
+    'Identity theft is not a joke! https://www.youtube.com/watch?v=WaaANll8h18';
+
+  const connectAs = (email: string) =>
+    ioc(`http://localhost:${port}`, {
+      reconnection: false,
+      extraHeaders: {
+        'x-goog-authenticated-user-email': `accounts.google.com:${email}`,
+      },
+    });
+
+  beforeEach(async () => {
+    vi.stubEnv('LOCAL_TEST', '1');
+    delete process.env.DEV_USER_EMAIL;
+    ({ httpServer } = await createApp());
+    await new Promise<void>(resolve => httpServer.listen(0, resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    owner?.disconnect();
+    intruder?.disconnect();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+    vi.unstubAllEnvs();
+    delete process.env.DEV_USER_EMAIL;
+  });
+
+  it('broadcasts a system warning when a player focuses at another player desk', async () => {
+    owner = connectAs(ownerEmail);
+    await waitFor(owner, 'connect');
+    owner.emit('joinRoom', { roomId });
+    await waitFor(owner, 'currentPlayers');
+    await waitFor<any[]>(owner, 'roomLayoutLoaded');
+
+    intruder = connectAs(intruderEmail);
+    await waitFor(intruder, 'connect');
+    intruder.emit('joinRoom', { roomId });
+    await waitFor(intruder, 'currentPlayers');
+    const intruderLayout = await waitFor<any[]>(intruder, 'roomLayoutLoaded');
+
+    const ownerDesk = intruderLayout.find(
+      (f: any) => f.type === 'desk' && f.config?.ownerEmail === ownerEmail
+    );
+    expect(ownerDesk).toBeDefined();
+
+    const ownerMessagePromise = waitFor<any>(owner, 'chatMessage');
+    const intruderMessagePromise = waitFor<any>(intruder, 'chatMessage');
+    intruder.emit('playerFocusUpdate', {
+      isFocused: true,
+      focusProgress: 0.1,
+      activeDeskId: ownerDesk.id,
+      focusSitPoseIndex: 0,
+    });
+
+    const [ownerMsg, intruderMsg] = await Promise.all([
+      ownerMessagePromise,
+      intruderMessagePromise,
+    ]);
+    expect(ownerMsg).toMatchObject({
+      playerId: 'system',
+      playerName: 'System',
+      text: expectedText,
+    });
+    expect(intruderMsg).toMatchObject({
+      playerId: 'system',
+      playerName: 'System',
+      text: expectedText,
+    });
+  });
+});
+
 describe('Socket.IO — purchaseTeamPyramid', () => {
   let httpServer: any;
   let buyer: Socket;
