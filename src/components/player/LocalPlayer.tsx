@@ -39,6 +39,7 @@ interface LocalPlayerProps {
   socket: Socket | null;
   lastMessage?: string;
   lastMessageTime?: number;
+  lastMessageDurationMs?: number;
   playerName: string;
   players: Record<string, Player>;
 }
@@ -47,6 +48,7 @@ export const LocalPlayer = ({
   socket,
   lastMessage,
   lastMessageTime,
+  lastMessageDurationMs,
   playerName,
   players,
 }: LocalPlayerProps) => {
@@ -589,7 +591,7 @@ export const LocalPlayer = ({
             )}
           </Billboard>
         )}
-        <ChatBubble text={lastMessage} time={lastMessageTime} />
+        <ChatBubble text={lastMessage} time={lastMessageTime} durationMs={lastMessageDurationMs} />
       </group>
     </>
   );

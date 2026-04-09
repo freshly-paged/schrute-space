@@ -1179,6 +1179,8 @@ const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
 const TEAM_PYRAMID_SYSTEM_CHAT_TEXT = "Unleash the power of Pyramid!";
 const IDENTITY_THEFT_VIDEO_URL = "https://www.youtube.com/watch?v=WaaANll8h18";
 const IDENTITY_THEFT_SYSTEM_CHAT_TEXT = `Identity theft is not a joke! ${IDENTITY_THEFT_VIDEO_URL}`;
+const IDENTITY_THEFT_OVERHEAD_TEXT = "Identity theft is not a joke!";
+const IDENTITY_THEFT_OVERHEAD_DURATION_MS = 10_000;
 
 function activeTeamPyramidBuffExpiresAt(roomId: string): number | null {
   const raw = roomTeamPyramidBuffExpiresAt[roomId];
@@ -1631,6 +1633,7 @@ io.on("connection", (socket) => {
         // Store last message on player for bubbles
         player.lastMessage = messageText;
         player.lastMessageTime = message.time;
+        delete player.lastMessageDurationMs;
 
         io.to(playerRoom).emit("chatMessage", message);
       }
@@ -1689,10 +1692,20 @@ io.on("connection", (socket) => {
                 deskOwnerEmail &&
                 deskOwnerEmail.toLowerCase() !== sittingPlayerEmail.toLowerCase()
               ) {
+                const messageTime = Date.now();
+                player.lastMessage = IDENTITY_THEFT_OVERHEAD_TEXT;
+                player.lastMessageTime = messageTime;
+                player.lastMessageDurationMs = IDENTITY_THEFT_OVERHEAD_DURATION_MS;
                 io.to(playerRoom).emit(
                   "chatMessage",
                   systemChatMessage(IDENTITY_THEFT_SYSTEM_CHAT_TEXT)
                 );
+                io.to(playerRoom).emit("ambientSpeech", {
+                  playerId: socket.id,
+                  text: IDENTITY_THEFT_OVERHEAD_TEXT,
+                  time: messageTime,
+                  durationMs: IDENTITY_THEFT_OVERHEAD_DURATION_MS,
+                });
               }
             })
             .catch((err) => {
@@ -1767,6 +1780,7 @@ io.on("connection", (socket) => {
       if (speaker) {
         speaker.lastMessage = "Gossip Gossip";
         speaker.lastMessageTime = time;
+        delete speaker.lastMessageDurationMs;
       }
       io.to(roomId).emit("ambientSpeech", {
         playerId: speakerId,

@@ -469,6 +469,8 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
   const intruderEmail = 'desk-intruder@example.com';
   const expectedText =
     'Identity theft is not a joke! https://www.youtube.com/watch?v=WaaANll8h18';
+  const expectedOverheadText = 'Identity theft is not a joke!';
+  const expectedOverheadDurationMs = 10_000;
 
   const connectAs = (email: string) =>
     ioc(`http://localhost:${port}`, {
@@ -516,6 +518,8 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
 
     const ownerMessagePromise = waitFor<any>(owner, 'chatMessage');
     const intruderMessagePromise = waitFor<any>(intruder, 'chatMessage');
+    const ownerOverheadPromise = waitFor<any>(owner, 'ambientSpeech');
+    const intruderOverheadPromise = waitFor<any>(intruder, 'ambientSpeech');
     intruder.emit('playerFocusUpdate', {
       isFocused: true,
       focusProgress: 0.1,
@@ -523,9 +527,11 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
       focusSitPoseIndex: 0,
     });
 
-    const [ownerMsg, intruderMsg] = await Promise.all([
+    const [ownerMsg, intruderMsg, ownerOverhead, intruderOverhead] = await Promise.all([
       ownerMessagePromise,
       intruderMessagePromise,
+      ownerOverheadPromise,
+      intruderOverheadPromise,
     ]);
     expect(ownerMsg).toMatchObject({
       playerId: 'system',
@@ -537,6 +543,18 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
       playerName: 'System',
       text: expectedText,
     });
+    expect(ownerOverhead).toMatchObject({
+      playerId: intruder.id,
+      text: expectedOverheadText,
+      durationMs: expectedOverheadDurationMs,
+    });
+    expect(intruderOverhead).toMatchObject({
+      playerId: intruder.id,
+      text: expectedOverheadText,
+      durationMs: expectedOverheadDurationMs,
+    });
+    expect(typeof ownerOverhead.time).toBe('number');
+    expect(typeof intruderOverhead.time).toBe('number');
   });
 });
 

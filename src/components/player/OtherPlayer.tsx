@@ -127,7 +127,11 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
           </Text>
         </Billboard>
       )}
-      <ChatBubble text={player.lastMessage} time={player.lastMessageTime} />
+      <ChatBubble
+        text={player.lastMessage}
+        time={player.lastMessageTime}
+        durationMs={player.lastMessageDurationMs}
+      />
     </group>
   );
 };
