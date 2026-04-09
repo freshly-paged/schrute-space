@@ -4,6 +4,26 @@ import { ChatMessage } from '../../types';
 import { useGameStore } from '../../store/useGameStore';
 
 const EMOTES = ['👋', '😂', '👍', '🔥', '🏢', '🥬'];
+const URL_PART_REGEX = /(https?:\/\/[^\s]+)/g;
+
+function renderChatText(text: string) {
+  return text.split(URL_PART_REGEX).map((part, idx) => {
+    if (!/^https?:\/\/\S+$/i.test(part)) {
+      return <React.Fragment key={`${idx}-${part}`}>{part}</React.Fragment>;
+    }
+    return (
+      <a
+        key={`${idx}-${part}`}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-indigo-400/80 hover:text-indigo-300 transition-colors break-all"
+      >
+        {part}
+      </a>
+    );
+  });
+}
 
 interface ChatPanelProps {
   chatHistory: ChatMessage[];
@@ -46,7 +66,7 @@ export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
           {chatHistory.map((msg) => (
             <div key={msg.id} className="text-[10px]">
               <span className="text-indigo-400 font-bold">{msg.playerName}: </span>
-              <span className="text-white/80">{msg.text}</span>
+              <span className="text-white/80">{renderChatText(msg.text)}</span>
             </div>
           ))}
         </div>

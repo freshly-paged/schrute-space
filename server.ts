@@ -1177,6 +1177,8 @@ const rooms: Record<string, Record<string, any>> = {};
 /** Per-room Team Pyramid buff expiry (epoch ms). In-memory only. */
 const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
 const TEAM_PYRAMID_SYSTEM_CHAT_TEXT = "Unleash the power of Pyramid!";
+const IDENTITY_THEFT_VIDEO_URL = "https://www.youtube.com/watch?v=WaaANll8h18";
+const IDENTITY_THEFT_SYSTEM_CHAT_TEXT = `Identity theft is not a joke! ${IDENTITY_THEFT_VIDEO_URL}`;
 
 function activeTeamPyramidBuffExpiresAt(roomId: string): number | null {
   const raw = roomTeamPyramidBuffExpiresAt[roomId];
@@ -1193,6 +1195,14 @@ function systemChatMessage(text: string) {
     text,
     time: Date.now(),
   };
+}
+
+function deskOwnerEmailByDeskId(layout: FurnitureItem[], deskId: string | null): string | null {
+  if (!deskId) return null;
+  const desk = layout.find((f): f is DeskItem => f.type === "desk" && f.id === deskId);
+  const ownerEmail = desk?.config?.ownerEmail;
+  if (typeof ownerEmail !== "string" || ownerEmail.length === 0) return null;
+  return ownerEmail;
 }
 
 const OFFICE_COLORS = [
@@ -1660,15 +1670,45 @@ io.on("connection", (socket) => {
       }
 
       if (playerRoom && rooms[playerRoom][socket.id]) {
-        rooms[playerRoom][socket.id].isFocused = data.isFocused;
-        rooms[playerRoom][socket.id].focusProgress = data.focusProgress;
-        rooms[playerRoom][socket.id].activeDeskId = data.activeDeskId;
-        if (data.isFocused && typeof data.focusSitPoseIndex === "number") {
-          rooms[playerRoom][socket.id].focusSitPoseIndex = data.focusSitPoseIndex;
-        } else {
-          delete rooms[playerRoom][socket.id].focusSitPoseIndex;
+        const player = rooms[playerRoom][socket.id];
+        const wasFocused = !!player.isFocused;
+        const prevDeskId =
+          typeof player.activeDeskId === "string" ? player.activeDeskId : null;
+        const nextFocused = !!data.isFocused;
+        const nextDeskId =
+          typeof data.activeDeskId === "string" ? data.activeDeskId : null;
+        const startedOrSwitchedDesk =
+          nextFocused && !!nextDeskId && (!wasFocused || prevDeskId !== nextDeskId);
+
+        if (startedOrSwitchedDesk) {
+          void getRoomLayout(playerRoom)
+            .then((layout) => {
+              const deskOwnerEmail = deskOwnerEmailByDeskId(layout, nextDeskId);
+              const sittingPlayerEmail = typeof player.email === "string" ? player.email : user.email;
+              if (
+                deskOwnerEmail &&
+                deskOwnerEmail.toLowerCase() !== sittingPlayerEmail.toLowerCase()
+              ) {
+                io.to(playerRoom).emit(
+                  "chatMessage",
+                  systemChatMessage(IDENTITY_THEFT_SYSTEM_CHAT_TEXT)
+                );
+              }
+            })
+            .catch((err) => {
+              console.error("playerFocusUpdate identity-theft warning failed:", err);
+            });
         }
-        socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+
+        player.isFocused = data.isFocused;
+        player.focusProgress = data.focusProgress;
+        player.activeDeskId = data.activeDeskId;
+        if (data.isFocused && typeof data.focusSitPoseIndex === "number") {
+          player.focusSitPoseIndex = data.focusSitPoseIndex;
+        } else {
+          delete player.focusSitPoseIndex;
+        }
+        socket.to(playerRoom).emit("playerMoved", player);
       }
     });
 
