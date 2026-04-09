@@ -1,4 +1,5 @@
 import type { Player } from './types';
+import { ICE_CREAM_QUARTERS_MAX } from './gameConfig';
 
 /** Five vending flavors — index is synced over the socket for other players. */
 export const ICE_CREAM_FLAVORS = [
@@ -18,8 +19,8 @@ export function iceCreamColorForIndex(index: number): string {
 
 /** Normalize socket payload so other clients always render held ice cream when valid. */
 export function getSyncedIceCreamState(
-  player: Pick<Player, 'iceCreamFlavorIndex' | 'iceCreamExpiresAt'>
-): { flavorIndex: number; expiresAt: number } | null {
+  player: Pick<Player, 'iceCreamFlavorIndex' | 'iceCreamExpiresAt' | 'iceCreamRemainingQuarters'>
+): { flavorIndex: number; expiresAt: number; remainingQuarters: number } | null {
   const exRaw = player.iceCreamExpiresAt;
   const fiRaw = player.iceCreamFlavorIndex;
   if (exRaw == null || fiRaw == null) return null;
@@ -29,5 +30,13 @@ export function getSyncedIceCreamState(
   if (flavorIndex !== Math.floor(flavorIndex) || flavorIndex < 0 || flavorIndex > ICE_CREAM_FLAVOR_COUNT - 1) {
     return null;
   }
-  return { flavorIndex, expiresAt };
+  const rqRaw = player.iceCreamRemainingQuarters;
+  let remainingQuarters =
+    rqRaw == null ? ICE_CREAM_QUARTERS_MAX : typeof rqRaw === 'number' ? rqRaw : Number(rqRaw);
+  if (!Number.isFinite(remainingQuarters) || remainingQuarters !== Math.floor(remainingQuarters)) {
+    remainingQuarters = ICE_CREAM_QUARTERS_MAX;
+  }
+  remainingQuarters = Math.min(ICE_CREAM_QUARTERS_MAX, Math.max(0, remainingQuarters));
+  if (remainingQuarters < 1) return null;
+  return { flavorIndex, expiresAt, remainingQuarters };
 }

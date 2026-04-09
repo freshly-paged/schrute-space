@@ -149,9 +149,9 @@ interface GameState {
   showVendingMenu: boolean;
   setShowVendingMenu: (show: boolean) => void;
 
-  /** Local Vend-O-Matic treat; cleared when `expiresAt` passes (see LocalPlayer). */
-  heldIceCream: { flavorIndex: number; expiresAt: number } | null;
-  setHeldIceCream: (value: { flavorIndex: number; expiresAt: number } | null) => void;
+  /** Local Vend-O-Matic treat; cleared when `expiresAt` passes or quarters reach 0 (see LocalPlayer). */
+  heldIceCream: { flavorIndex: number; expiresAt: number; remainingQuarters: number } | null;
+  setHeldIceCream: (value: { flavorIndex: number; expiresAt: number; remainingQuarters: number } | null) => void;
 
   /** Local-only: throwable prop id currently worn on the avatar (upper body). */
   wornPropId: string | null;

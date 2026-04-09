@@ -29,6 +29,7 @@ import {
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
 import {
+  ICE_CREAM_QUARTERS_MAX,
   TEAM_PYRAMID_COST_REAMS,
   TEAM_PYRAMID_DURATION_MS,
 } from "./src/gameConfig.js";
@@ -1549,7 +1550,9 @@ io.on("connection", (socket) => {
       socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
     });
 
-    socket.on("playerIceCream", (data: { flavorIndex: number | null; expiresAt: number | null }) => {
+    socket.on(
+      "playerIceCream",
+      (data: { flavorIndex: number | null; expiresAt: number | null; remainingQuarters?: number | null }) => {
       let playerRoom = "";
       for (const roomId in rooms) {
         if (rooms[roomId][socket.id]) {
@@ -1564,6 +1567,7 @@ io.on("connection", (socket) => {
       if (fi == null || ex == null) {
         delete player.iceCreamFlavorIndex;
         delete player.iceCreamExpiresAt;
+        delete player.iceCreamRemainingQuarters;
       } else {
         const fiNum = typeof fi === "number" ? fi : Number(fi);
         const exNum = typeof ex === "number" ? ex : Number(ex);
@@ -1572,11 +1576,17 @@ io.on("connection", (socket) => {
         const now = Date.now();
         // Allow client/server clock skew (±several minutes); duration is ~1 min client-side.
         if (exNum < now - 180_000 || exNum > now + 8 * 60_000) return;
+        const rqRaw = data?.remainingQuarters;
+        let rqNum = rqRaw == null ? ICE_CREAM_QUARTERS_MAX : typeof rqRaw === "number" ? rqRaw : Number(rqRaw);
+        if (!Number.isFinite(rqNum) || rqNum !== Math.floor(rqNum)) rqNum = ICE_CREAM_QUARTERS_MAX;
+        rqNum = Math.min(ICE_CREAM_QUARTERS_MAX, Math.max(1, rqNum));
         player.iceCreamFlavorIndex = fiNum;
         player.iceCreamExpiresAt = exNum;
+        player.iceCreamRemainingQuarters = rqNum;
       }
       socket.to(playerRoom).emit("playerMoved", player);
-    });
+    }
+    );
 
     socket.on("throwableRestSync", (data: { throwableId: string; position: number[]; rotation: number[] }) => {
       let playerRoom = "";

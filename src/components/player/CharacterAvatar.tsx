@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Box } from '@react-three/drei';
 import * as THREE from 'three';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
+import { ICE_CREAM_QUARTERS_MAX } from '../../gameConfig';
 import { FOCUS_SIT_POSES, FOCUS_SIT_POSE_COUNT } from '../../avatarFocusPoses';
 import { WornMsBody } from './WornMsBody';
 import { HeldIceCream } from './HeldIceCream';
@@ -22,6 +23,7 @@ export const CharacterAvatar = ({
   pantColor = '#333333',
   wornUpperPropId,
   heldIceCreamColor = null,
+  heldIceCreamRemainingQuarters = ICE_CREAM_QUARTERS_MAX,
   isFocused = false,
   focusSitPoseIndex = 0,
 }: {
@@ -35,6 +37,8 @@ export const CharacterAvatar = ({
   wornUpperPropId?: string | null;
   /** When set, a small ice cream is attached to the right hand. */
   heldIceCreamColor?: string | null;
+  /** Scoop size for held ice cream (only used when `heldIceCreamColor` is set). */
+  heldIceCreamRemainingQuarters?: number;
   /** When true, legs use a seated preset instead of standing idle. */
   isFocused?: boolean;
   /** Index into `FOCUS_SIT_POSES` (clamped). */
@@ -195,7 +199,7 @@ export const CharacterAvatar = ({
           <meshStandardMaterial color={skinTone} />
           {heldIceCreamColor ? (
             <group position={[0.1, -0.3, 0.06]} rotation={[0.25, 0, -0.2]}>
-              <HeldIceCream color={heldIceCreamColor} />
+              <HeldIceCream color={heldIceCreamColor} remainingQuarters={heldIceCreamRemainingQuarters} />
             </group>
           ) : null}
         </mesh>

@@ -36,6 +36,8 @@ export interface Player {
   iceCreamFlavorIndex?: number | null;
   /** Wall-clock ms when the ice cream prop disappears (client + server validated). */
   iceCreamExpiresAt?: number | null;
+  /** Scoop quarters left (1–4); omitted on older clients means full cone. */
+  iceCreamRemainingQuarters?: number | null;
 }
 
 export interface FurnitureItem {

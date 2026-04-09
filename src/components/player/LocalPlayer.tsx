@@ -18,7 +18,11 @@ import {
   PARKOUR_MIN_ENERGY_REQUIRED,
   focusWalkSpeedMultiplier,
 } from '../../focusEnergyModel';
-import { POMODORO_FOCUS_DURATION_SEC } from '../../gameConfig';
+import {
+  ICE_CREAM_BITE_FOCUS_ENERGY,
+  ICE_CREAM_QUARTERS_MAX,
+  POMODORO_FOCUS_DURATION_SEC,
+} from '../../gameConfig';
 import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
@@ -64,6 +68,7 @@ export const LocalPlayer = ({
   const prevInteractRef = useRef(false);
   const prevComputerRef = useRef(false);
   const prevDropRef = useRef(false);
+  const prevEatIceCreamRef = useRef(false);
   const cameraRayRef = useRef(new THREE.Ray());
   const cameraHitRef = useRef(new THREE.Vector3());
 
@@ -163,11 +168,22 @@ export const LocalPlayer = ({
 
     const rawKeys = get();
 
-    const keys =
-      isChatFocused || isTimerActive || isInspecting || showVendingMenu
-        ? { forward: false, backward: false, left: false, right: false, jump: false, interact: false, computer: false, drop: false }
-        : rawKeys;
-    const { forward, backward, left, right, jump, interact, computer, drop } = keys;
+    const blockMovement = isChatFocused || isTimerActive || isInspecting || showVendingMenu;
+    const keys = blockMovement
+      ? {
+          forward: false,
+          backward: false,
+          left: false,
+          right: false,
+          jump: false,
+          interact: false,
+          computer: false,
+          drop: false,
+          eatIceCream:
+            !isChatFocused && !isInspecting && !showVendingMenu ? rawKeys.eatIceCream : false,
+        }
+      : rawKeys;
+    const { forward, backward, left, right, jump, interact, computer, drop, eatIceCream } = keys;
 
     setIsMoving(forward || backward || left || right);
 
@@ -178,6 +194,8 @@ export const LocalPlayer = ({
     prevComputerRef.current = computer;
     const dropEdge = drop && !prevDropRef.current;
     prevDropRef.current = drop;
+    const eatIceCreamEdge = eatIceCream && !prevEatIceCreamRef.current;
+    prevEatIceCreamRef.current = eatIceCream;
 
     // Throwable object interactions take priority over desk interactions
     let interactConsumed = false;
@@ -248,6 +266,33 @@ export const LocalPlayer = ({
           camDir.normalize();
           throwObject([camDir.x * 10, 5, camDir.z * 10]);
           emitHeldThrowableSync(socket, null);
+        }
+      }
+    }
+
+    if (eatIceCreamEdge) {
+      const iceNow = useGameStore.getState().heldIceCream;
+      const objId = useGameStore.getState().heldObjectId;
+      if (
+        iceNow &&
+        Date.now() < iceNow.expiresAt &&
+        objId === null &&
+        iceNow.remainingQuarters >= 1
+      ) {
+        const st = useGameStore.getState();
+        st.setFocusEnergy(st.focusEnergy + ICE_CREAM_BITE_FOCUS_ENERGY);
+        const nextQ = iceNow.remainingQuarters - 1;
+        if (nextQ <= 0) {
+          useGameStore.getState().setHeldIceCream(null);
+          socket?.connected && socket.emit('playerIceCream', { flavorIndex: null, expiresAt: null });
+        } else {
+          useGameStore.getState().setHeldIceCream({ ...iceNow, remainingQuarters: nextQ });
+          socket?.connected &&
+            socket.emit('playerIceCream', {
+              flavorIndex: iceNow.flavorIndex,
+              expiresAt: iceNow.expiresAt,
+              remainingQuarters: nextQ,
+            });
         }
       }
     }
@@ -528,10 +573,12 @@ export const LocalPlayer = ({
                 heldIceCreamColor={
                   heldIceCream &&
                   Date.now() < heldIceCream.expiresAt &&
+                  heldIceCream.remainingQuarters >= 1 &&
                   heldObjectId === null
                     ? iceCreamColorForIndex(heldIceCream.flavorIndex)
                     : null
                 }
+                heldIceCreamRemainingQuarters={heldIceCream?.remainingQuarters ?? ICE_CREAM_QUARTERS_MAX}
                 isFocused={isTimerActive}
                 focusSitPoseIndex={focusSitPoseIndex}
               />
@@ -558,6 +605,27 @@ export const LocalPlayer = ({
             </Text>
           </Billboard>
         )}
+        {heldIceCream &&
+          Date.now() < heldIceCream.expiresAt &&
+          heldIceCream.remainingQuarters >= 1 &&
+          heldObjectId === null &&
+          !isChatFocused &&
+          !isInspecting &&
+          !showVendingMenu && (
+            <Billboard position={[0, 1.42, 0.48]}>
+              <Text
+                fontSize={0.14}
+                color="#fdf4ff"
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={0.008}
+                outlineColor="black"
+                onSync={onOverlayTextSync}
+              >
+                Press [B] to eat your ice cream
+              </Text>
+            </Billboard>
+          )}
         {isTimerActive && (
           <Billboard position={[0, 3.0, 0]}>
             {/* Outer background */}

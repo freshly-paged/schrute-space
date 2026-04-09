@@ -3,6 +3,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import type { Socket } from 'socket.io-client';
 import { useGameStore } from '../../store/useGameStore';
 import { ICE_CREAM_FLAVORS, ICE_CREAM_FLAVOR_COUNT } from '../../iceCreamFlavors';
+import { ICE_CREAM_QUARTERS_MAX } from '../../gameConfig';
 import {
   CHAIR_UPGRADE_COST_REAMS,
   CHAIR_UPGRADE_MAX_LEVEL,
@@ -111,8 +112,13 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
     const flavorIndex = Math.min(Math.max(0, selectedFlavor), ICE_CREAM_FLAVOR_COUNT - 1);
     const expiresAt = Date.now() + ICE_CREAM_DURATION_MS;
     addPaper(-ICE_CREAM_COST_REAMS);
-    setHeldIceCream({ flavorIndex, expiresAt });
-    socket?.connected && socket.emit('playerIceCream', { flavorIndex, expiresAt });
+    setHeldIceCream({ flavorIndex, expiresAt, remainingQuarters: ICE_CREAM_QUARTERS_MAX });
+    socket?.connected &&
+      socket.emit('playerIceCream', {
+        flavorIndex,
+        expiresAt,
+        remainingQuarters: ICE_CREAM_QUARTERS_MAX,
+      });
     onClose();
   };
 
