@@ -99,6 +99,7 @@ export const HUDPanel = ({
           ['W x2', 'Roll'],
           ['E', 'Focus'],
           ['F', 'Computer'],
+          ['B', 'Eat ice cream'],
         ].map(([key, label]) => (
           <div key={key} className="flex items-center gap-2 text-white/80 text-[10px]">
             <kbd className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10">{key}</kbd>

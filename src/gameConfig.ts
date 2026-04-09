@@ -106,6 +106,12 @@ export const ICE_CREAM_COST_REAMS = 2;
 /** Duration of the ice cream prop in milliseconds. */
 export const ICE_CREAM_DURATION_MS = 60_000;
 
+/** Bites until the cone is gone (each bite removes one quarter of the scoop). */
+export const ICE_CREAM_QUARTERS_MAX = 4;
+
+/** Focus energy gained per ice cream bite (clamped to {@link FOCUS_ENERGY_MAX}). */
+export const ICE_CREAM_BITE_FOCUS_ENERGY = 4;
+
 // ---------------------------------------------------------------------------
 // Vending machine — Team Pyramid (room buff)
 // ---------------------------------------------------------------------------

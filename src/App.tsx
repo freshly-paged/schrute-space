@@ -41,6 +41,7 @@ const KEYBOARD_MAP = [
   { name: 'interact', keys: ['KeyE'] },
   { name: 'computer', keys: ['KeyF'] },
   { name: 'drop', keys: ['KeyG'] },
+  { name: 'eatIceCream', keys: ['KeyB'] },
 ];
 
 function getRoomFromURL(): string | null {

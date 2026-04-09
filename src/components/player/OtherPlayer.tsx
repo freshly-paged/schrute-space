@@ -52,7 +52,7 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
     const ms = iceExp - Date.now() + 30;
     const id = window.setTimeout(() => setIceCreamTick((t) => t + 1), Math.max(ms, 0));
     return () => clearTimeout(id);
-  }, [iceExp, syncedIce?.flavorIndex]);
+  }, [iceExp, syncedIce?.flavorIndex, syncedIce?.remainingQuarters]);
 
   const showHeldIceCream =
     syncedIce != null &&
@@ -84,6 +84,7 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
               pantColor={player.avatarConfig?.pantColor ?? DEFAULT_AVATAR_CONFIG.pantColor}
               wornUpperPropId={player.wornPropId === MS_BODY_THROWABLE_ID ? MS_BODY_THROWABLE_ID : null}
               heldIceCreamColor={heldIceCreamColor}
+              heldIceCreamRemainingQuarters={syncedIce?.remainingQuarters}
               isFocused={player.isFocused ?? false}
               focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
             />
