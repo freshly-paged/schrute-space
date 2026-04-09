@@ -94,6 +94,14 @@ export default function App() {
     setUser(user ?? null);
   }, [user]);
 
+  useEffect(() => {
+    const preventSpaceScroll = (e: KeyboardEvent) => {
+      if (e.code === 'Space') e.preventDefault();
+    };
+    window.addEventListener('keydown', preventSpaceScroll);
+    return () => window.removeEventListener('keydown', preventSpaceScroll);
+  }, []);
+
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
