@@ -497,15 +497,17 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
   it('broadcasts a system warning when a player focuses at another player desk', async () => {
     owner = connectAs(ownerEmail);
     await waitFor(owner, 'connect');
+    const ownerLayoutPromise = waitFor<any[]>(owner, 'roomLayoutLoaded');
     owner.emit('joinRoom', { roomId });
     await waitFor(owner, 'currentPlayers');
-    await waitFor<any[]>(owner, 'roomLayoutLoaded');
+    await ownerLayoutPromise;
 
     intruder = connectAs(intruderEmail);
     await waitFor(intruder, 'connect');
+    const intruderLayoutPromise = waitFor<any[]>(intruder, 'roomLayoutLoaded');
     intruder.emit('joinRoom', { roomId });
     await waitFor(intruder, 'currentPlayers');
-    const intruderLayout = await waitFor<any[]>(intruder, 'roomLayoutLoaded');
+    const intruderLayout = await intruderLayoutPromise;
 
     const ownerDesk = intruderLayout.find(
       (f: any) => f.type === 'desk' && f.config?.ownerEmail === ownerEmail
