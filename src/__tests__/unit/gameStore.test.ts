@@ -24,6 +24,7 @@ function resetStore() {
     roomLayout: [],
     user: undefined,
     teamPyramidBuffExpiresAt: null,
+    focusSavingModeEnabled: false,
   });
 }
 
@@ -102,6 +103,30 @@ describe('useGameStore — timer lifecycle', () => {
     useGameStore.getState().togglePause();
     expect(useGameStore.getState().isTimerPaused).toBe(false);
   });
+
+  it('saving mode can only be enabled during active focus sessions', () => {
+    const state = useGameStore.getState();
+    state.setFocusSavingModeEnabled(true);
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(false);
+
+    state.startTimer('break');
+    state.setFocusSavingModeEnabled(true);
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(false);
+
+    state.stopTimer();
+    state.startTimer('focus');
+    state.setFocusSavingModeEnabled(true);
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(true);
+  });
+
+  it('stopTimer always clears saving mode', () => {
+    const state = useGameStore.getState();
+    state.startTimer('focus');
+    state.setFocusSavingModeEnabled(true);
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(true);
+    state.stopTimer();
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(false);
+  });
 });
 
 // ── tickTimer ─────────────────────────────────────────────────────────────────
@@ -146,10 +171,12 @@ describe('useGameStore — tickTimer', () => {
 
   it('stops timer when the end time is reached', () => {
     useGameStore.getState().startTimer('focus');
+    useGameStore.getState().setFocusSavingModeEnabled(true);
     vi.advanceTimersByTime(25 * 60 * 1000 + 1000); // past full 25 minutes
     useGameStore.getState().tickTimer();
     expect(useGameStore.getState().isTimerActive).toBe(false);
     expect(useGameStore.getState().activeDeskId).toBeNull();
+    expect(useGameStore.getState().focusSavingModeEnabled).toBe(false);
   });
 
   it('awards paper after 30 seconds of focus (baseline 2 reams/min)', () => {

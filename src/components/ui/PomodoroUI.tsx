@@ -25,6 +25,8 @@ export const PomodoroUI = () => {
     monitorLevelByEmail,
     focusEnergy,
     teamPyramidBuffExpiresAt,
+    focusSavingModeEnabled,
+    toggleFocusSavingMode,
   } = useGameStore();
   const upgradeEmail = getEffectiveDeskUpgradeEmail(
     roomLayout,
@@ -125,6 +127,29 @@ export const PomodoroUI = () => {
                     </span>
                   </div>
                 )}
+                <div className="mt-2 w-full rounded-xl border border-indigo-400/35 bg-indigo-500/10 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-left">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-200">
+                        Saving Mode
+                      </div>
+                      <div className="text-[10px] leading-snug text-indigo-100/80">
+                        Hide regular UI and reduce render cost.
+                      </div>
+                    </div>
+                    <button
+                      onClick={toggleFocusSavingMode}
+                      className={`px-3 py-1 rounded-full border text-[10px] uppercase tracking-widest font-bold transition-all ${
+                        focusSavingModeEnabled
+                          ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
+                          : 'border-white/25 bg-white/5 text-slate-300 hover:bg-white/10'
+                      }`}
+                      title="Toggle Saving Mode"
+                    >
+                      {focusSavingModeEnabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
