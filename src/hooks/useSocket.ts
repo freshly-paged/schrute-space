@@ -40,7 +40,11 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     syncRemoteHeldThrowableIds(playerMap);
   };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [lastLocalMessage, setLastLocalMessage] = useState<{ text: string; time: number } | null>(null);
+  const [lastLocalMessage, setLastLocalMessage] = useState<{
+    text: string;
+    time: number;
+    durationMs?: number;
+  } | null>(null);
   const [disconnectReason, setDisconnectReason] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -130,18 +134,25 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
               ...prev[message.playerId],
               lastMessage: message.text,
               lastMessageTime: message.time,
+              lastMessageDurationMs: undefined,
             },
           };
         });
       } else {
-        setLastLocalMessage({ text: message.text, time: message.time });
+        setLastLocalMessage({ text: message.text, time: message.time, durationMs: undefined });
       }
     });
 
     newSocket.on(
       'ambientSpeech',
-      (payload: { playerId: string; text: string; time: number }) => {
+      (payload: { playerId: string; text: string; time: number; durationMs?: number }) => {
         if (!payload?.playerId || typeof payload.text !== 'string' || typeof payload.time !== 'number') return;
+        const durationMs =
+          typeof payload.durationMs === 'number' &&
+          Number.isFinite(payload.durationMs) &&
+          payload.durationMs > 0
+            ? payload.durationMs
+            : undefined;
         if (payload.playerId !== newSocket.id) {
           setPlayers((prev) => {
             if (!prev[payload.playerId]) return prev;
@@ -151,11 +162,12 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
                 ...prev[payload.playerId],
                 lastMessage: payload.text,
                 lastMessageTime: payload.time,
+                lastMessageDurationMs: durationMs,
               },
             };
           });
         } else {
-          setLastLocalMessage({ text: payload.text, time: payload.time });
+          setLastLocalMessage({ text: payload.text, time: payload.time, durationMs });
         }
       }
     );

@@ -437,6 +437,7 @@ export default function App() {
               socket={socket}
               lastMessage={lastLocalMessage?.text}
               lastMessageTime={lastLocalMessage?.time}
+              lastMessageDurationMs={lastLocalMessage?.durationMs}
               playerName={visibleDisplayName}
               players={players}
             />

@@ -2,16 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { Html } from '@react-three/drei';
 import { motion } from 'motion/react';
 
-export const ChatBubble = ({ text, time }: { text?: string, time?: number }) => {
+const DEFAULT_CHAT_BUBBLE_DURATION_MS = 5000;
+
+export const ChatBubble = ({
+  text,
+  time,
+  durationMs,
+}: {
+  text?: string;
+  time?: number;
+  durationMs?: number;
+}) => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (text && time) {
       setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 5000);
+      const safeDurationMs =
+        typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+          ? durationMs
+          : DEFAULT_CHAT_BUBBLE_DURATION_MS;
+      const timer = setTimeout(() => setVisible(false), safeDurationMs);
       return () => clearTimeout(timer);
     }
-  }, [text, time]);
+  }, [text, time, durationMs]);
 
   if (!visible || !text) return null;
 

@@ -18,6 +18,8 @@ export interface Player {
   name: string;
   lastMessage?: string;
   lastMessageTime?: number;
+  /** Optional bubble visibility duration in ms for the current overhead message. */
+  lastMessageDurationMs?: number;
   isRolling?: boolean;
   rollTimer?: number;
   isFocused?: boolean;
