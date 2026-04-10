@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { FloorPlanRect } from '../../../types';
 import { useGameStore } from '../../../store/useGameStore';
 import { DeskItem } from '../../../types';
@@ -8,6 +9,8 @@ import { CeilingLights } from './props/CeilingLights';
 import { Plant } from '../shared/props/Plant';
 import { PrinterStation } from './props/PrinterStation';
 import { WORKING_AREA_BOUNDS } from '../../../officeLayout';
+
+const _deskWorldPos = new THREE.Vector3();
 
 // Working area occupies the open floor; bounds are defined in officeLayout.ts
 export const FLOOR_PLAN_RECT: FloorPlanRect = {
@@ -29,6 +32,32 @@ export const WorkingArea = () => {
   const desks = useGameStore((s) => s.roomLayout).filter(
     (f): f is DeskItem => f.type === 'desk'
   );
+  const deskRefsMap = useRef<Map<string, THREE.Group>>(new Map());
+
+  // Single proximity check for all desks instead of per-desk useFrame hooks
+  useFrame((state) => {
+    const player = state.scene.getObjectByName('localPlayer');
+    if (!player) return;
+
+    const store = useGameStore.getState();
+    let closestId: string | null = null;
+    let closestDist = 2; // proximity threshold
+
+    for (const desk of desks) {
+      const ref = deskRefsMap.current.get(desk.id);
+      if (!ref) continue;
+      ref.getWorldPosition(_deskWorldPos);
+      const dist = player.position.distanceTo(_deskWorldPos);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestId = desk.id;
+      }
+    }
+
+    if (store.nearestDeskId !== closestId) {
+      store.setNearestDeskId(closestId);
+    }
+  });
 
   return (
     <group>
@@ -52,6 +81,10 @@ export const WorkingArea = () => {
           rotation={desk.rotation}
           ownerName={String(desk.config.ownerName)}
           ownerEmail={desk.config.ownerEmail}
+          groupRef={(el) => {
+            if (el) deskRefsMap.current.set(desk.id, el);
+            else deskRefsMap.current.delete(desk.id);
+          }}
         />
       ))}
     </group>

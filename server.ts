@@ -1174,6 +1174,7 @@ export async function createApp(injectedPool?: pg.Pool) {
 
   // Player state grouped by room
 const rooms: Record<string, Record<string, any>> = {};
+const socketToRoom = new Map<string, string>();
 
 /** Per-room Team Pyramid buff expiry (epoch ms). In-memory only. */
 const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
@@ -1290,6 +1291,7 @@ io.on("connection", (socket) => {
         wornPropId: null,
         heldThrowableId: null,
       };
+      socketToRoom.set(socket.id, room);
 
       // Remove stale entries for the same email before sending currentPlayers.
       // The old socket's disconnect event fires asynchronously (after DB awaits above),
@@ -1297,6 +1299,7 @@ io.on("connection", (socket) => {
       for (const socketId of Object.keys(rooms[room])) {
         if (rooms[room][socketId].email === user.email && socketId !== socket.id) {
           delete rooms[room][socketId];
+          socketToRoom.delete(socketId);
           socket.to(room).emit("playerDisconnected", socketId);
         }
       }
@@ -1403,13 +1406,7 @@ io.on("connection", (socket) => {
       "purchaseChairUpgrade",
       async (ack: (r: unknown) => void) => {
         const respond = typeof ack === "function" ? ack : () => {};
-        let playerRoom = "";
-        for (const roomId in rooms) {
-          if (rooms[roomId][socket.id]) {
-            playerRoom = roomId;
-            break;
-          }
-        }
+        const playerRoom = socketToRoom.get(socket.id) ?? "";
         if (!playerRoom) {
           respond({ ok: false, error: "not_in_room" });
           return;
@@ -1442,13 +1439,7 @@ io.on("connection", (socket) => {
       "purchaseMonitorUpgrade",
       async (ack: (r: unknown) => void) => {
         const respond = typeof ack === "function" ? ack : () => {};
-        let playerRoom = "";
-        for (const roomId in rooms) {
-          if (rooms[roomId][socket.id]) {
-            playerRoom = roomId;
-            break;
-          }
-        }
+        const playerRoom = socketToRoom.get(socket.id) ?? "";
         if (!playerRoom) {
           respond({ ok: false, error: "not_in_room" });
           return;
@@ -1481,13 +1472,7 @@ io.on("connection", (socket) => {
       "purchaseTeamPyramid",
       async (ack: (r: unknown) => void) => {
         const respond = typeof ack === "function" ? ack : () => {};
-        let playerRoom = "";
-        for (const roomId in rooms) {
-          if (rooms[roomId][socket.id]) {
-            playerRoom = roomId;
-            break;
-          }
-        }
+        const playerRoom = socketToRoom.get(socket.id) ?? "";
         if (!playerRoom) {
           respond({ ok: false, error: "not_in_room" });
           return;
@@ -1518,14 +1503,8 @@ io.on("connection", (socket) => {
     );
 
     socket.on("playerWornProp", (data: { propId: string | null }) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (!playerRoom || !rooms[playerRoom]?.[socket.id]) return;
       const pid = data?.propId ?? null;
       if (pid !== null && pid !== "ms_body") return;
       rooms[playerRoom][socket.id].wornPropId = pid;
@@ -1536,14 +1515,8 @@ io.on("connection", (socket) => {
     });
 
     socket.on("playerHeldThrowable", (data: { propId: string | null }) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (!playerRoom || !rooms[playerRoom]?.[socket.id]) return;
       const propId = data?.propId ?? null;
       if (!isAllowedHeldThrowableId(propId)) return;
       rooms[playerRoom][socket.id].heldThrowableId = propId;
@@ -1553,14 +1526,8 @@ io.on("connection", (socket) => {
     socket.on(
       "playerIceCream",
       (data: { flavorIndex: number | null; expiresAt: number | null; remainingQuarters?: number | null }) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-      if (!playerRoom || !rooms[playerRoom][socket.id]) return;
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (!playerRoom || !rooms[playerRoom]?.[socket.id]) return;
       const player = rooms[playerRoom][socket.id];
       const fi = data?.flavorIndex;
       const ex = data?.expiresAt;
@@ -1589,13 +1556,7 @@ io.on("connection", (socket) => {
     );
 
     socket.on("throwableRestSync", (data: { throwableId: string; position: number[]; rotation: number[] }) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
       if (!playerRoom) return;
       if (!data || data.throwableId !== "ms_body") return;
       const { position, rotation } = data;
@@ -1611,26 +1572,16 @@ io.on("connection", (socket) => {
       const sanitized: AvatarConfig = { shirtColor, skinTone, pantColor };
       saveAvatarConfig(user.email, sanitized);
       // Update in-memory state and broadcast to room
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) { playerRoom = roomId; break; }
-      }
-      if (playerRoom && rooms[playerRoom][socket.id]) {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (playerRoom && rooms[playerRoom]?.[socket.id]) {
         rooms[playerRoom][socket.id].avatarConfig = sanitized;
         socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
       }
     });
 
     socket.on("chatMessage", (messageText: string) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-
-      if (playerRoom && rooms[playerRoom][socket.id]) {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (playerRoom && rooms[playerRoom]?.[socket.id]) {
         const player = rooms[playerRoom][socket.id];
         const message = {
           id: Math.random().toString(36).substring(7),
@@ -1650,16 +1601,8 @@ io.on("connection", (socket) => {
     });
 
     socket.on("playerMovement", (movementData) => {
-      // Find which room the player is in
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-
-      if (playerRoom && rooms[playerRoom][socket.id]) {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (playerRoom && rooms[playerRoom]?.[socket.id]) {
         rooms[playerRoom][socket.id].position = movementData.position;
         rooms[playerRoom][socket.id].rotation = movementData.rotation;
         rooms[playerRoom][socket.id].isRolling = movementData.isRolling;
@@ -1674,15 +1617,8 @@ io.on("connection", (socket) => {
       activeDeskId: string | null;
       focusSitPoseIndex?: number;
     }) => {
-      let playerRoom = "";
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          playerRoom = roomId;
-          break;
-        }
-      }
-
-      if (playerRoom && rooms[playerRoom][socket.id]) {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (playerRoom && rooms[playerRoom]?.[socket.id]) {
         const player = rooms[playerRoom][socket.id];
         const wasFocused = !!player.isFocused;
         const prevDeskId =
@@ -1746,16 +1682,15 @@ io.on("connection", (socket) => {
         activeUsers.delete(user.email);
       }
 
-      for (const roomId in rooms) {
-        if (rooms[roomId][socket.id]) {
-          delete rooms[roomId][socket.id];
-          io.to(roomId).emit("playerDisconnected", socket.id);
-          
-          // Clean up empty rooms
-          if (Object.keys(rooms[roomId]).length === 0) {
-            delete rooms[roomId];
-          }
-          break;
+      const playerRoom = socketToRoom.get(socket.id);
+      if (playerRoom && rooms[playerRoom]?.[socket.id]) {
+        delete rooms[playerRoom][socket.id];
+        socketToRoom.delete(socket.id);
+        io.to(playerRoom).emit("playerDisconnected", socket.id);
+
+        // Clean up empty rooms
+        if (Object.keys(rooms[playerRoom]).length === 0) {
+          delete rooms[playerRoom];
         }
       }
     });

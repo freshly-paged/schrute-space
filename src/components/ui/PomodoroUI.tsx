@@ -9,25 +9,23 @@ import { useGameStore } from '../../store/useGameStore';
 import { FocusEnergyBar } from './FocusEnergyBar';
 
 export const PomodoroUI = () => {
-  const {
-    isTimerActive,
-    isTimerPaused,
-    timerMode,
-    timeLeft,
-    tickTimer,
-    stopTimer,
-    togglePause,
-    nearestDeskId,
-    activeDeskId,
-    roomLayout,
-    sessionPaper,
-    user,
-    monitorLevelByEmail,
-    focusEnergy,
-    teamPyramidBuffExpiresAt,
-    focusSavingModeEnabled,
-    toggleFocusSavingMode,
-  } = useGameStore();
+  const isTimerActive = useGameStore((s) => s.isTimerActive);
+  const isTimerPaused = useGameStore((s) => s.isTimerPaused);
+  const timerMode = useGameStore((s) => s.timerMode);
+  const timeLeft = useGameStore((s) => s.timeLeft);
+  const tickTimer = useGameStore((s) => s.tickTimer);
+  const stopTimer = useGameStore((s) => s.stopTimer);
+  const togglePause = useGameStore((s) => s.togglePause);
+  const nearestDeskId = useGameStore((s) => s.nearestDeskId);
+  const activeDeskId = useGameStore((s) => s.activeDeskId);
+  const roomLayout = useGameStore((s) => s.roomLayout);
+  const sessionPaper = useGameStore((s) => s.sessionPaper);
+  const user = useGameStore((s) => s.user);
+  const monitorLevelByEmail = useGameStore((s) => s.monitorLevelByEmail);
+  const focusEnergy = useGameStore((s) => s.focusEnergy);
+  const teamPyramidBuffExpiresAt = useGameStore((s) => s.teamPyramidBuffExpiresAt);
+  const focusSavingModeEnabled = useGameStore((s) => s.focusSavingModeEnabled);
+  const toggleFocusSavingMode = useGameStore((s) => s.toggleFocusSavingMode);
   const upgradeEmail = getEffectiveDeskUpgradeEmail(
     roomLayout,
     activeDeskId,

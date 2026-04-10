@@ -1,24 +1,26 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
 
+// Shared materials — avoids creating hundreds of duplicate instances
+const monitorBodyMat = new THREE.MeshStandardMaterial({ color: '#111111' });
+const monitorScreenMat = new THREE.MeshStandardMaterial({ color: '#0a1f33', emissive: new THREE.Color('#1a3a5c'), emissiveIntensity: 0.6 });
+const monitorStandMat = new THREE.MeshStandardMaterial({ color: '#222222' });
+const deskLegMat = new THREE.MeshStandardMaterial({ color: '#333333' });
+const deskPaperMat = new THREE.MeshStandardMaterial({ color: '#f5f5f0' });
+const deskMugMat = new THREE.MeshStandardMaterial({ color: '#2c1810' });
+const deskKeyboardMat = new THREE.MeshStandardMaterial({ color: '#1a1a1a' });
+
 function SingleDeskMonitor() {
   return (
     <group>
-      <Box args={[0.65, 0.42, 0.05]} position={[0, 0.21, -0.2]}>
-        <meshStandardMaterial color="#111111" />
-      </Box>
-      <Box args={[0.55, 0.32, 0.01]} position={[0, 0.21, -0.17]}>
-        <meshStandardMaterial color="#0a1f33" emissive="#1a3a5c" emissiveIntensity={0.6} />
-      </Box>
-      <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
-        <meshStandardMaterial color="#222" />
-      </Box>
+      <Box args={[0.65, 0.42, 0.05]} position={[0, 0.21, -0.2]} material={monitorBodyMat} />
+      <Box args={[0.55, 0.32, 0.01]} position={[0, 0.21, -0.17]} material={monitorScreenMat} />
+      <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]} material={monitorStandMat} />
     </group>
   );
 }
@@ -93,6 +95,7 @@ export const Desk = ({
   hasChair = true,
   ownerName,
   ownerEmail,
+  groupRef,
 }: {
   id: string;
   position: [number, number, number];
@@ -100,13 +103,12 @@ export const Desk = ({
   hasChair?: boolean;
   ownerName?: string;
   ownerEmail?: string;
+  groupRef?: React.Ref<THREE.Group>;
 }) => {
-  const setNearestDeskId = useGameStore((state) => state.setNearestDeskId);
   const nearestDeskId = useGameStore((state) => state.nearestDeskId);
   const isTimerActive = useGameStore((state) => state.isTimerActive);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const isOccupied = occupiedDeskIds.includes(id);
-  const deskRef = useRef<THREE.Group>(null);
   const userEmail = useGameStore((state) => state.user?.email);
   const myRole = useGameStore((state) => state.roomInfo?.myRole);
   const chairLevelByEmail = useGameStore((state) => state.chairLevelByEmail);
@@ -135,23 +137,10 @@ export const Desk = ({
   const isOwnDesk = !!ownerEmail && ownerEmail === userEmail;
   const isOwnAdminDesk = isOwnDesk && (myRole === 'admin' || myRole === 'manager');
 
-  useFrame((state) => {
-    if (!deskRef.current) return;
-    const player = state.scene.getObjectByName('localPlayer');
-    if (!player) return;
-
-    const distance = player.position.distanceTo(deskRef.current.position);
-    if (distance < 2) {
-      if (nearestDeskId !== id) setNearestDeskId(id);
-    } else if (nearestDeskId === id) {
-      setNearestDeskId(null);
-    }
-  });
-
   const isNearest = nearestDeskId === id;
 
   return (
-    <group ref={deskRef} position={position} rotation={rotation}>
+    <group ref={groupRef} position={position} rotation={rotation}>
       {deskNameplate && (
         <Billboard position={[0, 1.8, 0]}>
           <Text
@@ -197,36 +186,19 @@ export const Desk = ({
       </Box>
 
       {/* Legs */}
-      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, -0.4]}>
-        <meshStandardMaterial color="#333" />
-      </Box>
-      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, -0.4]}>
-        <meshStandardMaterial color="#333" />
-      </Box>
-      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, 0.4]}>
-        <meshStandardMaterial color="#333" />
-      </Box>
-      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, 0.4]}>
-        <meshStandardMaterial color="#333" />
-      </Box>
+      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, -0.4]} material={deskLegMat} />
+      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, -0.4]} material={deskLegMat} />
+      <Box args={[0.1, 0.95, 0.1]} position={[-0.9, 0.475, 0.4]} material={deskLegMat} />
+      <Box args={[0.1, 0.95, 0.1]} position={[0.9, 0.475, 0.4]} material={deskLegMat} />
 
       {/* Paper stack on desk surface */}
-      <Box args={[0.4, 0.02, 0.3]} position={[0.5, 1.01, 0.1]}>
-        <meshStandardMaterial color="#f5f5f0" />
-      </Box>
+      <Box args={[0.4, 0.02, 0.3]} position={[0.5, 1.01, 0.1]} material={deskPaperMat} />
 
       {/* Coffee mug */}
-      <Cylinder
-        args={[0.06, 0.06, 0.12, 8]}
-        position={[-0.55, 1.06, 0.1]}
-      >
-        <meshStandardMaterial color="#2c1810" />
-      </Cylinder>
+      <Cylinder args={[0.06, 0.06, 0.12, 8]} position={[-0.55, 1.06, 0.1]} material={deskMugMat} />
 
       {/* Keyboard strip */}
-      <Box args={[0.5, 0.02, 0.15]} position={[0, 1.01, 0.25]}>
-        <meshStandardMaterial color="#1a1a1a" />
-      </Box>
+      <Box args={[0.5, 0.02, 0.15]} position={[0, 1.01, 0.25]} material={deskKeyboardMat} />
 
       <DeskMonitors count={monitorCount} />
 
