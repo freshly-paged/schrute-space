@@ -40,6 +40,58 @@ const ROOM_RECTS = [
   return { label: r.label, x: x1, y: y1, w: x2 - x1, h: y2 - y1, color: r.color };
 });
 
+// Desk half-extents in SVG pixels (matches the rect: width=40, height=24)
+const DESK_HALF_W = 20;
+const DESK_HALF_H = 12;
+
+function getOBBCorners(cx: number, cy: number, angle: number): [number, number][] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const corners: [number, number][] = [
+    [DESK_HALF_W, DESK_HALF_H],
+    [-DESK_HALF_W, DESK_HALF_H],
+    [-DESK_HALF_W, -DESK_HALF_H],
+    [DESK_HALF_W, -DESK_HALF_H],
+  ];
+  return corners.map(([lx, ly]) => [cx + lx * cos - ly * sin, cy + lx * sin + ly * cos]);
+}
+
+function projectOBB(corners: [number, number][], axis: [number, number]): [number, number] {
+  const dots = corners.map(([x, y]) => x * axis[0] + y * axis[1]);
+  return [Math.min(...dots), Math.max(...dots)];
+}
+
+function desksIntersect(a: DeskItem, b: DeskItem): boolean {
+  const [ax, ay] = worldToSvg(a.position[0], a.position[2]);
+  const [bx, by] = worldToSvg(b.position[0], b.position[2]);
+  const aAngle = -a.rotation[1];
+  const bAngle = -b.rotation[1];
+
+  const cornersA = getOBBCorners(ax, ay, aAngle);
+  const cornersB = getOBBCorners(bx, by, bAngle);
+
+  const axes: [number, number][] = [
+    [Math.cos(aAngle), Math.sin(aAngle)],
+    [-Math.sin(aAngle), Math.cos(aAngle)],
+    [Math.cos(bAngle), Math.sin(bAngle)],
+    [-Math.sin(bAngle), Math.cos(bAngle)],
+  ];
+
+  for (const axis of axes) {
+    const [minA, maxA] = projectOBB(cornersA, axis);
+    const [minB, maxB] = projectOBB(cornersB, axis);
+    if (maxA < minB || maxB < minA) return false; // separating axis found
+  }
+  return true;
+}
+
+function anyDeskIntersects(deskId: string, layout: FurnitureItem[]): boolean {
+  const desks = layout.filter((f): f is DeskItem => f.type === 'desk');
+  const moved = desks.find((d) => d.id === deskId);
+  if (!moved) return false;
+  return desks.some((d) => d.id !== deskId && desksIntersect(moved, d));
+}
+
 interface DragState {
   deskId: string;
   startClientX: number;
@@ -64,6 +116,7 @@ export const OfficeCustomizationPage = ({
   const [layout, setLayout] = useState<FurnitureItem[]>(initialLayout);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [intersectionError, setIntersectionError] = useState(false);
   const dragging = useRef<DragState | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -106,27 +159,42 @@ export const OfficeCustomizationPage = ({
     const clampedX = Math.max(-22, Math.min(22, newWorldX));
     const clampedZ = Math.max(-22, Math.min(22, newWorldZ));
 
-    setLayout((prev) =>
-      prev.map((f) =>
-        f.id === dragging.current!.deskId
-          ? { ...f, position: [clampedX, f.position[1], clampedZ] as [number, number, number] }
-          : f
-      )
+    const newLayout = layout.map((f) =>
+      f.id === dragging.current!.deskId
+        ? { ...f, position: [clampedX, f.position[1], clampedZ] as [number, number, number] }
+        : f
     );
-  }, []);
+
+    if (anyDeskIntersects(dragging.current!.deskId, newLayout)) {
+      setIntersectionError(true);
+      return;
+    }
+
+    setIntersectionError(false);
+    setLayout(newLayout);
+  }, [layout]);
 
   const handleRotate = useCallback((deskId: string, direction: 1 | -1) => {
-    setLayout((prev) =>
-      prev.map((f) =>
+    setLayout((prev) => {
+      const newLayout = prev.map((f) =>
         f.id === deskId
           ? { ...f, rotation: [f.rotation[0], f.rotation[1] + direction * (Math.PI / 4), f.rotation[2]] as [number, number, number] }
           : f
-      )
-    );
+      );
+      if (anyDeskIntersects(deskId, newLayout)) {
+        setIntersectionError(true);
+        return prev;
+      }
+      setIntersectionError(false);
+      return newLayout;
+    });
   }, []);
 
   useEffect(() => {
-    const stopDrag = () => { dragging.current = null; };
+    const stopDrag = () => {
+      dragging.current = null;
+      setIntersectionError(false);
+    };
     window.addEventListener('mouseup', stopDrag);
     return () => window.removeEventListener('mouseup', stopDrag);
   }, []);
@@ -171,6 +239,13 @@ export const OfficeCustomizationPage = ({
             </button>
           </div>
         </div>
+
+        {/* Intersection error */}
+        {intersectionError && (
+          <div className="pixel-border bg-red-900/80 border-red-500 p-2 mb-4 text-center text-xs text-red-200">
+            ⚠ Desks cannot overlap — move is not allowed
+          </div>
+        )}
 
         {/* Floor plan */}
         <div className="pixel-border bg-[#2d1f0f] p-4 mb-4">
