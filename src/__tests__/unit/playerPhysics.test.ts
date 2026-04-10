@@ -25,7 +25,20 @@ vi.mock('three', () => {
     multiplyScalar: vi.fn().mockReturnThis(),
   }));
 
-  return { Box3: MockBox3, Vector3: MockVector3 };
+  const MockMaterial = vi.fn().mockImplementation(() => ({}));
+  const MockGeometry = vi.fn().mockImplementation(() => ({}));
+  return {
+    Box3: MockBox3,
+    Vector3: MockVector3,
+    MeshStandardMaterial: MockMaterial,
+    MeshBasicMaterial: MockMaterial,
+    Color: vi.fn().mockImplementation(() => ({})),
+    SphereGeometry: MockGeometry,
+    ConeGeometry: MockGeometry,
+    Ray: vi.fn().mockImplementation(() => ({})),
+    AdditiveBlending: 2,
+    DoubleSide: 2,
+  };
 });
 
 import { usePlayerPhysics } from '../../hooks/usePlayerPhysics';
