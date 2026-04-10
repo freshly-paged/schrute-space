@@ -5,6 +5,10 @@ import * as THREE from 'three';
 import { Player, DEFAULT_AVATAR_CONFIG, DeskItem } from '../../types';
 import { ROLL_PIVOT_Y } from '../../constants';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
+
+// Pre-allocated vectors reused every frame to avoid GC pressure
+const _otherPos = new THREE.Vector3();
+const _otherPrev = new THREE.Vector3();
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
@@ -33,7 +37,7 @@ export function getFocusedDeskTransform(
   return { position, rotation };
 }
 
-export const OtherPlayer = ({ player }: { player: Player }) => {
+export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
   const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
   const [, setIceCreamTick] = useState(0);
@@ -64,7 +68,9 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
   const renderRotation = focusedDeskTransform?.rotation ?? player.rotation;
 
   useFrame(() => {
-    const dist = new THREE.Vector3(...player.position).distanceTo(new THREE.Vector3(...prevPos.current));
+    _otherPos.set(player.position[0], player.position[1], player.position[2]);
+    _otherPrev.set(prevPos.current[0], prevPos.current[1], prevPos.current[2]);
+    const dist = _otherPos.distanceTo(_otherPrev);
     setIsMoving(dist > 0.01);
     prevPos.current = player.position;
   });
@@ -117,9 +123,12 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
             <planeGeometry args={[1.6, 0.22]} />
             <meshBasicMaterial color="#1e293b" />
           </mesh>
-          {/* Bar fill */}
-          <mesh position={[-(1.6 - player.focusProgress * 1.6) / 2, 0, 0.001]}>
-            <planeGeometry args={[Math.max(0.001, player.focusProgress * 1.6), 0.18]} />
+          {/* Bar fill — fixed geometry, scaled via scale-x */}
+          <mesh
+            position={[-(1.6 - Math.max(0.001, player.focusProgress) * 1.6) / 2, 0, 0.001]}
+            scale={[Math.max(0.001, player.focusProgress), 1, 1]}
+          >
+            <planeGeometry args={[1.6, 0.18]} />
             <meshBasicMaterial color="#22c55e" />
           </mesh>
           {/* Percent label */}
@@ -135,4 +144,4 @@ export const OtherPlayer = ({ player }: { player: Player }) => {
       />
     </group>
   );
-};
+});

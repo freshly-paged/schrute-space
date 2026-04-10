@@ -11,33 +11,29 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [players, setPlayers] = useState<Record<string, Player>>({});
   const [isConnected, setIsConnected] = useState(false);
 
-  const syncOccupiedDesks = (playerMap: Record<string, Player>) => {
-    const ids = Object.values(playerMap)
+  const syncFromPlayerMap = (playerMap: Record<string, Player>) => {
+    const players = Object.values(playerMap);
+    const occupiedDeskIds = players
       .filter((p) => p.activeDeskId)
       .map((p) => p.activeDeskId as string);
-    useGameStore.getState().setOccupiedDeskIds(ids);
-  };
-
-  const syncRemoteWornThrowableIds = (playerMap: Record<string, Player>) => {
-    const worn: string[] = [];
-    for (const p of Object.values(playerMap)) {
-      if (p.wornPropId) worn.push(p.wornPropId);
+    const remoteWornThrowableIds: string[] = [];
+    const remoteHeldThrowableIds: string[] = [];
+    for (const p of players) {
+      if (p.wornPropId) remoteWornThrowableIds.push(p.wornPropId);
+      if (p.heldThrowableId) remoteHeldThrowableIds.push(p.heldThrowableId);
     }
-    useGameStore.getState().setRemoteWornThrowableIds(worn);
-  };
 
-  const syncRemoteHeldThrowableIds = (playerMap: Record<string, Player>) => {
-    const held: string[] = [];
-    for (const p of Object.values(playerMap)) {
-      if (p.heldThrowableId) held.push(p.heldThrowableId);
+    const state = useGameStore.getState();
+    const arraysEqual = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i]);
+
+    if (
+      !arraysEqual(occupiedDeskIds, state.occupiedDeskIds) ||
+      !arraysEqual(remoteWornThrowableIds, state.remoteWornThrowableIds) ||
+      !arraysEqual(remoteHeldThrowableIds, state.remoteHeldThrowableIds)
+    ) {
+      useGameStore.setState({ occupiedDeskIds, remoteWornThrowableIds, remoteHeldThrowableIds });
     }
-    useGameStore.getState().setRemoteHeldThrowableIds(held);
-  };
-
-  const syncFromPlayerMap = (playerMap: Record<string, Player>) => {
-    syncOccupiedDesks(playerMap);
-    syncRemoteWornThrowableIds(playerMap);
-    syncRemoteHeldThrowableIds(playerMap);
   };
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [lastLocalMessage, setLastLocalMessage] = useState<{

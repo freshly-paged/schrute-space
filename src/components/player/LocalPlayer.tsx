@@ -39,6 +39,16 @@ const WALK_MOVE_SPEED = 6;
 const ROLL_MOVE_SPEED = 18;
 const MOVE_SPEED_SCALE = 1;
 
+// Pre-allocated vectors reused every frame to avoid GC pressure
+const _cameraDir = new THREE.Vector3();
+const _cameraSide = new THREE.Vector3();
+const _moveVector = new THREE.Vector3();
+const _cameraTarget = new THREE.Vector3();
+const _chairOffset = new THREE.Vector3();
+const _currentVec = new THREE.Vector3();
+const _targetVec = new THREE.Vector3();
+const _upAxis = new THREE.Vector3(0, 1, 0);
+
 interface LocalPlayerProps {
   socket: Socket | null;
   lastMessage?: string;
@@ -71,6 +81,7 @@ export const LocalPlayer = ({
   const prevEatIceCreamRef = useRef(false);
   const cameraRayRef = useRef(new THREE.Ray());
   const cameraHitRef = useRef(new THREE.Vector3());
+  const lastMovementEmitRef = useRef(0);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -125,7 +136,8 @@ export const LocalPlayer = ({
       activeDeskId: isTimerActive ? activeDeskId : null,
       focusSitPoseIndex: isTimerActive ? focusSitPoseIndex : undefined,
     });
-  }, [socket, isTimerActive, timeLeft, activeDeskId, focusSitPoseIndex]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isTimerActive, activeDeskId, focusSitPoseIndex]);
 
   useFrame((state, delta) => {
     // Keep camera below roof
@@ -332,46 +344,48 @@ export const LocalPlayer = ({
     if (isTimerActive && activeDeskId) {
       const desk = roomLayout.find((d) => d.id === activeDeskId);
       if (desk) {
-        const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          desk.rotation[1]
-        );
+        _chairOffset.set(0, 0, 0.8).applyAxisAngle(_upAxis, desk.rotation[1]);
         const targetPos: [number, number, number] = [
-          desk.position[0] + chairOffset.x,
+          desk.position[0] + _chairOffset.x,
           desk.position[1],
-          desk.position[2] + chairOffset.z,
+          desk.position[2] + _chairOffset.z,
         ];
         const targetRot: [number, number, number] = [0, desk.rotation[1] + Math.PI, 0];
 
-        const currentVec = new THREE.Vector3(...positionRef.current);
-        const targetVec = new THREE.Vector3(...targetPos);
-        if (currentVec.distanceTo(targetVec) > 0.01) {
-          const lerped = currentVec.lerp(targetVec, 0.1);
-          const lerpedPos: [number, number, number] = [lerped.x, lerped.y, lerped.z];
+        _currentVec.set(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
+        _targetVec.set(targetPos[0], targetPos[1], targetPos[2]);
+        if (_currentVec.distanceTo(_targetVec) > 0.01) {
+          _currentVec.lerp(_targetVec, 0.1);
+          const lerpedPos: [number, number, number] = [_currentVec.x, _currentVec.y, _currentVec.z];
           positionRef.current = lerpedPos;
           rotationRef.current = targetRot;
           if (playerRef.current) {
             playerRef.current.position.set(...lerpedPos);
             playerRef.current.rotation.set(0, targetRot[1], 0);
           }
-          socket?.connected &&
-            socket.emit('playerMovement', {
-              position: lerpedPos,
-              rotation: targetRot,
-              isRolling: false,
-              rollTimer: 0,
-            });
+          if (socket?.connected) {
+            const now = performance.now();
+            if (now - lastMovementEmitRef.current >= 50) {
+              socket.emit('playerMovement', {
+                position: lerpedPos,
+                rotation: targetRot,
+                isRolling: false,
+                rollTimer: 0,
+              });
+              lastMovementEmitRef.current = now;
+            }
+          }
         }
 
         // Apply camera follow and bounds clamping during focus session
         if (controlsRef.current) {
           const focusPos = positionRef.current;
-          const focusTarget = new THREE.Vector3(
+          _cameraTarget.set(
             Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[0])),
             Math.max(0, Math.min(7.5, focusPos[1] + 1.5)),
             Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[2]))
           );
-          controlsRef.current.target.lerp(focusTarget, 0.08);
+          controlsRef.current.target.lerp(_cameraTarget, 0.08);
           controlsRef.current.update();
 
           const cam = state.camera;
@@ -442,23 +456,20 @@ export const LocalPlayer = ({
     newPosition[1] = physics.applyGravity(newPosition, delta, deskBoxes);
 
     // Camera-relative movement vector
-    const cameraDir = new THREE.Vector3();
-    state.camera.getWorldDirection(cameraDir);
-    cameraDir.y = 0;
-    cameraDir.normalize();
-    const cameraSide = new THREE.Vector3()
-      .crossVectors(new THREE.Vector3(0, 1, 0), cameraDir)
-      .normalize();
+    state.camera.getWorldDirection(_cameraDir);
+    _cameraDir.y = 0;
+    _cameraDir.normalize();
+    _cameraSide.crossVectors(_upAxis, _cameraDir).normalize();
 
-    const moveVector = new THREE.Vector3();
-    if (forward || physics.isRolling.current) moveVector.add(cameraDir);
-    if (backward && !physics.isRolling.current) moveVector.sub(cameraDir);
-    if (left && !physics.isRolling.current) moveVector.add(cameraSide);
-    if (right && !physics.isRolling.current) moveVector.sub(cameraSide);
+    _moveVector.set(0, 0, 0);
+    if (forward || physics.isRolling.current) _moveVector.add(_cameraDir);
+    if (backward && !physics.isRolling.current) _moveVector.sub(_cameraDir);
+    if (left && !physics.isRolling.current) _moveVector.add(_cameraSide);
+    if (right && !physics.isRolling.current) _moveVector.sub(_cameraSide);
 
-    if (moveVector.length() > 0) {
-      newPosition = physics.applyMovement(newPosition, moveVector, speed, players, deskBoxes);
-      newRotation[1] = Math.atan2(moveVector.x, moveVector.z);
+    if (_moveVector.length() > 0) {
+      newPosition = physics.applyMovement(newPosition, _moveVector, speed, players, deskBoxes);
+      newRotation[1] = Math.atan2(_moveVector.x, _moveVector.z);
     }
 
     // Clamp to office bounds
@@ -485,23 +496,28 @@ export const LocalPlayer = ({
           0, 0
         );
       }
-      socket?.connected &&
-        socket.emit('playerMovement', {
-          position: newPosition,
-          rotation: newRotation,
-          isRolling: physics.isRolling.current,
-          rollTimer: physics.rollTimer.current,
-        });
+      if (socket?.connected) {
+        const now = performance.now();
+        if (now - lastMovementEmitRef.current >= 50) {
+          socket.emit('playerMovement', {
+            position: newPosition,
+            rotation: newRotation,
+            isRolling: physics.isRolling.current,
+            rollTimer: physics.rollTimer.current,
+          });
+          lastMovementEmitRef.current = now;
+        }
+      }
     }
 
     // Camera follow
     if (controlsRef.current) {
-      const target = new THREE.Vector3(
+      _cameraTarget.set(
         Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[0])),
         Math.max(0, Math.min(7.5, newPosition[1] + 1.5)),
         Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]))
       );
-      controlsRef.current.target.lerp(target, 0.08);
+      controlsRef.current.target.lerp(_cameraTarget, 0.08);
       controlsRef.current.update();
 
       const cam = state.camera;
@@ -629,8 +645,8 @@ export const LocalPlayer = ({
         {isTimerActive && (
           <Billboard position={[0, 3.0, 0]}>
             {/* Outer background */}
-            <mesh position={[0, 0.1, -0.001]}>
-              <planeGeometry args={[1.8, sessionPaper > 0 ? 0.78 : 0.58]} />
+            <mesh position={[0, 0.1, -0.001]} scale={[1.8, sessionPaper > 0 ? 0.78 : 0.58, 1]}>
+              <planeGeometry args={[1, 1]} />
               <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
             </mesh>
             {/* Label */}
@@ -642,9 +658,12 @@ export const LocalPlayer = ({
               <planeGeometry args={[1.6, 0.22]} />
               <meshBasicMaterial color="#1e293b" />
             </mesh>
-            {/* Bar fill */}
-            <mesh position={[-(1.6 - focusProgress * 1.6) / 2, 0, 0.001]}>
-              <planeGeometry args={[Math.max(0.001, focusProgress * 1.6), 0.18]} />
+            {/* Bar fill — fixed geometry, scaled via scale-x */}
+            <mesh
+              position={[-(1.6 - Math.max(0.001, focusProgress) * 1.6) / 2, 0, 0.001]}
+              scale={[Math.max(0.001, focusProgress), 1, 1]}
+            >
+              <planeGeometry args={[1.6, 0.18]} />
               <meshBasicMaterial color="#22c55e" />
             </mesh>
             {/* Percent label */}

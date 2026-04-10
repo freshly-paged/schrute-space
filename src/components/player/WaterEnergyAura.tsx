@@ -7,6 +7,10 @@ import { useGameStore } from '../../store/useGameStore';
 const BLUE = '#38bdf8';
 const BLUE_SOFT = '#7dd3fc';
 
+// Pre-allocated geometries shared across all WaterEnergyAura instances
+const shellGeometry = new THREE.SphereGeometry(0.95, 20, 20);
+const innerGeometry = new THREE.SphereGeometry(0.62, 16, 16);
+
 /**
  * Blue glow on the local avatar while water cooler buff is active (store: waterBuffExpiresAt).
  */
@@ -52,8 +56,7 @@ export const WaterEnergyAura = () => {
         decay={2}
         position={[0, 1.05, 0]}
       />
-      <mesh ref={shellRef} position={[0, 1.02, 0]}>
-        <sphereGeometry args={[0.95, 20, 20]} />
+      <mesh ref={shellRef} position={[0, 1.02, 0]} geometry={shellGeometry}>
         <meshBasicMaterial
           color={BLUE}
           transparent
@@ -63,8 +66,7 @@ export const WaterEnergyAura = () => {
           side={THREE.DoubleSide}
         />
       </mesh>
-      <mesh ref={innerRef} position={[0, 1.02, 0]}>
-        <sphereGeometry args={[0.62, 16, 16]} />
+      <mesh ref={innerRef} position={[0, 1.02, 0]} geometry={innerGeometry}>
         <meshBasicMaterial
           color={BLUE_SOFT}
           transparent

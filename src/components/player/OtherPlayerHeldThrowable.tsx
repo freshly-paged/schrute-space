@@ -1,10 +1,11 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { useGameAsset, type AssetKey } from '../../hooks/useGameAsset';
 import { heldThrowableIdToDisplay, type NetworkHeldThrowableId } from '../../networkThrowables';
 
 function HeldClone({ assetKey, scale }: { assetKey: AssetKey; scale: number }) {
   const { scene } = useGameAsset(assetKey);
-  return <primitive object={scene.clone()} scale={scale} />;
+  const clonedScene = useMemo(() => scene.clone(), [scene]);
+  return <primitive object={clonedScene} scale={scale} />;
 }
 
 /** Renders another player's held throwable at the same offset as local `useThrowable` held phase.
