@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useGameStore } from '../../store/useGameStore';
 
+describe('branch protection test — intentionally failing', () => {
+  it('this test always fails', () => {
+    expect(true).toBe(false);
+  });
+});
+
 // useGameStore is a Zustand module-level singleton, so we must reset relevant
 // slices before each test to prevent state leakage between tests.
 // timerEndsAt, sessionPaperAccruedFloat, and lastFocusPaperTickAt are required
