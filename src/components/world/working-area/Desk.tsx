@@ -19,36 +19,69 @@ function SingleDeskMonitor() {
       <Box args={[0.2, 0.05, 0.2]} position={[0, 0.025, -0.2]}>
         <meshStandardMaterial color="#222" />
       </Box>
-      <Box args={[0.4, 0.02, 0.2]} position={[0, 0.01, 0.1]}>
-        <meshStandardMaterial color="#222" />
-      </Box>
     </group>
   );
 }
 
+/** Monitors per row: first entry is the upper row, last is the lower row (Y-up stacking). */
+function monitorRowCounts(c: number): number[] {
+  switch (c) {
+    case 1:
+      return [1];
+    case 2:
+      return [2];
+    case 3:
+      return [3];
+    case 4:
+      return [2, 2];
+    case 5:
+      return [3, 2];
+    case 6:
+      return [3, 3];
+    case 7:
+      return [4, 3];
+    case 8:
+      return [4, 4];
+    default:
+      return [Math.min(8, Math.max(1, c))];
+  }
+}
+
+/** Same cap as legacy single-monitor layout — do not shrink when adding more screens. */
+const MONITOR_MESH_SCALE = 1.28;
+
 function DeskMonitors({ count }: { count: number }) {
   const c = Math.min(8, Math.max(1, Math.floor(count)));
-  const maxRowW = 1.72;
+  const rows = monitorRowCounts(c);
   const unitW = 0.65;
   const gap = 0.06;
-  const denom = c * unitW + Math.max(0, c - 1) * gap;
-  /** Use desk width when few monitors; cap so one screen does not dominate the desk. */
-  const fitScale = maxRowW / denom;
-  const maxScaleForFew = 1.28;
-  const scale = Math.min(fitScale, maxScaleForFew);
+  /** Vertical offset between stacked rows (unscaled); ~one screen height per step. */
+  const rowStepY = 0.44;
+  const scale = MONITOR_MESH_SCALE;
+  const rowCount = rows.length;
   const step = scale * (unitW + gap);
-  const mid = (c - 1) / 2;
+  const rowDy = scale * rowStepY;
+
+  let globalIndex = 0;
   return (
     <group position={[0, 1.0, 0]}>
-      {Array.from({ length: c }, (_, i) => (
-        <group
-          key={i}
-          position={[(i - mid) * step, 0, 0]}
-          scale={[scale, scale, scale]}
-        >
-          <SingleDeskMonitor />
-        </group>
-      ))}
+      {rows.flatMap((nInRow, rowIdx) => {
+        const rowMid = (nInRow - 1) / 2;
+        const y = (rowCount - 1 - rowIdx) * rowDy;
+        return Array.from({ length: nInRow }, (_, i) => {
+          const x = (i - rowMid) * step;
+          const key = globalIndex++;
+          return (
+            <group
+              key={key}
+              position={[x, y, 0]}
+              scale={[scale, scale, scale]}
+            >
+              <SingleDeskMonitor />
+            </group>
+          );
+        });
+      })}
     </group>
   );
 }
