@@ -414,6 +414,7 @@ export default function App() {
         <ComputerInterface
           onClose={() => setShowComputerInterface(false)}
           onOpenAdminPanel={() => { setShowComputerInterface(false); setShowAdminPanel(true); }}
+          socket={socket}
         />
       )}
 

@@ -235,22 +235,25 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
-    const applyTeamPyramidBuff = (payload: { expiresAt?: unknown }) => {
-      const raw = payload?.expiresAt;
-      if (raw == null) {
-        useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
-        return;
-      }
-      const n = typeof raw === 'number' ? raw : Number(raw);
-      if (!Number.isFinite(n) || Date.now() >= n) {
-        useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
-        return;
-      }
-      useGameStore.getState().setTeamPyramidBuffExpiresAt(n);
-    };
+    newSocket.on('deskItemsLoaded', (map: Record<string, unknown[]>) => {
+      if (map && typeof map === 'object') useGameStore.getState().setDeskItemsByEmail(map as Record<string, import('../types').DeskItemPlacement[]>);
+    });
 
-    newSocket.on('teamPyramidBuffLoaded', applyTeamPyramidBuff);
-    newSocket.on('teamPyramidBuffUpdated', applyTeamPyramidBuff);
+    newSocket.on('deskItemUpdated', (payload: { email: string; items: import('../types').DeskItemPlacement[] }) => {
+      if (payload?.email && Array.isArray(payload.items)) {
+        useGameStore.getState().patchDeskItems(payload.email, payload.items);
+      }
+    });
+
+    newSocket.on('teamUpgradePoolsLoaded', (pools: Record<string, import('../types').TeamUpgradePool>) => {
+      if (pools && typeof pools === 'object') useGameStore.getState().setTeamUpgradePools(pools);
+    });
+
+    newSocket.on('teamUpgradePoolUpdated', (payload: { upgradeType: string; pool: import('../types').TeamUpgradePool }) => {
+      if (payload?.upgradeType && payload.pool) {
+        useGameStore.getState().patchTeamUpgradePool(payload.upgradeType, payload.pool);
+      }
+    });
 
     newSocket.on('roomInfoLoaded', (info: RoomInfo) => {
       console.log(`[socket] roomInfoLoaded: role=${info.myRole ?? 'visitor'} members=${info.memberCount}`);
@@ -329,6 +332,8 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       unsubscribeReams();
       useGameStore.getState().resetChairLevels();
       useGameStore.getState().resetMonitorLevels();
+      useGameStore.getState().resetDeskItems();
+      useGameStore.getState().setTeamUpgradePools({});
       useGameStore.getState().setRoomInfo(null);
       useGameStore.getState().setRemoteWornThrowableIds([]);
       useGameStore.getState().clearWornProp();

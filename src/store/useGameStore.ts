@@ -15,7 +15,7 @@ import {
   TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER,
 } from '../gameConfig';
 import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
-import { AvatarConfig, DEFAULT_AVATAR_CONFIG, FurnitureItem, RoomInfo } from '../types';
+import { AvatarConfig, DEFAULT_AVATAR_CONFIG, DeskItemPlacement, FurnitureItem, RoomInfo, TeamUpgradePool } from '../types';
 
 export type InspectPreviewKind = 'model' | 'pyramid';
 
@@ -121,6 +121,15 @@ interface GameState {
   setDeskMonitorLevels: (map: Record<string, number>) => void;
   patchMonitorLevel: (email: string, level: number) => void;
   resetMonitorLevels: () => void;
+  /** Desk owner email → purchased desk decoration placements; synced from server. */
+  deskItemsByEmail: Record<string, DeskItemPlacement[]>;
+  setDeskItemsByEmail: (map: Record<string, DeskItemPlacement[]>) => void;
+  patchDeskItems: (email: string, items: DeskItemPlacement[]) => void;
+  resetDeskItems: () => void;
+  /** upgradeType → contribution pool state; synced from server. */
+  teamUpgradePools: Record<string, TeamUpgradePool>;
+  setTeamUpgradePools: (pools: Record<string, TeamUpgradePool>) => void;
+  patchTeamUpgradePool: (upgradeType: string, pool: TeamUpgradePool) => void;
   roomInfo: RoomInfo | null;
   setRoomInfo: (info: RoomInfo | null) => void;
 
@@ -454,6 +463,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       monitorLevelByEmail: { ...s.monitorLevelByEmail, [email]: level },
     })),
   resetMonitorLevels: () => set({ monitorLevelByEmail: {} }),
+  deskItemsByEmail: {},
+  setDeskItemsByEmail: (map) =>
+    set((s) => ({ deskItemsByEmail: { ...s.deskItemsByEmail, ...map } })),
+  patchDeskItems: (email, items) =>
+    set((s) => ({ deskItemsByEmail: { ...s.deskItemsByEmail, [email]: items } })),
+  resetDeskItems: () => set({ deskItemsByEmail: {} }),
+  teamUpgradePools: {},
+  setTeamUpgradePools: (pools) => set({
+    teamUpgradePools: pools,
+    // Keep backward-compat field in sync
+    teamPyramidBuffExpiresAt: pools['pyramid']?.expiresAt ?? null,
+  }),
+  patchTeamUpgradePool: (upgradeType, pool) =>
+    set((s) => ({
+      teamUpgradePools: { ...s.teamUpgradePools, [upgradeType]: pool },
+      ...(upgradeType === 'pyramid' ? { teamPyramidBuffExpiresAt: pool.expiresAt } : {}),
+    })),
   roomInfo: null,
   setRoomInfo: (info) => set({ roomInfo: info }),
 
