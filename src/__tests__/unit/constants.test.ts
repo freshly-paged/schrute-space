@@ -1,7 +1,8 @@
 // vi.mock is hoisted by Vitest above all imports.
 // We must mock 'three' here because constants.ts calls
 // `new THREE.Box3(new THREE.Vector3(...), ...)` at module evaluation time.
-vi.mock('three', () => {
+vi.mock('three', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('three')>();
   const vec3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
   const MockBox3 = vi.fn().mockImplementation((min?: ReturnType<typeof vec3>, max?: ReturnType<typeof vec3>) => ({
     min: min ?? vec3(),
@@ -10,7 +11,7 @@ vi.mock('three', () => {
     setFromCenterAndSize: vi.fn().mockReturnThis(),
   }));
   const MockVector3 = vi.fn().mockImplementation((x = 0, y = 0, z = 0) => vec3(x, y, z));
-  return { Box3: MockBox3, Vector3: MockVector3 };
+  return { ...actual, Box3: MockBox3, Vector3: MockVector3 };
 });
 
 // Dynamic import is required here: vi.mock is hoisted but a static import
