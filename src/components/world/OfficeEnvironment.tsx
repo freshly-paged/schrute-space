@@ -7,6 +7,7 @@ import { ManagersOffice } from './managers-office/ManagersOffice';
 import { DundieAward } from './managers-office/props/DundieAward';
 import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 import { MsBodySuit } from './managers-office/props/MsBodySuit';
+import { NuclearLaunchDetector } from './managers-office/props/NuclearLaunchDetector';
 import { TeamPyramidProp } from './working-area/TeamPyramidProp';
 
 export const OfficeEnvironment = () => (
@@ -42,6 +43,7 @@ export const OfficeEnvironment = () => (
     <ManagersOffice />
     <DundieAward />
     <DwightBobblehead />
+    <NuclearLaunchDetector />
     <MsBodySuit />
   </group>
 );

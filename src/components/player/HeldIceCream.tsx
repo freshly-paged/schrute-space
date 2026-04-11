@@ -1,5 +1,11 @@
 import React from 'react';
+import * as THREE from 'three';
 import { ICE_CREAM_QUARTERS_MAX } from '../../gameConfig';
+
+// Pre-allocated geometries shared across all HeldIceCream instances
+const coneGeo = new THREE.ConeGeometry(0.065, 0.16, 10);
+const scoopGeo = new THREE.SphereGeometry(0.075, 10, 10);
+const coneMat = new THREE.MeshStandardMaterial({ color: '#b08968', roughness: 0.7 });
 
 /** Tiny cone + scoop for the blocky avatar hand (local units). */
 export function HeldIceCream({
@@ -17,12 +23,8 @@ export function HeldIceCream({
 
   return (
     <group scale={1.05}>
-      <mesh position={[0, -0.06, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.065, 0.16, 10]} />
-        <meshStandardMaterial color="#b08968" roughness={0.7} />
-      </mesh>
-      <mesh position={[0, scoopY, 0]} scale={[1, scoopK, 1]}>
-        <sphereGeometry args={[scoopR, 10, 10]} />
+      <mesh position={[0, -0.06, 0]} rotation={[Math.PI, 0, 0]} geometry={coneGeo} material={coneMat} />
+      <mesh position={[0, scoopY, 0]} scale={[1, scoopK, 1]} geometry={scoopGeo}>
         <meshStandardMaterial color={color} roughness={0.35} />
       </mesh>
     </group>

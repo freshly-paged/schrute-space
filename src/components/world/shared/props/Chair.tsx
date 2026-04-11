@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
+import * as THREE from 'three';
 import { Box, Cylinder } from '@react-three/drei';
 import { getChairVisualParams } from '../../../../chairUpgradeStyle';
+
+// Shared materials for chair decorations
+const grassStemMat = new THREE.MeshStandardMaterial({ color: '#2d6b3a', metalness: 0, roughness: 0.9 });
+const grassLeafMat = new THREE.MeshStandardMaterial({ color: '#3d8b4a', metalness: 0, roughness: 0.88 });
 
 export const Chair = ({
   position,
@@ -43,12 +48,8 @@ export const Chair = ({
       const r = 0.28 + (i % 2) * 0.06;
       return (
         <group key={i} position={[Math.sin(a) * r, 0.04, Math.cos(a) * r]}>
-          <Cylinder args={[0.04, 0.05, 0.1, 6]} position={[0, 0.05, 0]}>
-            <meshStandardMaterial color="#2d6b3a" metalness={0} roughness={0.9} />
-          </Cylinder>
-          <Box args={[0.12, 0.02, 0.08]} position={[0.02, 0.02, 0]} rotation={[0, 0.4, 0]}>
-            <meshStandardMaterial color="#3d8b4a" metalness={0} roughness={0.88} />
-          </Box>
+          <Cylinder args={[0.04, 0.05, 0.1, 6]} position={[0, 0.05, 0]} material={grassStemMat} />
+          <Box args={[0.12, 0.02, 0.08]} position={[0.02, 0.02, 0]} rotation={[0, 0.4, 0]} material={grassLeafMat} />
         </group>
       );
     });

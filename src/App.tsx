@@ -57,35 +57,35 @@ export default function App() {
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
 
-  const {
-    isTimerActive,
-    timerMode,
-    paperReams,
-    avatarConfig,
-    setAvatarConfig,
-    setPaperReams,
-    roomLayout,
-    setRoomLayout,
-    roomInfo,
-    showLeaderboard,
-    setShowLeaderboard,
-    showAdminPanel,
-    setShowAdminPanel,
-    showComputerInterface,
-    setShowComputerInterface,
-    showVendingMenu,
-    setShowVendingMenu,
-    setHeldIceCream,
-    setUser,
-    playerProfileLoaded,
-    playerProfileDisplayName,
-    playerProfileJobTitle,
-    setPlayerProfileFromServer,
-    focusEnergy,
-    setFocusEnergy,
-    tickFocusEnergyWallClock,
-    focusSavingModeEnabled,
-  } = useGameStore();
+  const isTimerActive = useGameStore((s) => s.isTimerActive);
+  const timerMode = useGameStore((s) => s.timerMode);
+  const paperReams = useGameStore((s) => s.paperReams);
+  const avatarConfig = useGameStore((s) => s.avatarConfig);
+  const roomLayout = useGameStore((s) => s.roomLayout);
+  const roomInfo = useGameStore((s) => s.roomInfo);
+  const showLeaderboard = useGameStore((s) => s.showLeaderboard);
+  const showAdminPanel = useGameStore((s) => s.showAdminPanel);
+  const showComputerInterface = useGameStore((s) => s.showComputerInterface);
+  const showVendingMenu = useGameStore((s) => s.showVendingMenu);
+  const focusEnergy = useGameStore((s) => s.focusEnergy);
+  const focusSavingModeEnabled = useGameStore((s) => s.focusSavingModeEnabled);
+  const playerProfileLoaded = useGameStore((s) => s.playerProfileLoaded);
+  const playerProfileDisplayName = useGameStore((s) => s.playerProfileDisplayName);
+  const playerProfileJobTitle = useGameStore((s) => s.playerProfileJobTitle);
+
+  // Stable setter references — these don't change across renders
+  const setAvatarConfig = useGameStore((s) => s.setAvatarConfig);
+  const setPaperReams = useGameStore((s) => s.setPaperReams);
+  const setRoomLayout = useGameStore((s) => s.setRoomLayout);
+  const setShowLeaderboard = useGameStore((s) => s.setShowLeaderboard);
+  const setShowAdminPanel = useGameStore((s) => s.setShowAdminPanel);
+  const setShowComputerInterface = useGameStore((s) => s.setShowComputerInterface);
+  const setShowVendingMenu = useGameStore((s) => s.setShowVendingMenu);
+  const setHeldIceCream = useGameStore((s) => s.setHeldIceCream);
+  const setUser = useGameStore((s) => s.setUser);
+  const setPlayerProfileFromServer = useGameStore((s) => s.setPlayerProfileFromServer);
+  const setFocusEnergy = useGameStore((s) => s.setFocusEnergy);
+  const tickFocusEnergyWallClock = useGameStore((s) => s.tickFocusEnergyWallClock);
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
 
   useFocusSessionCompleteFeedback();
@@ -93,6 +93,14 @@ export default function App() {
   useEffect(() => {
     setUser(user ?? null);
   }, [user]);
+
+  useEffect(() => {
+    const preventSpaceScroll = (e: KeyboardEvent) => {
+      if (e.code === 'Space') e.preventDefault();
+    };
+    window.addEventListener('keydown', preventSpaceScroll);
+    return () => window.removeEventListener('keydown', preventSpaceScroll);
+  }, []);
 
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
