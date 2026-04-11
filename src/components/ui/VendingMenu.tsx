@@ -243,235 +243,195 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
       aria-labelledby="vending-title"
     >
       <div
-        className="relative w-full max-w-md bg-slate-900 border-4 border-black pixel-border p-6 shadow-2xl"
+        className="relative w-full max-w-5xl bg-slate-900 border-4 border-black pixel-border p-4 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col"
         style={{ boxShadow: '8px 8px 0 0 #1e1b4b' }}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-3 right-3 text-violet-300 hover:text-white transition-colors z-10"
-          aria-label="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-start justify-between gap-3 pr-1 shrink-0">
+          <div>
+            <h2
+              id="vending-title"
+              className="font-pixel text-[10px] sm:text-xs text-violet-300 tracking-widest uppercase pr-8"
+            >
+              {subView === 'main' ? 'Vend-O-Matic' : 'Choose flavor'}
+            </h2>
+            {subView === 'main' ? (
+              <p className="text-slate-400 font-mono text-[10px] mt-2">
+                Your balance: <span className="text-amber-200">{paperReams.toLocaleString()}</span> reams
+              </p>
+            ) : (
+              <p className="text-slate-500 font-mono text-[9px] mt-2">
+                {ICE_CREAM_COST_REAMS} reams - balance {paperReams.toLocaleString()}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-violet-300 hover:text-white transition-colors z-10"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
         {subView === 'main' ? (
           <>
-            <h2
-              id="vending-title"
-              className="font-pixel text-[10px] sm:text-xs text-violet-300 tracking-widest uppercase mb-3 pr-8"
-            >
-              Vend-O-Matic
-            </h2>
-            <p className="text-slate-400 font-mono text-[10px] mb-5">
-              Your balance: <span className="text-amber-200">{paperReams.toLocaleString()}</span> reams
-            </p>
-
-            <div className="border-2 border-violet-500/40 bg-violet-950/40 p-4 mb-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-pixel text-[8px] sm:text-[10px] text-white mb-1">Ice Cream</p>
-                  <p className="text-slate-400 text-xs font-mono">
-                    Pick a flavor after you tap buy — hold 1 min
+            <div className="mt-4 flex-1 min-h-0 overflow-y-auto pr-1 space-y-3" style={{ scrollbarGutter: 'stable' }}>
+              <div className="border-2 border-violet-500/40 bg-violet-950/40 p-3">
+                <div className="grid grid-cols-[auto_minmax(92px,150px)_1fr] gap-3 items-start">
+                  <button
+                    type="button"
+                    onClick={openFlavorSubmenu}
+                    className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center min-w-[94px]"
+                  >
+                    Buy
+                  </button>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-white pt-1">🍦 Ice Cream</p>
+                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug pt-1">
+                    Pick a flavor after tapping buy. Hold for 1 minute. Cost: {ICE_CREAM_COST_REAMS} reams.
                   </p>
                 </div>
-                <span className="font-mono text-amber-300 text-sm shrink-0">
-                  {ICE_CREAM_COST_REAMS} reams
-                </span>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={openFlavorSubmenu}
-              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full mb-5"
-            >
-              Buy ice cream
-            </button>
-
-            <div className="border-2 border-fuchsia-600/45 bg-fuchsia-950/30 p-4 mb-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-pixel text-[8px] sm:text-[10px] text-fuchsia-100 mb-1">Team Pyramid</p>
-                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
-                    Team-wide buff: 3 hours of +50% paper reams for everyone while focusing. A floating
-                    sabre pyramid tablet appears above the office. Unleash the power of the pyramid!
+              <div className="border-2 border-fuchsia-600/45 bg-fuchsia-950/30 p-3">
+                <div className="grid grid-cols-[auto_minmax(92px,150px)_1fr] gap-3 items-start">
+                  <button
+                    type="button"
+                    onClick={handleBuyTeamPyramid}
+                    disabled={!socketOk || pyramidBusy}
+                    className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center min-w-[94px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pyramidBusy ? 'Wait' : 'Buy'}
+                  </button>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-fuchsia-100 pt-1">🔺 Team Pyramid</p>
+                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug pt-1">
+                    Team buff: +50% paper for 3 hours while focusing. Cost: {TEAM_PYRAMID_COST_REAMS} reams.
                   </p>
                 </div>
-                <span className="font-mono text-fuchsia-300 text-sm shrink-0">
-                  {TEAM_PYRAMID_COST_REAMS} reams
-                </span>
+                {pyramidFeedback === 'insufficient' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Not enough reams.</p>
+                )}
+                {pyramidFeedback === 'not_in_room' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Join the office room first.</p>
+                )}
+                {pyramidFeedback === 'server_error' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Could not complete purchase - try again.
+                  </p>
+                )}
+                {pyramidFeedback === 'offline' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Not connected - try again when online.
+                  </p>
+                )}
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={handleBuyTeamPyramid}
-              disabled={!socketOk || pyramidBusy}
-              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full mb-5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {pyramidBusy ? 'Processing…' : `Buy Team Pyramid (${TEAM_PYRAMID_COST_REAMS} reams)`}
-            </button>
-            {pyramidFeedback === 'insufficient' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">Not enough reams.</p>
-            )}
-            {pyramidFeedback === 'not_in_room' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
-                Join the office room first.
-              </p>
-            )}
-            {pyramidFeedback === 'server_error' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
-                Could not complete purchase — try again.
-              </p>
-            )}
-            {pyramidFeedback === 'offline' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mb-4 -mt-3">
-                Not connected — try again when online.
-              </p>
-            )}
-
-            <div className="border-2 border-amber-600/40 bg-amber-950/25 p-4 mb-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-pixel text-[8px] sm:text-[10px] text-amber-100 mb-1">
-                    Desk Chair Upgrade
-                  </p>
-                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
-                    Bigger seat, gold trim, studs &amp; plants — everyone sees it at your desk.
-                  </p>
-                  <p className="text-slate-500 text-[9px] sm:text-[10px] font-mono leading-snug mt-2">
-                    Seated focus: +{FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN} energy/min per
-                    level (max +{FOCUS_ENERGY_SEATED_REGEN_MAX_PER_MIN}/min at level{' '}
-                    {CHAIR_UPGRADE_MAX_LEVEL}), stacked with the usual focus-session energy drain.
-                  </p>
-                  <p className="text-slate-500 font-mono text-[9px] mt-2">
-                    Your level:{' '}
-                    <span className="text-amber-200">
-                      {myChairLevel}/{CHAIR_UPGRADE_MAX_LEVEL}
-                    </span>
-                  </p>
-                </div>
-                <span className="font-mono text-amber-300 text-sm shrink-0">
-                  {CHAIR_UPGRADE_COST_REAMS} reams
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleBuyChairUpgrade}
-              disabled={!socketOk || chairMaxed || chairBusy}
-              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {chairMaxed
-                ? 'Chair fully upgraded'
-                : chairBusy
-                  ? 'Processing…'
-                  : `Upgrade chair (${CHAIR_UPGRADE_COST_REAMS} reams)`}
-            </button>
-            {!socketOk && (
-              <p className="text-center text-amber-400/90 text-[10px] font-mono mt-2">
-                Connect to purchase upgrades.
-              </p>
-            )}
-            {chairFeedback === 'insufficient' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Not enough reams.
-              </p>
-            )}
-            {chairFeedback === 'max_level' && (
-              <p className="text-center text-slate-400 text-xs font-mono mt-2">
-                Already at max level ({CHAIR_UPGRADE_MAX_LEVEL}).
-              </p>
-            )}
-            {chairFeedback === 'not_in_room' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Join the office room first.
-              </p>
-            )}
-            {chairFeedback === 'server_error' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Could not complete purchase — try again.
-              </p>
-            )}
-            {chairFeedback === 'offline' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Not connected — try again when online.
-              </p>
-            )}
-
-            <div className="border-2 border-cyan-700/40 bg-cyan-950/20 p-4 mb-4 mt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-pixel text-[8px] sm:text-[10px] text-cyan-100 mb-1">
-                    Desk monitors
-                  </p>
-                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug">
-                    Add a screen on your desk each time (up to 8). First 3 upgrades also add +1 ream/min
-                    while focusing; later ones are look-only.
-                  </p>
-                  <p className="text-slate-500 font-mono text-[9px] mt-2">
-                    Upgrades:{' '}
-                    <span className="text-cyan-200">
-                      {myMonitorLevel}/{MONITOR_UPGRADE_MAX_LEVEL}
-                    </span>
-                    {!monitorMaxed && (
-                      <span className="text-slate-500">
-                        {' '}
-                        → next: {1 + myMonitorLevel} monitors ({nextMonitorCost} reams)
+              <div className="border-2 border-amber-600/40 bg-amber-950/25 p-3">
+                <div className="grid grid-cols-[auto_minmax(92px,150px)_1fr] gap-3 items-start">
+                  <button
+                    type="button"
+                    onClick={handleBuyChairUpgrade}
+                    disabled={!socketOk || chairMaxed || chairBusy}
+                    className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center min-w-[94px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {chairMaxed ? 'Maxed' : chairBusy ? 'Wait' : 'Buy'}
+                  </button>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-amber-100 pt-1">🪑 Chair Upgrade</p>
+                  <div className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug pt-1">
+                    Bigger seat and desk style upgrades that everyone can see. Cost:{' '}
+                    {CHAIR_UPGRADE_COST_REAMS} reams.
+                    <p className="text-slate-500 text-[9px] sm:text-[10px] mt-1">
+                      Seated focus: +{FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN} energy/min each level
+                      (max +{FOCUS_ENERGY_SEATED_REGEN_MAX_PER_MIN}/min).
+                    </p>
+                    <p className="text-slate-500 text-[9px] sm:text-[10px] mt-1">
+                      Your level:{' '}
+                      <span className="text-amber-200">
+                        {myChairLevel}/{CHAIR_UPGRADE_MAX_LEVEL}
                       </span>
-                    )}
-                  </p>
+                    </p>
+                  </div>
                 </div>
-                {!monitorMaxed && (
-                  <span className="font-mono text-cyan-300 text-sm shrink-0">{nextMonitorCost} reams</span>
+                {!socketOk && (
+                  <p className="text-amber-400/90 text-[10px] font-mono mt-2">Connect to purchase upgrades.</p>
+                )}
+                {chairFeedback === 'insufficient' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Not enough reams.</p>
+                )}
+                {chairFeedback === 'max_level' && (
+                  <p className="text-slate-400 text-xs font-mono mt-2">
+                    Already at max level ({CHAIR_UPGRADE_MAX_LEVEL}).
+                  </p>
+                )}
+                {chairFeedback === 'not_in_room' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Join the office room first.</p>
+                )}
+                {chairFeedback === 'server_error' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Could not complete purchase - try again.
+                  </p>
+                )}
+                {chairFeedback === 'offline' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Not connected - try again when online.
+                  </p>
+                )}
+              </div>
+
+              <div className="border-2 border-cyan-700/40 bg-cyan-950/20 p-3">
+                <div className="grid grid-cols-[auto_minmax(92px,150px)_1fr] gap-3 items-start">
+                  <button
+                    type="button"
+                    onClick={handleBuyMonitorUpgrade}
+                    disabled={!socketOk || monitorMaxed || monitorBusy}
+                    className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center min-w-[94px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {monitorMaxed ? 'Maxed' : monitorBusy ? 'Wait' : 'Buy'}
+                  </button>
+                  <p className="font-pixel text-[8px] sm:text-[10px] text-cyan-100 pt-1">🖥️ Desk Monitors</p>
+                  <div className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug pt-1">
+                    Add screens to your desk (up to 8). First 3 upgrades add +1 ream/min while focusing.
+                    {!monitorMaxed && (
+                      <p className="text-slate-500 text-[9px] sm:text-[10px] mt-1">
+                        Next upgrade costs {nextMonitorCost} reams.
+                      </p>
+                    )}
+                    <p className="text-slate-500 text-[9px] sm:text-[10px] mt-1">
+                      Upgrades:{' '}
+                      <span className="text-cyan-200">
+                        {myMonitorLevel}/{MONITOR_UPGRADE_MAX_LEVEL}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                {monitorFeedback === 'insufficient' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Not enough reams.</p>
+                )}
+                {monitorFeedback === 'max_level' && (
+                  <p className="text-slate-400 text-xs font-mono mt-2">
+                    Already at max ({MONITOR_UPGRADE_MAX_LEVEL} upgrades, 8 monitors).
+                  </p>
+                )}
+                {monitorFeedback === 'not_in_room' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">Join the office room first.</p>
+                )}
+                {monitorFeedback === 'server_error' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Could not complete purchase - try again.
+                  </p>
+                )}
+                {monitorFeedback === 'offline' && (
+                  <p className="text-rose-400/90 text-xs font-mono mt-2">
+                    Not connected - try again when online.
+                  </p>
                 )}
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleBuyMonitorUpgrade}
-              disabled={!socketOk || monitorMaxed || monitorBusy}
-              className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {monitorMaxed
-                ? 'Monitors maxed (8 screens)'
-                : monitorBusy
-                  ? 'Processing…'
-                  : `Add monitor (${nextMonitorCost} reams)`}
-            </button>
-            {monitorFeedback === 'insufficient' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Not enough reams.
-              </p>
-            )}
-            {monitorFeedback === 'max_level' && (
-              <p className="text-center text-slate-400 text-xs font-mono mt-2">
-                Already at max ({MONITOR_UPGRADE_MAX_LEVEL} upgrades, 8 monitors).
-              </p>
-            )}
-            {monitorFeedback === 'not_in_room' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Join the office room first.
-              </p>
-            )}
-            {monitorFeedback === 'server_error' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Could not complete purchase — try again.
-              </p>
-            )}
-            {monitorFeedback === 'offline' && (
-              <p className="text-center text-rose-400/90 text-xs font-mono mt-2">
-                Not connected — try again when online.
-              </p>
-            )}
-
-            <p className="mt-5 text-center text-slate-500 font-mono text-[10px]">Press Esc to close</p>
+            <p className="mt-4 text-center text-slate-500 font-mono text-[10px] shrink-0">Press Esc to close</p>
           </>
         ) : (
-          <>
+          <div className="mt-4 overflow-y-auto pr-1 flex-1 min-h-0" style={{ scrollbarGutter: 'stable' }}>
             <button
               type="button"
               onClick={() => {
@@ -483,16 +443,6 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
               <ArrowLeft className="w-3.5 h-3.5" />
               Back
             </button>
-
-            <h2
-              id="vending-flavor-title"
-              className="font-pixel text-[10px] sm:text-xs text-violet-300 tracking-widest uppercase mb-1 pr-8"
-            >
-              Choose flavor
-            </h2>
-            <p className="text-slate-500 font-mono text-[9px] mb-4">
-              {ICE_CREAM_COST_REAMS} reams — balance {paperReams.toLocaleString()}
-            </p>
 
             <p className="font-pixel text-[7px] sm:text-[8px] text-slate-500 uppercase tracking-wider mb-2">
               Flavor
@@ -540,15 +490,15 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
               )}
               {feedback === 'offline' && (
                 <p className="text-center text-rose-400/90 text-xs font-mono">
-                  Not connected — try again when online.
+                  Not connected - try again when online.
                 </p>
               )}
             </div>
 
             <p className="mt-5 text-center text-slate-500 font-mono text-[10px]">
-              Esc — back to machine · Close (X) exits
+              Esc - back to machine · Close (X) exits
             </p>
-          </>
+          </div>
         )}
       </div>
     </div>

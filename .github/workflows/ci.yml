@@ -9,7 +9,6 @@ on:
 jobs:
   # ── 1. TypeScript type-checking ─────────────────────────────────────────────
   typecheck:
-    name: TypeScript
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +25,6 @@ jobs:
 
   # ── 2. Unit tests ────────────────────────────────────────────────────────────
   unit-tests:
-    name: Unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +48,6 @@ jobs:
 
   # ── 3. Production build check ────────────────────────────────────────────────
   build:
-    name: Production build
     runs-on: ubuntu-latest
     env:
       # Vite injects GEMINI_API_KEY at build time (vite.config.ts).
@@ -78,7 +75,6 @@ jobs:
   # The postgres service block below is kept for future end-to-end expansion but
   # is not required for the current mock-based suite.
   integration-tests:
-    name: Integration tests
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
