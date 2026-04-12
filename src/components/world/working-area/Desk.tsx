@@ -5,6 +5,7 @@ import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
+import type { DeskItemPlacement } from '../../../types';
 
 // Shared materials — avoids creating hundreds of duplicate instances
 const monitorBodyMat = new THREE.MeshStandardMaterial({ color: '#111111' });
@@ -85,6 +86,41 @@ function DeskMonitors({ count }: { count: number }) {
         });
       })}
     </group>
+  );
+}
+
+/** Simple Dundie trophy rendered on the desk surface. */
+function DundieAward({ x, z }: { x: number; z: number }) {
+  return (
+    <group position={[x, 1.05, z]}>
+      {/* Cup */}
+      <Cylinder args={[0.04, 0.03, 0.1, 8]} position={[0, 0.1, 0]}>
+        <meshStandardMaterial color="#FFD700" metalness={0.7} roughness={0.3} />
+      </Cylinder>
+      {/* Stem */}
+      <Cylinder args={[0.015, 0.015, 0.08, 8]} position={[0, 0.04, 0]}>
+        <meshStandardMaterial color="#b8860b" metalness={0.6} roughness={0.4} />
+      </Cylinder>
+      {/* Base */}
+      <Cylinder args={[0.055, 0.055, 0.025, 8]} position={[0, 0, 0]}>
+        <meshStandardMaterial color="#b8860b" metalness={0.6} roughness={0.3} />
+      </Cylinder>
+    </group>
+  );
+}
+
+function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
+  const deskItemsByEmail = useGameStore((s) => s.deskItemsByEmail);
+  if (!ownerEmail) return null;
+  const items: DeskItemPlacement[] = deskItemsByEmail[ownerEmail] ?? [];
+  if (items.length === 0) return null;
+  return (
+    <>
+      {items.map((item) => {
+        if (item.id === 'dundie') return <DundieAward key={item.id} x={item.x} z={item.z} />;
+        return null;
+      })}
+    </>
   );
 }
 
@@ -201,6 +237,8 @@ export const Desk = ({
       <Box args={[0.5, 0.02, 0.15]} position={[0, 1.01, 0.25]} material={deskKeyboardMat} />
 
       <DeskMonitors count={monitorCount} />
+
+      <DeskDecorations ownerEmail={ownerEmail} />
 
       {hasChair && (
         <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} level={chairLevel} />

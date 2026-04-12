@@ -11,7 +11,21 @@ vi.mock('three', async (importOriginal) => {
     setFromCenterAndSize: vi.fn().mockReturnThis(),
   }));
   const MockVector3 = vi.fn().mockImplementation((x = 0, y = 0, z = 0) => vec3(x, y, z));
-  return { ...actual, Box3: MockBox3, Vector3: MockVector3 };
+  const MockMaterial = vi.fn().mockImplementation(() => ({}));
+  const MockGeometry = vi.fn().mockImplementation(() => ({}));
+  return {
+    ...actual,
+    Box3: MockBox3,
+    Vector3: MockVector3,
+    MeshStandardMaterial: MockMaterial,
+    MeshBasicMaterial: MockMaterial,
+    Color: vi.fn().mockImplementation(() => ({})),
+    SphereGeometry: MockGeometry,
+    ConeGeometry: MockGeometry,
+    Ray: vi.fn().mockImplementation(() => ({})),
+    AdditiveBlending: 2,
+    DoubleSide: 2,
+  };
 });
 
 // Dynamic import is required here: vi.mock is hoisted but a static import

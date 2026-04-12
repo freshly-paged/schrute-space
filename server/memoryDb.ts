@@ -1,7 +1,8 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
 import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
-import { TEAM_PYRAMID_COST_REAMS } from "../src/gameConfig.js";
+import { DESK_ITEM_CATALOG } from "../src/deskItemCatalog.js";
+import type { DeskItemPlacement } from "../src/types.js";
 import { totalPaperReamsEarnedFloor } from "../src/paperReamsLifetime.js";
 import {
   clampFocusEnergy,
@@ -43,6 +44,8 @@ interface UserRow {
   focus_energy_mode: FocusEnergyMode;
   /** While saved mode is focus: which desk owner's chair upgrades apply for offline settlement. */
   focus_energy_desk_owner_email: string | null;
+  /** Purchased desk decoration placements. */
+  desk_items: DeskItemPlacement[];
 }
 
 interface RoomRow {
@@ -85,6 +88,7 @@ function defaultUserRow(): UserRow {
     focus_energy_updated_at: now,
     focus_energy_mode: "idle",
     focus_energy_desk_owner_email: null,
+    desk_items: [],
   };
 }
 
@@ -410,20 +414,69 @@ export async function memPurchaseMonitorUpgrade(email: string): Promise<MemMonit
   return { ok: true, paperReams: u.paper_reams, monitorUpgradeLevel: u.monitor_upgrade_level };
 }
 
-export type MemTeamPyramidPurchaseResult =
-  | { ok: true; paperReams: number }
-  | { ok: false; error: "insufficient" };
-
-export async function memPurchaseTeamPyramid(email: string): Promise<MemTeamPyramidPurchaseResult> {
+/** Deduct reams for a team upgrade contribution (replaces single-payer pyramid purchase). */
+export async function memDeductReamsForTeamContribution(
+  email: string,
+  amount: number
+): Promise<{ ok: true; paperReams: number } | { ok: false; error: "insufficient" }> {
   const u = users.get(email) ?? defaultUserRow();
-  if (u.paper_reams < TEAM_PYRAMID_COST_REAMS) return { ok: false, error: "insufficient" };
-  u.paper_reams -= TEAM_PYRAMID_COST_REAMS;
+  if (u.paper_reams < amount) return { ok: false, error: "insufficient" };
+  u.paper_reams -= amount;
   u.total_paper_reams_earned = Math.max(
     u.total_paper_reams_earned,
     totalPaperReamsEarnedFloor(u.paper_reams, u.chair_upgrade_level, u.monitor_upgrade_level)
   );
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams };
+}
+
+export async function memGetDeskItemsForEmails(
+  emails: string[]
+): Promise<Record<string, DeskItemPlacement[]>> {
+  const out: Record<string, DeskItemPlacement[]> = {};
+  for (const e of emails) {
+    const row = users.get(e);
+    out[e] = row?.desk_items ?? [];
+  }
+  return out;
+}
+
+export type MemDeskItemPurchaseResult =
+  | { ok: true; paperReams: number; items: DeskItemPlacement[] }
+  | { ok: false; error: "already_owned" | "insufficient" | "not_found" };
+
+export async function memPurchaseDeskItem(
+  email: string,
+  itemId: string,
+  cost: number
+): Promise<MemDeskItemPurchaseResult> {
+  const def = DESK_ITEM_CATALOG.find((d) => d.id === itemId);
+  if (!def) return { ok: false, error: "not_found" };
+  const u = users.get(email) ?? defaultUserRow();
+  if (u.desk_items.some((i) => i.id === itemId)) return { ok: false, error: "already_owned" };
+  if (u.paper_reams < cost) return { ok: false, error: "insufficient" };
+  u.paper_reams -= cost;
+  u.desk_items = [...u.desk_items, { id: itemId, x: 0, z: 0 }];
+  u.total_paper_reams_earned = Math.max(
+    u.total_paper_reams_earned,
+    totalPaperReamsEarnedFloor(u.paper_reams, u.chair_upgrade_level, u.monitor_upgrade_level)
+  );
+  users.set(email, u);
+  return { ok: true, paperReams: u.paper_reams, items: u.desk_items };
+}
+
+export async function memSaveDeskItemPositions(
+  email: string,
+  items: DeskItemPlacement[]
+): Promise<{ ok: true }> {
+  const u = users.get(email) ?? defaultUserRow();
+  u.desk_items = items.map((item) => ({
+    id: item.id,
+    x: Math.max(-1, Math.min(1, item.x)),
+    z: Math.max(-0.4, Math.min(0.4, item.z)),
+  }));
+  users.set(email, u);
+  return { ok: true };
 }
 
 export async function memUpdateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise<void> {

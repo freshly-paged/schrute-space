@@ -33,6 +33,9 @@ import {
   TEAM_PYRAMID_COST_REAMS,
   TEAM_PYRAMID_DURATION_MS,
 } from "./src/gameConfig.js";
+import { DESK_ITEM_CATALOG } from "./src/deskItemCatalog.js";
+import { TEAM_UPGRADE_DEFS } from "./src/teamUpgradeDefs.js";
+import type { DeskItemPlacement, TeamUpgradePool } from "./src/types.js";
 import { totalPaperReamsEarnedFloor } from "./src/paperReamsLifetime.js";
 import {
   FOCUS_ENERGY_MAX,
@@ -143,6 +146,9 @@ async function initDb() {
   `);
   await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS focus_energy_desk_owner_email TEXT
+  `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS desk_items JSONB NOT NULL DEFAULT '[]'
   `);
   await pool!.query(`
     UPDATE users SET focus_energy_updated_at = (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
@@ -500,13 +506,117 @@ async function purchaseMonitorUpgradeTxn(email: string): Promise<MonitorPurchase
   }
 }
 
-type TeamPyramidPurchaseResult =
-  | { ok: true; paperReams: number }
-  | { ok: false; error: "insufficient" };
+// ── Desk Items ──────────────────────────────────────────────────────────────
 
-async function purchaseTeamPyramidTxn(email: string): Promise<TeamPyramidPurchaseResult> {
+async function getDeskItemsForEmails(
+  emails: string[]
+): Promise<Record<string, DeskItemPlacement[]>> {
+  if (emails.length === 0) return {};
   if (isLocalTest()) {
-    return mem.memPurchaseTeamPyramid(email);
+    return mem.memGetDeskItemsForEmails(emails);
+  }
+  const { rows } = await pool!.query(
+    "SELECT email, COALESCE(desk_items, '[]'::jsonb) AS desk_items FROM users WHERE email = ANY($1::text[])",
+    [emails]
+  );
+  const out: Record<string, DeskItemPlacement[]> = {};
+  for (const e of emails) out[e] = [];
+  for (const row of rows) {
+    const items = Array.isArray(row.desk_items) ? row.desk_items : [];
+    out[row.email] = items as DeskItemPlacement[];
+  }
+  return out;
+}
+
+type DeskItemPurchaseResult =
+  | { ok: true; paperReams: number; items: DeskItemPlacement[] }
+  | { ok: false; error: "already_owned" | "insufficient" | "not_found" };
+
+async function purchaseDeskItemTxn(email: string, itemId: string): Promise<DeskItemPurchaseResult> {
+  const def = DESK_ITEM_CATALOG.find((d) => d.id === itemId);
+  if (!def) return { ok: false, error: "not_found" };
+  if (isLocalTest()) {
+    return mem.memPurchaseDeskItem(email, itemId, def.cost);
+  }
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const sel = await client.query(
+      `SELECT paper_reams,
+              COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level,
+              COALESCE(monitor_upgrade_level, 0) AS monitor_upgrade_level,
+              COALESCE(desk_items, '[]'::jsonb) AS desk_items
+       FROM users WHERE email = $1 FOR UPDATE`,
+      [email]
+    );
+    if (sel.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const paper = sel.rows[0].paper_reams as number;
+    const existingItems: DeskItemPlacement[] = Array.isArray(sel.rows[0].desk_items)
+      ? (sel.rows[0].desk_items as DeskItemPlacement[])
+      : [];
+    if (existingItems.some((i) => i.id === itemId)) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "already_owned" };
+    }
+    if (paper < def.cost) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "insufficient" };
+    }
+    const newPaper = paper - def.cost;
+    // Default position: center of desk surface
+    const newItems: DeskItemPlacement[] = [...existingItems, { id: itemId, x: 0, z: 0 }];
+    const chairLv = Number(sel.rows[0].chair_upgrade_level);
+    const monitorLv = Number(sel.rows[0].monitor_upgrade_level);
+    const floor = totalPaperReamsEarnedFloor(newPaper, chairLv, monitorLv);
+    await client.query(
+      `UPDATE users SET paper_reams = $1, desk_items = $2::jsonb,
+         total_paper_reams_earned = GREATEST(total_paper_reams_earned, $4)
+       WHERE email = $3`,
+      [newPaper, JSON.stringify(newItems), email, floor]
+    );
+    await client.query("COMMIT");
+    return { ok: true, paperReams: newPaper, items: newItems };
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function saveDeskItemPositionsTxn(
+  email: string,
+  items: DeskItemPlacement[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isLocalTest()) {
+    return mem.memSaveDeskItemPositions(email, items);
+  }
+  // Validate bounds before saving
+  const clamped: DeskItemPlacement[] = items.map((item) => ({
+    id: item.id,
+    x: Math.max(-1, Math.min(1, Number(item.x) || 0)),
+    z: Math.max(-0.4, Math.min(0.4, Number(item.z) || 0)),
+  }));
+  await pool!.query(
+    "UPDATE users SET desk_items = $1::jsonb WHERE email = $2",
+    [JSON.stringify(clamped), email]
+  );
+  return { ok: true };
+}
+
+// ── Team Upgrade Pools ───────────────────────────────────────────────────────
+
+
+/** Deduct reams from a user toward a team upgrade contribution. Pure DB transaction. */
+async function deductReamsForTeamContribution(
+  email: string,
+  amount: number
+): Promise<{ ok: true; paperReams: number } | { ok: false; error: "insufficient" }> {
+  if (isLocalTest()) {
+    return mem.memDeductReamsForTeamContribution(email, amount);
   }
   const client = await pool!.connect();
   try {
@@ -518,16 +628,11 @@ async function purchaseTeamPyramidTxn(email: string): Promise<TeamPyramidPurchas
        FROM users WHERE email = $1 FOR UPDATE`,
       [email]
     );
-    if (sel.rows.length === 0) {
+    if (sel.rows.length === 0 || (sel.rows[0].paper_reams as number) < amount) {
       await client.query("ROLLBACK");
       return { ok: false, error: "insufficient" };
     }
-    const paper = sel.rows[0].paper_reams as number;
-    if (paper < TEAM_PYRAMID_COST_REAMS) {
-      await client.query("ROLLBACK");
-      return { ok: false, error: "insufficient" };
-    }
-    const newPaper = paper - TEAM_PYRAMID_COST_REAMS;
+    const newPaper = (sel.rows[0].paper_reams as number) - amount;
     const chairLv = Number(sel.rows[0].chair_upgrade_level);
     const monitorLv = Number(sel.rows[0].monitor_upgrade_level);
     const floor = totalPaperReamsEarnedFloor(newPaper, chairLv, monitorLv);
@@ -540,11 +645,7 @@ async function purchaseTeamPyramidTxn(email: string): Promise<TeamPyramidPurchas
     await client.query("COMMIT");
     return { ok: true, paperReams: newPaper };
   } catch (err) {
-    try {
-      await client.query("ROLLBACK");
-    } catch {
-      /* ignore */
-    }
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
     throw err;
   } finally {
     client.release();
@@ -553,9 +654,13 @@ async function purchaseTeamPyramidTxn(email: string): Promise<TeamPyramidPurchas
 
 async function broadcastDeskChairLevels(io: Server, roomId: string, layout: FurnitureItem[]) {
   const emails = extractDeskOwnerEmails(layout);
-  const { chairs, monitors } = await getChairAndMonitorLevelsForEmails(emails);
+  const [{ chairs, monitors }, deskItemsMap] = await Promise.all([
+    getChairAndMonitorLevelsForEmails(emails),
+    getDeskItemsForEmails(emails),
+  ]);
   io.to(roomId).emit("deskChairLevels", chairs);
   io.to(roomId).emit("deskMonitorLevels", monitors);
+  io.to(roomId).emit("deskItemsLoaded", deskItemsMap);
 }
 
 async function getRoomLayout(roomId: string): Promise<FurnitureItem[]> {
@@ -1176,19 +1281,38 @@ export async function createApp(injectedPool?: pg.Pool) {
 const rooms: Record<string, Record<string, any>> = {};
 const socketToRoom = new Map<string, string>();
 
-/** Per-room Team Pyramid buff expiry (epoch ms). In-memory only. */
-const roomTeamPyramidBuffExpiresAt: Record<string, number> = {};
+/** Per-room team upgrade contribution pools. In-memory only; resets on server restart. */
+const roomTeamUpgradePools: Record<string, Record<string, TeamUpgradePool>> = {};
 const TEAM_PYRAMID_SYSTEM_CHAT_TEXT = "Unleash the power of Pyramid!";
 const IDENTITY_THEFT_VIDEO_URL = "https://www.youtube.com/watch?v=WaaANll8h18";
 const IDENTITY_THEFT_SYSTEM_CHAT_TEXT = `Identity theft is not a joke! ${IDENTITY_THEFT_VIDEO_URL}`;
 const IDENTITY_THEFT_OVERHEAD_TEXT = "Identity theft is not a joke!";
 const IDENTITY_THEFT_OVERHEAD_DURATION_MS = 10_000;
 
+function getOrCreatePool(roomId: string, upgradeType: string): TeamUpgradePool {
+  if (!roomTeamUpgradePools[roomId]) roomTeamUpgradePools[roomId] = {};
+  if (!roomTeamUpgradePools[roomId][upgradeType]) {
+    const def = TEAM_UPGRADE_DEFS[upgradeType];
+    roomTeamUpgradePools[roomId][upgradeType] = {
+      contributed: 0,
+      target: def?.target ?? TEAM_PYRAMID_COST_REAMS,
+      contributors: {},
+      expiresAt: null,
+    };
+  }
+  return roomTeamUpgradePools[roomId][upgradeType];
+}
+
+/** Returns active (not yet expired) pool expiresAt for the pyramid buff; backward-compat helper. */
 function activeTeamPyramidBuffExpiresAt(roomId: string): number | null {
-  const raw = roomTeamPyramidBuffExpiresAt[roomId];
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
-  if (Date.now() >= raw) return null;
-  return raw;
+  const pool = roomTeamUpgradePools[roomId]?.pyramid;
+  if (!pool || pool.expiresAt == null) return null;
+  if (Date.now() >= pool.expiresAt) return null;
+  return pool.expiresAt;
+}
+
+function getRoomTeamUpgradePools(roomId: string): Record<string, TeamUpgradePool> {
+  return roomTeamUpgradePools[roomId] ?? {};
 }
 
 function systemChatMessage(text: string) {
@@ -1307,9 +1431,7 @@ io.on("connection", (socket) => {
       // Send current players in this room to the new player
       socket.emit("currentPlayers", rooms[room]);
 
-      socket.emit("teamPyramidBuffLoaded", {
-        expiresAt: activeTeamPyramidBuffExpiresAt(room),
-      });
+      socket.emit("teamUpgradePoolsLoaded", getRoomTeamUpgradePools(room));
 
       // Broadcast new player to others in the same room
       socket.to(room).emit("newPlayer", rooms[room][socket.id]);
@@ -1352,11 +1474,14 @@ io.on("connection", (socket) => {
         // Visitor: send current layout read-only, no desk created
         getRoomLayout(room).then(async (layout) => {
           socket.emit("roomLayoutLoaded", layout);
-          const { chairs, monitors } = await getChairAndMonitorLevelsForEmails(
-            extractDeskOwnerEmails(layout)
-          );
+          const emails = extractDeskOwnerEmails(layout);
+          const [{ chairs, monitors }, deskItemsMap] = await Promise.all([
+            getChairAndMonitorLevelsForEmails(emails),
+            getDeskItemsForEmails(emails),
+          ]);
           socket.emit("deskChairLevels", chairs);
           socket.emit("deskMonitorLevels", monitors);
+          socket.emit("deskItemsLoaded", deskItemsMap);
         });
       }
 
@@ -1469,9 +1594,16 @@ io.on("connection", (socket) => {
     );
 
     socket.on(
-      "purchaseTeamPyramid",
-      async (ack: (r: unknown) => void) => {
+      "contributeTeamUpgrade",
+      async (payload: { upgradeType?: unknown; amount?: unknown }, ack: (r: unknown) => void) => {
         const respond = typeof ack === "function" ? ack : () => {};
+        const upgradeType = typeof payload?.upgradeType === "string" ? payload.upgradeType : "";
+        const rawAmount = Number(payload?.amount);
+        if (!upgradeType || !(upgradeType in TEAM_UPGRADE_DEFS) || !Number.isFinite(rawAmount) || rawAmount <= 0) {
+          respond({ ok: false, error: "invalid" });
+          return;
+        }
+        const amount = Math.floor(rawAmount);
         const playerRoom = socketToRoom.get(socket.id) ?? "";
         if (!playerRoom) {
           respond({ ok: false, error: "not_in_room" });
@@ -1479,24 +1611,88 @@ io.on("connection", (socket) => {
         }
         try {
           await ensureUserRow(user.email);
-          const result = await purchaseTeamPyramidTxn(user.email);
-          if (!result.ok) {
-            respond(result);
+          const deduct = await deductReamsForTeamContribution(user.email, amount);
+          if (!deduct.ok) {
+            respond(deduct);
             return;
           }
-          const extensionBase = activeTeamPyramidBuffExpiresAt(playerRoom) ?? Date.now();
-          const expiresAt = extensionBase + TEAM_PYRAMID_DURATION_MS;
-          roomTeamPyramidBuffExpiresAt[playerRoom] = expiresAt;
-          socket.emit("paperReamsLoaded", result.paperReams);
-          io.to(playerRoom).emit("teamPyramidBuffUpdated", { expiresAt });
-          io.to(playerRoom).emit("chatMessage", systemChatMessage(TEAM_PYRAMID_SYSTEM_CHAT_TEXT));
-          respond({
-            ok: true,
-            paperReams: result.paperReams,
-            expiresAt,
-          });
+          const pool = getOrCreatePool(playerRoom, upgradeType);
+          // If already active and not expired, re-accumulate for next cycle
+          if (pool.expiresAt != null && Date.now() >= pool.expiresAt) {
+            pool.contributed = 0;
+            pool.contributors = {};
+            pool.expiresAt = null;
+          }
+          pool.contributed += amount;
+          pool.contributors[user.email] = (pool.contributors[user.email] ?? 0) + amount;
+          const def = TEAM_UPGRADE_DEFS[upgradeType];
+          if (pool.contributed >= pool.target && pool.expiresAt == null) {
+            const extensionBase = pool.expiresAt ?? Date.now();
+            pool.expiresAt = extensionBase + def.durationMs;
+            io.to(playerRoom).emit("chatMessage", systemChatMessage(TEAM_PYRAMID_SYSTEM_CHAT_TEXT));
+          }
+          socket.emit("paperReamsLoaded", deduct.paperReams);
+          io.to(playerRoom).emit("teamUpgradePoolUpdated", { upgradeType, pool });
+          respond({ ok: true, paperReams: deduct.paperReams, pool });
         } catch (e) {
-          console.error("purchaseTeamPyramid:", e);
+          console.error("contributeTeamUpgrade:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
+    socket.on(
+      "purchaseDeskItem",
+      async (payload: { itemId?: unknown }, ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        const itemId = typeof payload?.itemId === "string" ? payload.itemId : "";
+        if (!itemId) { respond({ ok: false, error: "not_found" }); return; }
+        let playerRoom = "";
+        for (const roomId in rooms) {
+          if (rooms[roomId][socket.id]) { playerRoom = roomId; break; }
+        }
+        if (!playerRoom) { respond({ ok: false, error: "not_in_room" }); return; }
+        try {
+          await ensureUserRow(user.email);
+          const result = await purchaseDeskItemTxn(user.email, itemId);
+          if (!result.ok) { respond(result); return; }
+          socket.emit("paperReamsLoaded", result.paperReams);
+          io.to(playerRoom).emit("deskItemUpdated", { email: user.email, items: result.items });
+          respond({ ok: true, paperReams: result.paperReams, items: result.items });
+        } catch (e) {
+          console.error("purchaseDeskItem:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
+    socket.on(
+      "saveDeskItemPositions",
+      async (payload: { items?: unknown }, ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        const rawItems = payload?.items;
+        if (!Array.isArray(rawItems)) { respond({ ok: false, error: "invalid" }); return; }
+        const items: DeskItemPlacement[] = rawItems
+          .filter((i): i is { id: string; x: number; z: number } =>
+            i && typeof i.id === "string" && typeof i.x === "number" && typeof i.z === "number"
+          )
+          .map((i) => ({
+            id: i.id,
+            x: Math.max(-1, Math.min(1, i.x)),
+            z: Math.max(-0.4, Math.min(0.4, i.z)),
+          }));
+        let playerRoom = "";
+        for (const roomId in rooms) {
+          if (rooms[roomId][socket.id]) { playerRoom = roomId; break; }
+        }
+        try {
+          await saveDeskItemPositionsTxn(user.email, items);
+          if (playerRoom) {
+            io.to(playerRoom).emit("deskItemUpdated", { email: user.email, items });
+          }
+          respond({ ok: true });
+        } catch (e) {
+          console.error("saveDeskItemPositions:", e);
           respond({ ok: false, error: "server_error" });
         }
       }

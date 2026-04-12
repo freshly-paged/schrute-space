@@ -53,6 +53,28 @@ export interface DeskItem extends FurnitureItem {
   config: { ownerEmail: string; ownerName: string; model?: string; [key: string]: unknown };
 }
 
+/** A purchased desk decoration item placed at a specific position on the desk surface. */
+export interface DeskItemPlacement {
+  /** Catalog item id (e.g. 'dundie'). */
+  id: string;
+  /** Local desk X offset (-1..1). */
+  x: number;
+  /** Local desk Z offset (-0.4..0.4). */
+  z: number;
+}
+
+/** In-memory state of a team upgrade contribution pool. */
+export interface TeamUpgradePool {
+  /** Total reams contributed so far this cycle. */
+  contributed: number;
+  /** Reams required to activate the upgrade. */
+  target: number;
+  /** email → amount contributed */
+  contributors: Record<string, number>;
+  /** Wall-clock ms when the active buff expires; null if not yet activated. */
+  expiresAt: number | null;
+}
+
 /** Describes a room's footprint for the 2D floor-plan editor.
  *  Export one of these as `FLOOR_PLAN_RECT` from each room component so the
  *  customization page automatically stays in sync with the 3D layout. */
