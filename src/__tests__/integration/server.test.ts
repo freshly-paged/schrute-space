@@ -15,7 +15,7 @@ import request from 'supertest';
 import { io as ioc, type Socket } from 'socket.io-client';
 import type { AddressInfo } from 'net';
 import type pg from 'pg';
-import { TEAM_PYRAMID_DURATION_MS } from '../../gameConfig.js';
+import { TEAM_PYRAMID_COST_REAMS, TEAM_PYRAMID_DURATION_MS } from '../../gameConfig.js';
 
 // Static import so that dotenv.config() in server.ts runs exactly once (at
 // file load time), before any test manipulates process.env. Dynamic
@@ -256,6 +256,7 @@ function waitFor<T = unknown>(socket: Socket, event: string, timeout = 3000): Pr
 function emitWithAck<T = unknown>(
   socket: Socket,
   event: string,
+  data?: unknown,
   timeout = 3000
 ): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -263,10 +264,12 @@ function emitWithAck<T = unknown>(
       () => reject(new Error(`Timed out waiting for ack from "${event}"`)),
       timeout
     );
-    socket.emit(event, (payload: T) => {
-      clearTimeout(timer);
-      resolve(payload);
-    });
+    const cb = (payload: T) => { clearTimeout(timer); resolve(payload); };
+    if (data !== undefined) {
+      socket.emit(event, data, cb);
+    } else {
+      socket.emit(event, cb);
+    }
   });
 }
 
@@ -558,7 +561,7 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
   });
 });
 
-describe('Socket.IO — purchaseTeamPyramid', () => {
+describe('Socket.IO — contributeTeamUpgrade (pyramid)', () => {
   let httpServer: any;
   let buyer: Socket;
   let watcher: Socket;
@@ -592,20 +595,22 @@ describe('Socket.IO — purchaseTeamPyramid', () => {
     delete process.env.DEV_USER_EMAIL;
   });
 
-  it('extends an already-active Team Pyramid buff by another full duration', async () => {
+  it('activates the buff and sets expiresAt when contribution reaches the target', async () => {
     buyer = connectAs(buyerEmail);
     await waitFor(buyer, 'connect');
     buyer.emit('joinRoom', { roomId });
     await waitFor(buyer, 'currentPlayers');
 
-    const first = await emitWithAck<{ ok: boolean; expiresAt?: number }>(buyer, 'purchaseTeamPyramid');
-    const second = await emitWithAck<{ ok: boolean; expiresAt?: number }>(buyer, 'purchaseTeamPyramid');
+    const before = Date.now();
+    const result = await emitWithAck<{ ok: boolean; pool?: { expiresAt: number | null } }>(
+      buyer,
+      'contributeTeamUpgrade',
+      { upgradeType: 'pyramid', amount: TEAM_PYRAMID_COST_REAMS }
+    );
 
-    expect(first.ok).toBe(true);
-    expect(second.ok).toBe(true);
-    expect(typeof first.expiresAt).toBe('number');
-    expect(typeof second.expiresAt).toBe('number');
-    expect((second.expiresAt as number) - (first.expiresAt as number)).toBe(TEAM_PYRAMID_DURATION_MS);
+    expect(result.ok).toBe(true);
+    expect(typeof result.pool?.expiresAt).toBe('number');
+    expect(result.pool!.expiresAt!).toBeGreaterThanOrEqual(before + TEAM_PYRAMID_DURATION_MS - 100);
   });
 
   it('broadcasts the pyramid system message to chat for everyone in the room', async () => {
@@ -621,9 +626,13 @@ describe('Socket.IO — purchaseTeamPyramid', () => {
 
     const buyerMessagePromise = waitFor<any>(buyer, 'chatMessage');
     const watcherMessagePromise = waitFor<any>(watcher, 'chatMessage');
-    const purchase = await emitWithAck<{ ok: boolean }>(buyer, 'purchaseTeamPyramid');
+    const result = await emitWithAck<{ ok: boolean }>(
+      buyer,
+      'contributeTeamUpgrade',
+      { upgradeType: 'pyramid', amount: TEAM_PYRAMID_COST_REAMS }
+    );
 
-    expect(purchase.ok).toBe(true);
+    expect(result.ok).toBe(true);
     const [buyerMsg, watcherMsg] = await Promise.all([buyerMessagePromise, watcherMessagePromise]);
     expect(buyerMsg).toMatchObject({
       playerId: 'system',
