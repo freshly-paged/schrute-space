@@ -9,6 +9,8 @@ export interface DeskItemDef {
   modelKey: AssetKey;
   /** If false, item is not shown in the shop and cannot be purchased. Defaults to true. */
   shopVisible?: boolean;
+  /** Additional Y offset applied when rendering on a desk surface. Use to correct for models whose origin isn't at their base. */
+  yOffset?: number;
 }
 
 export const DESK_ITEM_CATALOG: DeskItemDef[] = [
@@ -26,5 +28,7 @@ export const DESK_ITEM_CATALOG: DeskItemDef[] = [
     cost: 0,
     modelKey: 'nuclear_launch_detector',
     shopVisible: false,
+    // min.y=-0.9508 at scale=0.45 → base is 0.428 below origin; lift so base sits on desk surface (y=1.0)
+    yOffset: 0.38,
   },
 ];

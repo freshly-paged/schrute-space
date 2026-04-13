@@ -91,9 +91,9 @@ function DeskMonitors({ count }: { count: number }) {
   );
 }
 
-function DeskItemAssetModel({ assetKey, x, z }: { assetKey: AssetKey; x: number; z: number }) {
+function DeskItemAssetModel({ assetKey, x, z, yOffset = 0 }: { assetKey: AssetKey; x: number; z: number; yOffset?: number }) {
   const { scene } = useGameAsset(assetKey);
-  return <primitive object={scene.clone()} position={[x, 1.05, z]} scale={0.45} />;
+  return <primitive object={scene.clone()} position={[x, 1.05 + yOffset, z]} scale={0.45} />;
 }
 
 function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
@@ -108,7 +108,7 @@ function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
         if (!def) return null;
         return (
           <Suspense key={item.id} fallback={null}>
-            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} />
+            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} yOffset={def.yOffset} />
           </Suspense>
         );
       })}
