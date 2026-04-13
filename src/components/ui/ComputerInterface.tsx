@@ -376,7 +376,7 @@ function DeskShopTab({ socket }: { socket: Socket | null }) {
     <div className="flex flex-col gap-5">
       <p className="text-[#00c8ff]/40 text-[10px] font-mono">Balance: <span className="text-amber-200">{paperReams.toLocaleString()}</span> reams</p>
 
-      {DESK_ITEM_CATALOG.map((def) => {
+      {DESK_ITEM_CATALOG.filter((def) => def.shopVisible !== false).map((def) => {
         const owned = myItems.some((i) => i.id === def.id);
         const busy = buyBusy[def.id] ?? false;
         const fb = buyFeedback[def.id];

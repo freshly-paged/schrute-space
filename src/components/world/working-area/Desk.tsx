@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
 import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
@@ -6,6 +6,8 @@ import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
 import type { DeskItemPlacement } from '../../../types';
+import { DESK_ITEM_CATALOG } from '../../../deskItemCatalog';
+import { useGameAsset, type AssetKey } from '../../../hooks/useGameAsset';
 
 // Shared materials — avoids creating hundreds of duplicate instances
 const monitorBodyMat = new THREE.MeshStandardMaterial({ color: '#111111' });
@@ -89,24 +91,9 @@ function DeskMonitors({ count }: { count: number }) {
   );
 }
 
-/** Simple Dundie trophy rendered on the desk surface. */
-function DundieAward({ x, z }: { x: number; z: number }) {
-  return (
-    <group position={[x, 1.05, z]}>
-      {/* Cup */}
-      <Cylinder args={[0.04, 0.03, 0.1, 8]} position={[0, 0.1, 0]}>
-        <meshStandardMaterial color="#FFD700" metalness={0.7} roughness={0.3} />
-      </Cylinder>
-      {/* Stem */}
-      <Cylinder args={[0.015, 0.015, 0.08, 8]} position={[0, 0.04, 0]}>
-        <meshStandardMaterial color="#b8860b" metalness={0.6} roughness={0.4} />
-      </Cylinder>
-      {/* Base */}
-      <Cylinder args={[0.055, 0.055, 0.025, 8]} position={[0, 0, 0]}>
-        <meshStandardMaterial color="#b8860b" metalness={0.6} roughness={0.3} />
-      </Cylinder>
-    </group>
-  );
+function DeskItemAssetModel({ assetKey, x, z }: { assetKey: AssetKey; x: number; z: number }) {
+  const { scene } = useGameAsset(assetKey);
+  return <primitive object={scene.clone()} position={[x, 1.05, z]} scale={0.45} />;
 }
 
 function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
@@ -117,8 +104,13 @@ function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
   return (
     <>
       {items.map((item) => {
-        if (item.id === 'dundie') return <DundieAward key={item.id} x={item.x} z={item.z} />;
-        return null;
+        const def = DESK_ITEM_CATALOG.find((d) => d.id === item.id);
+        if (!def) return null;
+        return (
+          <Suspense key={item.id} fallback={null}>
+            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} />
+          </Suspense>
+        );
       })}
     </>
   );
