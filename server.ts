@@ -534,7 +534,7 @@ type DeskItemPurchaseResult =
 
 async function purchaseDeskItemTxn(email: string, itemId: string): Promise<DeskItemPurchaseResult> {
   const def = DESK_ITEM_CATALOG.find((d) => d.id === itemId);
-  if (!def) return { ok: false, error: "not_found" };
+  if (!def || def.shopVisible === false) return { ok: false, error: "not_found" };
   if (isLocalTest()) {
     return mem.memPurchaseDeskItem(email, itemId, def.cost);
   }
