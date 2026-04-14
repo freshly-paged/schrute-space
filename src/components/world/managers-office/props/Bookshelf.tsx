@@ -1,51 +1,45 @@
-import React from 'react';
-import { Box } from '@react-three/drei';
+import React, { Suspense, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { useGameAsset } from '../../../../hooks/useGameAsset';
+import { computeFloorLift } from '../../../../utils/glbFloorLift';
+import { useGlbCollision } from '../../../../hooks/useGlbCollision';
 
-const BOOK_COLORS = ['#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#e67e22', '#2c3e50'];
+// Manager's office local-space geometry
+// North wall: center at z = -7, thickness 0.3 → inner face at z = -6.85
+const NORTH_WALL_INNER_Z = -6.85;
 
 interface BookshelfProps {
-  position: [number, number, number];
-  rotation?: [number, number, number];
+  /** X position in manager's office local space (default centres on the north wall). */
+  x?: number;
 }
 
-export const Bookshelf = ({ position, rotation = [0, 0, 0] }: BookshelfProps) => {
-  // Shelf Y positions (local to group): bottom shelf ~0.4, middle ~0.95, top ~1.5
-  const shelfYPositions = [0.4, 0.95, 1.5];
+function BookshelfModel({ x = -5 }: BookshelfProps) {
+  const groupRef = useRef<THREE.Group>(null);
+  const { scene } = useGameAsset('manager_bookshelf');
+
+  const { cloned, yLift, zPos } = useMemo(() => {
+    const cloned = scene.clone();
+    // Apply scale before computing bounds so yLift and zPos are correct at render size.
+    cloned.scale.setScalar(1.5);
+    cloned.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(cloned);
+    const yLift = -box.min.y;
+    // Push the model's back face (min.z) flush against the north wall inner face.
+    const zPos = NORTH_WALL_INNER_Z - box.min.z;
+    return { cloned, yLift, zPos };
+  }, [scene]);
+
+  useGlbCollision('manager_bookshelf', groupRef);
 
   return (
-    <group position={position} rotation={rotation}>
-      {/* Tall frame */}
-      <Box args={[1.2, 2.2, 0.3]} position={[0, 1.1, 0]}>
-        <meshStandardMaterial color="#5D4037" />
-      </Box>
-
-      {/* 3 horizontal shelves */}
-      {shelfYPositions.map((y, i) => (
-        <Box key={i} args={[1.1, 0.05, 0.28]} position={[0, y, 0]}>
-          <meshStandardMaterial color="#6D4C41" />
-        </Box>
-      ))}
-
-      {/* Books on each shelf */}
-      {shelfYPositions.map((shelfY, shelfIdx) => {
-        const books = [
-          { x: -0.44, height: 0.26, color: BOOK_COLORS[(shelfIdx * 6 + 0) % BOOK_COLORS.length] },
-          { x: -0.28, height: 0.22, color: BOOK_COLORS[(shelfIdx * 6 + 1) % BOOK_COLORS.length] },
-          { x: -0.12, height: 0.28, color: BOOK_COLORS[(shelfIdx * 6 + 2) % BOOK_COLORS.length] },
-          { x: 0.04,  height: 0.24, color: BOOK_COLORS[(shelfIdx * 6 + 3) % BOOK_COLORS.length] },
-          { x: 0.20,  height: 0.25, color: BOOK_COLORS[(shelfIdx * 6 + 4) % BOOK_COLORS.length] },
-          { x: 0.36,  height: 0.22, color: BOOK_COLORS[(shelfIdx * 6 + 5) % BOOK_COLORS.length] },
-        ];
-        return books.map((book, bookIdx) => (
-          <Box
-            key={`${shelfIdx}-${bookIdx}`}
-            args={[0.1, book.height, 0.22]}
-            position={[book.x, shelfY + book.height / 2 + 0.025, 0]}
-          >
-            <meshStandardMaterial color={book.color} />
-          </Box>
-        ));
-      })}
+    <group ref={groupRef} position={[x, yLift, zPos]}>
+      <primitive object={cloned} />
     </group>
   );
-};
+}
+
+export const Bookshelf = ({ x }: BookshelfProps) => (
+  <Suspense fallback={null}>
+    <BookshelfModel x={x} />
+  </Suspense>
+);

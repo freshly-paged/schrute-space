@@ -11,7 +11,6 @@ import { ManagersOffice, FLOOR_PLAN_RECT as MANAGERS_OFFICE_RECT } from './manag
 import { DundieAward } from './managers-office/props/DundieAward';
 import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 import { MsBodySuit } from './managers-office/props/MsBodySuit';
-import { NuclearLaunchDetector } from './managers-office/props/NuclearLaunchDetector';
 import { TeamPyramidProp } from './working-area/TeamPyramidProp';
 
 
@@ -193,7 +192,6 @@ export const OfficeEnvironment = () => {
     <ManagersOffice />
     <DundieAward />
     <DwightBobblehead />
-    <NuclearLaunchDetector />
     <MsBodySuit />
   </group>
   );

@@ -1,6 +1,7 @@
 import { useRef, useCallback, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { COLLISION_BOXES } from '../constants';
+import { getDynamicCollisionBoxes } from '../utils/dynamicCollisionRegistry';
 import { PLAYER_ROOF_Y } from '../officeLayout';
 import { Player } from '../types';
 
@@ -126,6 +127,15 @@ export function usePlayerPhysics() {
         groundY = Math.max(groundY, box.max.y);
       }
     }
+    for (const box of getDynamicCollisionBoxes()) {
+      if (
+        position[0] >= box.min.x && position[0] <= box.max.x &&
+        position[2] >= box.min.z && position[2] <= box.max.z &&
+        box.max.y <= position[1] + 0.1
+      ) {
+        groundY = Math.max(groundY, box.max.y);
+      }
+    }
     for (const box of extraBoxes) {
       if (
         position[0] >= box.min.x && position[0] <= box.max.x &&
@@ -215,6 +225,9 @@ function hasCollision(position: [number, number, number], otherPlayers: Record<s
   _playerBox.setFromCenterAndSize(_boxCenter, _playerSize);
 
   for (const box of COLLISION_BOXES) {
+    if (_playerBox.intersectsBox(box)) return true;
+  }
+  for (const box of getDynamicCollisionBoxes()) {
     if (_playerBox.intersectsBox(box)) return true;
   }
   for (const box of extraBoxes) {

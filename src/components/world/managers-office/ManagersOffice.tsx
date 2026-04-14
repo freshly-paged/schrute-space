@@ -55,8 +55,7 @@ export const MANAGERS_OFFICE_COLLISION_BOXES: THREE.Box3[] = [
   ...wallsToBoxes(COLLISION_WALL_DEFS, GROUP_OFFSET),
   // Boss desk (local [-1,0,0] rotated 90° → world [-17,0,12])
   new THREE.Box3(new THREE.Vector3(-17.7, 0, 10.6), new THREE.Vector3(-16.3, 1.1, 13.4)),
-  // Bookshelf (local [-5,0,-6] → world [-21,0,6])
-  new THREE.Box3(new THREE.Vector3(-21.6, 0, 5.85), new THREE.Vector3(-20.4, 2.2, 6.45)),
+  // Bookshelf collision is registered dynamically via useGlbCollision in Bookshelf.tsx
 ];
 
 /** Four black rails forming a closed frame around a pane.
@@ -244,9 +243,12 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
 
     {/* ── Furniture ── */}
     <BossDesk position={[-1, 0, 0]} rotation={[0, Math.PI / 2, 0]} ownerName={ownerName} />
+    {/* Manager's chair behind the desk, facing east toward visitors */}
+    <Chair position={[-2.8, 0, 0]} rotation={[0, Math.PI / 2, 0]} />
+    {/* Visitor chairs in front of the desk */}
     <Chair position={[2.5, 0, -0.8]} rotation={[0, -Math.PI / 2 + Math.PI / 8, 0]} />
     <Chair position={[2.5, 0, 0.8]} rotation={[0, -Math.PI / 2 - Math.PI / 8, 0]} />
-    <Bookshelf position={[-5, 0, -6]} />
+    <Bookshelf x={-5} />
 
     {/* ── Lighting ── */}
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />
