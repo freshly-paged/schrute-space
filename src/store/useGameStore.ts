@@ -156,6 +156,9 @@ interface GameState {
   setShowAdminPanel: (show: boolean) => void;
   showComputerInterface: boolean;
   setShowComputerInterface: (show: boolean) => void;
+  /** Set to true by the entryway door; App.tsx watches and calls handleExitRoom. */
+  requestExitRoom: boolean;
+  setRequestExitRoom: (v: boolean) => void;
 
   nearVendingMachine: boolean;
   setNearVendingMachine: (near: boolean) => void;
@@ -514,6 +517,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   showAdminPanel: false,
   setShowAdminPanel: (show) => set({ showAdminPanel: show }),
+  requestExitRoom: false,
+  setRequestExitRoom: (v) => set({ requestExitRoom: v }),
   showComputerInterface: false,
   setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 

@@ -67,6 +67,7 @@ export default function App() {
   const showAdminPanel = useGameStore((s) => s.showAdminPanel);
   const showComputerInterface = useGameStore((s) => s.showComputerInterface);
   const showVendingMenu = useGameStore((s) => s.showVendingMenu);
+  const requestExitRoom = useGameStore((s) => s.requestExitRoom);
   const focusEnergy = useGameStore((s) => s.focusEnergy);
   const focusSavingModeEnabled = useGameStore((s) => s.focusSavingModeEnabled);
   const playerProfileLoaded = useGameStore((s) => s.playerProfileLoaded);
@@ -81,6 +82,7 @@ export default function App() {
   const setShowAdminPanel = useGameStore((s) => s.setShowAdminPanel);
   const setShowComputerInterface = useGameStore((s) => s.setShowComputerInterface);
   const setShowVendingMenu = useGameStore((s) => s.setShowVendingMenu);
+  const setRequestExitRoom = useGameStore((s) => s.setRequestExitRoom);
   const setHeldIceCream = useGameStore((s) => s.setHeldIceCream);
   const setUser = useGameStore((s) => s.setUser);
   const setPlayerProfileFromServer = useGameStore((s) => s.setPlayerProfileFromServer);
@@ -151,6 +153,13 @@ export default function App() {
       })
       .catch(() => {});
   }, [user, setPaperReams, setAvatarConfig, setPlayerProfileFromServer, setFocusEnergy]);
+
+  // Entryway door sets requestExitRoom; we respond here so handleExitRoom stays in App scope.
+  useEffect(() => {
+    if (!requestExitRoom) return;
+    setRequestExitRoom(false);
+    handleExitRoom();
+  }, [requestExitRoom]);
 
   const storeUser = useGameStore((s) => s.user);
 
@@ -363,7 +372,6 @@ export default function App() {
               currentRoom={currentRoom}
               paperReams={paperReams}
               focusEnergy={focusEnergy}
-              onExitRoom={handleExitRoom}
               onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
             />

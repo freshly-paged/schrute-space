@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, LogOut, Layout, Shield } from 'lucide-react';
+import { Users, Monitor, Coffee, Briefcase, Layout, Shield } from 'lucide-react';
 import { FocusEnergyBar } from './FocusEnergyBar';
 import { RoomRole } from '../../types';
 
@@ -9,7 +9,6 @@ interface HUDPanelProps {
   currentRoom: string;
   paperReams: number;
   focusEnergy: number;
-  onExitRoom: () => void;
   onCustomizeOffice: () => void;
   myRole?: RoomRole | null;
 }
@@ -20,7 +19,6 @@ export const HUDPanel = ({
   currentRoom,
   paperReams,
   focusEnergy,
-  onExitRoom,
   onCustomizeOffice,
   myRole,
 }: HUDPanelProps) => (
@@ -75,13 +73,6 @@ export const HUDPanel = ({
         >
           <Layout className="w-3 h-3" />
           Customize Office
-        </button>
-        <button
-          onClick={onExitRoom}
-          className="w-full bg-indigo-500/20 hover:bg-indigo-500/40 border border-indigo-500/50 text-indigo-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-3 h-3" />
-          Exit Room
         </button>
       </div>
     </div>

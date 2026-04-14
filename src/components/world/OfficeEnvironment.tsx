@@ -12,6 +12,7 @@ import { DundieAward } from './managers-office/props/DundieAward';
 import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 import { MsBodySuit } from './managers-office/props/MsBodySuit';
 import { TeamPyramidProp } from './working-area/TeamPyramidProp';
+import { Entryway } from './Entryway';
 
 
 // Window centres along the north/south walls (x varies)
@@ -130,7 +131,13 @@ export const OfficeEnvironment = () => {
     <Box args={[46, OFFICE_CEILING_Y, 0.5]} position={[0, OFFICE_CEILING_Y / 2, -23]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
-    <Box args={[46, OFFICE_CEILING_Y, 0.5]} position={[0, OFFICE_CEILING_Y / 2, 23]}>
+    {/* South perimeter wall — split around the entryway exit door (gap at x≈-7.1→-4.9) */}
+    {/* Left segment: x=-23 → -7.1  (width 15.9, centre -15.05) */}
+    <Box args={[15.9, OFFICE_CEILING_Y, 0.5]} position={[-15.05, OFFICE_CEILING_Y / 2, 23]}>
+      <meshStandardMaterial color="#D8D0B8" />
+    </Box>
+    {/* Right segment: x=-4.9 → 23  (width 27.9, centre 9.05) */}
+    <Box args={[27.9, OFFICE_CEILING_Y, 0.5]} position={[9.05, OFFICE_CEILING_Y / 2, 23]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
     <Box args={[0.5, OFFICE_CEILING_Y, 46]} position={[-23, OFFICE_CEILING_Y / 2, 0]}>
@@ -193,6 +200,7 @@ export const OfficeEnvironment = () => {
     <DundieAward />
     <DwightBobblehead />
     <MsBodySuit />
+    <Entryway />
   </group>
   );
 };
