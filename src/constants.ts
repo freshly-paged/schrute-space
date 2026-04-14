@@ -12,6 +12,8 @@ import { BREAK_ROOM_COLLISION_BOXES } from './components/world/break-room/BreakR
 import { CONFERENCE_ROOM_COLLISION_BOXES } from './components/world/conference-room/ConferenceRoom';
 import { MANAGERS_OFFICE_COLLISION_BOXES } from './components/world/managers-office/ManagersOffice';
 
+export { DESK_WOOD_COLOR } from './officeTheme';
+
 export const OFFICE_COLORS = [
   "#4f46e5", // Indigo
   "#059669", // Emerald

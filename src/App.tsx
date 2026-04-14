@@ -440,19 +440,13 @@ export default function App() {
       ) : (
         <KeyboardControls map={keyboardMap}>
           <Canvas
-            shadows
             dpr={[1, 2]}
             frameloop="always"
             camera={{ position: [0, 2, 5], fov: 50 }}
           >
             <color attach="background" args={['#1e293b']} />
-            <ambientLight intensity={0.7} />
-            <directionalLight
-              position={[10, 10, 10]}
-              intensity={1.5}
-              castShadow
-              shadow-mapSize={[1024, 1024]}
-            />
+            <ambientLight intensity={1.2} />
+            <directionalLight position={[10, 10, 10]} intensity={0.5} />
             <React.Suspense
               fallback={
                 <Html center>
