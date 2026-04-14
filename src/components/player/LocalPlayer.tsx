@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, useKeyboardControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
@@ -84,6 +84,8 @@ export const LocalPlayer = ({
   const cameraHitRef = useRef(new THREE.Vector3());
   const lastMovementEmitRef = useRef(0);
 
+  const camera = useThree((state) => state.camera);
+
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
   const physics = usePlayerPhysics();
@@ -128,14 +130,18 @@ export const LocalPlayer = ({
   const focusProgress = isTimerActive ? 1 - timeLeft / POMODORO_FOCUS_DURATION_SEC : 0;
   const sessionPaper = useGameStore((state) => state.sessionPaper);
 
-  // Snap OrbitControls target to spawn position on first mount so the camera
-  // doesn't slowly drift from [0,0,0] to the actual spawn location.
+  // Snap camera and OrbitControls target to spawn position on first mount so
+  // the camera doesn't drift in from [0,0,0] to the actual spawn location.
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls) return;
     const [x, , z] = positionRef.current;
-    controls.target.set(x, 1.5, z);
+    const targetY = 1.5;
+    controls.target.set(x, targetY, z);
+    // Place the camera behind and above the player (looking north from the entryway).
+    camera.position.set(x, targetY + 5, z + 8);
     controls.update();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Emit focus state to server whenever it changes
