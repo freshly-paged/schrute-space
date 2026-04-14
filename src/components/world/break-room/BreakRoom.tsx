@@ -188,23 +188,28 @@ function BreakInteractiveDoor() {
     hingeRef.current.rotation.y = rotRef.current;
   });
 
-  const panelH  = DOOR_HEIGHT - 0.05;
-  const panelCY = panelH / 2 + 0.05;
+  // Panel fits inside the frame rails with a small gap on every side.
+  // Left/right rails inner faces are at x=±0.96 → clear width = 1.92; use 1.88 (0.02 gap each side).
+  // Mid rail inner face at y=4.76; bottom rail inner face at y=0.04 → use height 4.70 (0.01 gap top/bottom).
+  const panelW  = 1.88;
+  const panelH  = 4.70;
+  const panelCY = panelH / 2 + 0.05; // raised 0.05 off floor → panel spans y=0.05 to y=4.75
 
   return (
     <>
       {/* Hinge at room-local [−1, 0, 7]; panel extends in local +x when closed.
-          Panel centre at hinge-local z=+0.09 puts its outer face flush with FZ (7.15). */}
+          Centre at hinge-local x=1.0 → room-local x=0 (midpoint of 2-unit opening).
+          Centre at hinge-local z=0.23 → outer face flush with frame rail outer face (FZ+FD=7.29). */}
       <group ref={hingeRef} position={[-1, 0, 7]}>
-        <Box args={[1.9, panelH, 0.12]} position={[0.95, panelCY, 0.09]}>
+        <Box args={[panelW, panelH, 0.12]} position={[1.0, panelCY, 0.23]}>
           <meshStandardMaterial color={DOOR_COLOR} />
         </Box>
         {/* Knob near latch side (local x≈1.75) — interior side */}
-        <Box args={[0.09, 0.09, 0.09]} position={[1.75, 1.35, -0.02]}>
+        <Box args={[0.09, 0.09, 0.09]} position={[1.75, 1.35, 0.12]}>
           <meshStandardMaterial color="#c4a055" metalness={0.7} roughness={0.2} />
         </Box>
         {/* Knob near latch side — exterior side */}
-        <Box args={[0.09, 0.09, 0.09]} position={[1.75, 1.35, 0.20]}>
+        <Box args={[0.09, 0.09, 0.09]} position={[1.75, 1.35, 0.34]}>
           <meshStandardMaterial color="#c4a055" metalness={0.7} roughness={0.2} />
         </Box>
       </group>
