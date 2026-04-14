@@ -68,7 +68,7 @@ export const DESK_SPAWN_SPACING = 3.5;
 export const BREAK_ROOM_GROUP_POSITION: [number, number, number] = [6, 0, -16];
 
 /** Water cooler position local to the break room group (NW corner, flush against north wall, gap from west wall). */
-export const WATER_COOLER_LOCAL_POSITION: [number, number, number] = [-12, 0, -6.85];
+export const WATER_COOLER_LOCAL_POSITION: [number, number, number] = [-12, 0, -6.75];
 
 /** Water cooler center in world space (group + local). */
 export const WATER_COOLER_WORLD_POSITION: [number, number, number] = [
