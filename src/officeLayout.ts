@@ -3,6 +3,34 @@
  * and client-side code. Keep this file free of React / Three.js imports.
  */
 
+// ─── Office dimensions ────────────────────────────────────────────────────────
+// All player, camera, and geometry bounds are derived from these two values so
+// that changing the office size only ever requires editing this file.
+
+/** Distance from world origin to the interior face of each perimeter wall. */
+export const OFFICE_HALF_SIZE = 23;
+
+/** Interior ceiling height in world units. */
+export const OFFICE_CEILING_Y = 6;
+
+/**
+ * Maximum Y the player's feet may reach.
+ * Set so the player's visual height (~1.9 units) stays below the ceiling.
+ */
+export const PLAYER_ROOF_Y = OFFICE_CEILING_Y - 1.9;
+
+/**
+ * Maximum Y the camera position may reach (just below the ceiling so it
+ * never pokes through).
+ */
+export const CAMERA_MAX_Y = OFFICE_CEILING_Y - 0.2;
+
+/**
+ * Maximum XZ magnitude for player movement.
+ * One unit of inset from the wall interior face keeps the player inside.
+ */
+export const PLAYER_BOUNDS_XZ = OFFICE_HALF_SIZE - 1;
+
 /** World-space bounds of the working area (where player desks are placed). */
 export const WORKING_AREA_BOUNDS = {
   x1: -9,
@@ -52,8 +80,8 @@ export const WATER_COOLER_WORLD_POSITION: [number, number, number] = [
 /** Horizontal proximity radius for water cooler interactions (meters). */
 export const WATER_COOLER_RADIUS = 2.5;
 
-/** Vending machine position local to the break room group (east side). */
-export const VENDING_MACHINE_LOCAL_POSITION: [number, number, number] = [13, 0, 0];
+/** Vending machine position local to the break room group (east side, flush against east wall, 1u north of centre). */
+export const VENDING_MACHINE_LOCAL_POSITION: [number, number, number] = [16.5, 0, -1];
 
 /** Vending machine center in world space (break room group + local). */
 export const VENDING_MACHINE_WORLD_POSITION: [number, number, number] = [

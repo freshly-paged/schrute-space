@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { Socket } from 'socket.io-client';
 import { Player, DeskItem } from '../../types';
 import { getDeterministicColor, COLLISION_BOXES, ROLL_PIVOT_Y } from '../../constants';
+import { doorState, confDoorState, breakDoorState, playerWorldPos, DOOR_COLLISION_BOX, CONF_DOOR_COLLISION_BOX, BREAK_DOOR_COLLISION_BOX } from '../../doorState';
+import { PLAYER_BOUNDS_XZ, CAMERA_MAX_Y } from '../../officeLayout';
 import { useGameStore } from '../../store/useGameStore';
 import { DEFAULT_AVATAR_CONFIG } from '../../types';
 import { usePlayerPhysics, usePlayerPhysicsAvatarSync } from '../../hooks/usePlayerPhysics';
@@ -30,8 +32,6 @@ function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
   if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
 }
 
-const BOUNDS = 22;
-const CAMERA_BOUNDS = 22;
 // Camera is clamped within this radius of the player to prevent wall-clipping
 const CAMERA_ORBIT_LEASH = 13;
 
@@ -140,8 +140,8 @@ export const LocalPlayer = ({
   }, [socket, isTimerActive, activeDeskId, focusSitPoseIndex]);
 
   useFrame((state, delta) => {
-    // Keep camera below roof
-    if (state.camera.position.y > 7.5) state.camera.position.y = 7.5;
+    // Keep camera below ceiling
+    if (state.camera.position.y > CAMERA_MAX_Y) state.camera.position.y = CAMERA_MAX_Y;
 
     const ice = useGameStore.getState().heldIceCream;
     if (ice && Date.now() >= ice.expiresAt) {
@@ -381,9 +381,9 @@ export const LocalPlayer = ({
         if (controlsRef.current) {
           const focusPos = positionRef.current;
           _cameraTarget.set(
-            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[0])),
-            Math.max(0, Math.min(7.5, focusPos[1] + 1.5)),
-            Math.max(-BOUNDS, Math.min(BOUNDS, focusPos[2]))
+            Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, focusPos[0])),
+            Math.max(0, Math.min(CAMERA_MAX_Y, focusPos[1] + 1.5)),
+            Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, focusPos[2]))
           );
           controlsRef.current.target.lerp(_cameraTarget, 0.08);
           controlsRef.current.update();
@@ -392,14 +392,14 @@ export const LocalPlayer = ({
           const px = focusPos[0];
           const pz = focusPos[2];
           cam.position.x = Math.max(
-            Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
-            Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+            Math.max(-PLAYER_BOUNDS_XZ, px - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(PLAYER_BOUNDS_XZ, px + CAMERA_ORBIT_LEASH), cam.position.x)
           );
           cam.position.z = Math.max(
-            Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
-            Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+            Math.max(-PLAYER_BOUNDS_XZ, pz - CAMERA_ORBIT_LEASH),
+            Math.min(Math.min(PLAYER_BOUNDS_XZ, pz + CAMERA_ORBIT_LEASH), cam.position.z)
           );
-          cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+          cam.position.y = Math.max(0.5, Math.min(CAMERA_MAX_Y, cam.position.y));
 
           const orbitTarget = controlsRef.current.target;
           cameraRayRef.current.origin.copy(orbitTarget);
@@ -453,7 +453,13 @@ export const LocalPlayer = ({
     let newPosition: [number, number, number] = [...positionRef.current];
     let newRotation: [number, number, number] = [...rotationRef.current];
 
-    newPosition[1] = physics.applyGravity(newPosition, delta, deskBoxes);
+    const extraBoxes = [
+      ...deskBoxes,
+      ...(doorState.open      ? [] : [DOOR_COLLISION_BOX]),
+      ...(confDoorState.open  ? [] : [CONF_DOOR_COLLISION_BOX]),
+      ...(breakDoorState.open ? [] : [BREAK_DOOR_COLLISION_BOX]),
+    ];
+    newPosition[1] = physics.applyGravity(newPosition, delta, extraBoxes);
 
     // Camera-relative movement vector
     state.camera.getWorldDirection(_cameraDir);
@@ -468,13 +474,16 @@ export const LocalPlayer = ({
     if (right && !physics.isRolling.current) _moveVector.sub(_cameraSide);
 
     if (_moveVector.length() > 0) {
-      newPosition = physics.applyMovement(newPosition, _moveVector, speed, players, deskBoxes);
+      newPosition = physics.applyMovement(newPosition, _moveVector, speed, players, extraBoxes);
       newRotation[1] = Math.atan2(_moveVector.x, _moveVector.z);
     }
 
     // Clamp to office bounds
-    newPosition[0] = Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[0]));
-    newPosition[2] = Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]));
+    newPosition[0] = Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, newPosition[0]));
+    newPosition[2] = Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, newPosition[2]));
+
+    // Keep shared world position up to date for proximity checks in other components
+    playerWorldPos.set(newPosition[0], newPosition[1], newPosition[2]);
 
     const hasMoved =
       newPosition[0] !== positionRef.current[0] ||
@@ -513,9 +522,9 @@ export const LocalPlayer = ({
     // Camera follow
     if (controlsRef.current) {
       _cameraTarget.set(
-        Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[0])),
-        Math.max(0, Math.min(7.5, newPosition[1] + 1.5)),
-        Math.max(-BOUNDS, Math.min(BOUNDS, newPosition[2]))
+        Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, newPosition[0])),
+        Math.max(0, Math.min(CAMERA_MAX_Y, newPosition[1] + 1.5)),
+        Math.max(-PLAYER_BOUNDS_XZ, Math.min(PLAYER_BOUNDS_XZ, newPosition[2]))
       );
       controlsRef.current.target.lerp(_cameraTarget, 0.08);
       controlsRef.current.update();
@@ -526,14 +535,14 @@ export const LocalPlayer = ({
       const px = newPosition[0];
       const pz = newPosition[2];
       cam.position.x = Math.max(
-        Math.max(-CAMERA_BOUNDS, px - CAMERA_ORBIT_LEASH),
-        Math.min(Math.min(CAMERA_BOUNDS, px + CAMERA_ORBIT_LEASH), cam.position.x)
+        Math.max(-PLAYER_BOUNDS_XZ, px - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(PLAYER_BOUNDS_XZ, px + CAMERA_ORBIT_LEASH), cam.position.x)
       );
       cam.position.z = Math.max(
-        Math.max(-CAMERA_BOUNDS, pz - CAMERA_ORBIT_LEASH),
-        Math.min(Math.min(CAMERA_BOUNDS, pz + CAMERA_ORBIT_LEASH), cam.position.z)
+        Math.max(-PLAYER_BOUNDS_XZ, pz - CAMERA_ORBIT_LEASH),
+        Math.min(Math.min(PLAYER_BOUNDS_XZ, pz + CAMERA_ORBIT_LEASH), cam.position.z)
       );
-      cam.position.y = Math.max(0.5, Math.min(7.5, cam.position.y));
+      cam.position.y = Math.max(0.5, Math.min(CAMERA_MAX_Y, cam.position.y));
 
       // Camera wall-clip prevention: ray-cast from orbit target toward the camera.
       // If any wall box sits between them, pull the camera in to just in front of it.

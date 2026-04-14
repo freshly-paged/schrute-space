@@ -2,6 +2,7 @@ import React, { Suspense, useMemo } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
 import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
+import { DESK_WOOD_COLOR } from '../../../officeTheme';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
@@ -210,7 +211,7 @@ export const Desk = ({
 
       {/* Table top */}
       <Box args={[2, 0.1, 1]} position={[0, 0.95, 0]}>
-        <meshStandardMaterial color={isOccupied ? '#6b3a3a' : isNearest ? '#a0522d' : '#8B4513'} />
+        <meshStandardMaterial color={isOccupied ? '#7a4a2a' : isNearest ? '#c49a45' : DESK_WOOD_COLOR} />
       </Box>
 
       {/* Legs */}
