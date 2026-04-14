@@ -46,7 +46,7 @@ export const FLOOR_PLAN_RECT: FloorPlanRect = {
 
 const COLLISION_WALL_DEFS: WallDef[] = [
   { args: [0.3, OFFICE_CEILING_Y, 14], position: [-7, OFFICE_CEILING_Y / 2,  0] }, // West
-  // South wall removed — entryway corridor is open to the office
+  { args: [14,  OFFICE_CEILING_Y, 0.3], position: [ 0, OFFICE_CEILING_Y / 2,  7] }, // South
   { args: [0.3, OFFICE_CEILING_Y,  4], position: [ 7, OFFICE_CEILING_Y / 2, -5] }, // East left solid
   { args: [0.3, OFFICE_CEILING_Y,  8], position: [ 7, OFFICE_CEILING_Y / 2,  3] }, // East right (windows+solid)
 ];
@@ -208,7 +208,12 @@ interface ManagersOfficeProps {
 export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
   <group position={GROUP_OFFSET}>
 
-    {/* South wall removed — entryway corridor is open to the office */}
+    {/* ── South wall (faces entryway corridor) ── */}
+    <Box args={[14, OFFICE_CEILING_Y, 0.3]} position={[0, OFFICE_CEILING_Y / 2, 7]}>
+      <meshStandardMaterial color={WALL_COLOR} />
+    </Box>
+    {/* Window centred on south wall, facing north into the office */}
+    <OfficeWindow position={[0, 3.0, 7]} rotation={[0, Math.PI, 0]} />
 
     {/* ── East wall ── */}
 
