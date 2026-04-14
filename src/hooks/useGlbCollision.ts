@@ -1,11 +1,10 @@
 /**
  * useGlbCollision — registers a GLB prop's world-space bounding box in the
- * dynamic collision registry after the model mounts, and cleans it up on unmount.
+ * dynamic collision registry after the first animation frame, and cleans it up on unmount.
  *
- * Usage: call this inside the component that renders the <primitive> (i.e. inside
- * the Suspense boundary, after the GLB has loaded). Pass a ref to the group that
- * carries the correct world position and rotation so setFromObject gives
- * world-space bounds.
+ * Registration is deferred to the first useFrame tick (not useEffect) so that
+ * R3F has already called scene.updateMatrixWorld() and all ancestor world matrices
+ * are guaranteed to be correct.
  *
  *   function MyProp({ position, rotation }) {
  *     const ref = useRef<THREE.Group>(null);
@@ -13,7 +12,8 @@
  *     return <group ref={ref} position={position} rotation={rotation}>...</group>;
  *   }
  */
-import { useEffect, RefObject } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   registerDynamicCollisionBox,
@@ -21,18 +21,26 @@ import {
 } from '../utils/dynamicCollisionRegistry';
 
 export function useGlbCollision(id: string, groupRef: RefObject<THREE.Group | null>): void {
-  useEffect(() => {
+  const registeredRef = useRef(false);
+
+  // Compute and register the world-space bounding box on the first animation frame.
+  // useFrame runs after R3F calls scene.updateMatrixWorld(), so all parent transforms
+  // are already baked — no manual updateWorldMatrix() needed.
+  useFrame(() => {
+    if (registeredRef.current) return;
     const group = groupRef.current;
     if (!group) return;
 
-    // Ensure parent transforms are baked into matrixWorld before computing bounds.
-    // useEffect runs before the first R3F frame, so world matrices may not be up to date yet.
-    group.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(group);
     registerDynamicCollisionBox(id, box);
+    registeredRef.current = true;
+  });
 
+  // Unregister on unmount so stale boxes don't linger.
+  useEffect(() => {
     return () => {
       unregisterDynamicCollisionBox(id);
+      registeredRef.current = false;
     };
-  }, [id, groupRef]);
+  }, [id]);
 }
