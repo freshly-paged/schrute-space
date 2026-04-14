@@ -49,10 +49,10 @@ function Sofa({ position, rotation = 0 }: { position: [number, number, number]; 
       <Box args={[W, BACK_H, 0.18]} position={[0, SEAT_H + BACK_H / 2, -(D / 2 - 0.09)]}>
         <meshStandardMaterial color={SOFA_COLOR} roughness={0.85} />
       </Box>
-      <Box args={[0.18, ARM_H, D]} position={[-(W / 2 - 0.09), ARM_H / 2, 0]}>
+      <Box args={[0.18, ARM_H, D]} position={[-(W / 2 + 0.09), ARM_H / 2, 0]}>
         <meshStandardMaterial color={ARM_COLOR} roughness={0.8} />
       </Box>
-      <Box args={[0.18, ARM_H, D]} position={[(W / 2 - 0.09), ARM_H / 2, 0]}>
+      <Box args={[0.18, ARM_H, D]} position={[(W / 2 + 0.09), ARM_H / 2, 0]}>
         <meshStandardMaterial color={ARM_COLOR} roughness={0.8} />
       </Box>
     </group>
