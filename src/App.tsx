@@ -98,7 +98,12 @@ export default function App() {
 
   useEffect(() => {
     const preventSpaceScroll = (e: KeyboardEvent) => {
-      if (e.code === 'Space') e.preventDefault();
+      const target = e.target as HTMLElement | null;
+      const isTypingTarget =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+      if (e.code === 'Space' && !isTypingTarget) e.preventDefault();
     };
     window.addEventListener('keydown', preventSpaceScroll);
     return () => window.removeEventListener('keydown', preventSpaceScroll);

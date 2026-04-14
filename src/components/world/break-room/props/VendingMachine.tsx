@@ -74,7 +74,7 @@ export const VendingMachine = ({
   return (
     <group ref={groupRef} position={position}>
       {nearVendingMachine && (
-        <Billboard position={[0, 3, 0]}>
+        <Billboard position={[0, 4.4, 0]}>
           <Text
             fontSize={0.2}
             color="#a78bfa"

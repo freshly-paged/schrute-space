@@ -10,6 +10,7 @@ import { OFFICE_CEILING_Y } from '../../../officeLayout';
 import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
 import { Chair } from '../shared/props/Chair';
+
 // Room: 14 wide × 14 deep, group at world [-16, 0, 12]
 // World extents: X[-23, -9], Z[+5, +19]
 const GROUP_OFFSET: [number, number, number] = [-16, 0, 12];
