@@ -5,7 +5,6 @@ import { FloorPlanRect } from '../../../types';
 import { useGameStore } from '../../../store/useGameStore';
 import { DeskItem } from '../../../types';
 import { Desk } from './Desk';
-import { CeilingLights } from './props/CeilingLights';
 import { Plant } from '../shared/props/Plant';
 import { PrinterStation } from './props/PrinterStation';
 import { WORKING_AREA_BOUNDS } from '../../../officeLayout';
@@ -61,9 +60,6 @@ export const WorkingArea = () => {
 
   return (
     <group>
-      {/* Ceiling light fixtures */}
-      <CeilingLights />
-
       {/* Plants — corners of working area */}
       <Plant position={[20, 0, -8]} />
       <Plant position={[-6, 0, 17]} />

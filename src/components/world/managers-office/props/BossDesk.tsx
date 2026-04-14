@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Cylinder } from '@react-three/drei';
+import { DESK_WOOD_COLOR } from '../../../../officeTheme';
 
 interface BossDeskProps {
   position: [number, number, number];
@@ -11,26 +12,26 @@ export const BossDesk = ({ position, rotation = [0, 0, 0], ownerName = '' }: Bos
   <group position={position} rotation={rotation}>
     {/* Main tabletop */}
     <Box args={[2.8, 0.12, 1.4]} position={[0, 0.95, 0]}>
-      <meshStandardMaterial color="#3E2723" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
 
     {/* 4 chunky legs */}
     <Box args={[0.15, 0.95, 0.15]} position={[-1.3, 0.475, -0.6]}>
-      <meshStandardMaterial color="#4E342E" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
     <Box args={[0.15, 0.95, 0.15]} position={[1.3, 0.475, -0.6]}>
-      <meshStandardMaterial color="#4E342E" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
     <Box args={[0.15, 0.95, 0.15]} position={[-1.3, 0.475, 0.6]}>
-      <meshStandardMaterial color="#4E342E" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
     <Box args={[0.15, 0.95, 0.15]} position={[1.3, 0.475, 0.6]}>
-      <meshStandardMaterial color="#4E342E" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
 
     {/* Return / side extension attached at right end */}
     <Box args={[1.2, 0.12, 0.8]} position={[2.0, 0.95, -0.3]}>
-      <meshStandardMaterial color="#3E2723" />
+      <meshStandardMaterial color={DESK_WOOD_COLOR} />
     </Box>
 
     {/* "World's Best Boss" mug */}

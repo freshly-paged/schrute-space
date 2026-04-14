@@ -1,6 +1,7 @@
 import { useRef, useCallback, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { COLLISION_BOXES } from '../constants';
+import { PLAYER_ROOF_Y } from '../officeLayout';
 import { Player } from '../types';
 
 /** Values derived from physics refs that must trigger React re-renders (refs alone do not). */
@@ -18,7 +19,6 @@ const _moveScaled = new THREE.Vector3();
 
 const JUMP_FORCE = 8;
 const GRAVITY = 20;
-const ROOF_Y = 6.1;
 const ROLL_DURATION = 0.5;
 const DOUBLE_TAP_MS = 300;
 
@@ -141,8 +141,8 @@ export function usePlayerPhysics() {
       yVelocity.current -= GRAVITY * delta;
       newY += yVelocity.current * delta;
 
-      if (newY >= ROOF_Y) {
-        newY = ROOF_Y;
+      if (newY >= PLAYER_ROOF_Y) {
+        newY = PLAYER_ROOF_Y;
         yVelocity.current = 0;
       }
 

@@ -2,6 +2,7 @@ import React, { Suspense, useMemo } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
 import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
+import { DESK_WOOD_COLOR } from '../../../officeTheme';
 import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
@@ -91,9 +92,9 @@ function DeskMonitors({ count }: { count: number }) {
   );
 }
 
-function DeskItemAssetModel({ assetKey, x, z }: { assetKey: AssetKey; x: number; z: number }) {
+function DeskItemAssetModel({ assetKey, x, z, yOffset = 0 }: { assetKey: AssetKey; x: number; z: number; yOffset?: number }) {
   const { scene } = useGameAsset(assetKey);
-  return <primitive object={scene.clone()} position={[x, 1.05, z]} scale={0.45} />;
+  return <primitive object={scene.clone()} position={[x, 1.05 + yOffset, z]} scale={0.45} />;
 }
 
 function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
@@ -108,7 +109,7 @@ function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
         if (!def) return null;
         return (
           <Suspense key={item.id} fallback={null}>
-            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} />
+            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} yOffset={def.yOffset} />
           </Suspense>
         );
       })}
@@ -210,7 +211,7 @@ export const Desk = ({
 
       {/* Table top */}
       <Box args={[2, 0.1, 1]} position={[0, 0.95, 0]}>
-        <meshStandardMaterial color={isOccupied ? '#6b3a3a' : isNearest ? '#a0522d' : '#8B4513'} />
+        <meshStandardMaterial color={isOccupied ? '#7a4a2a' : isNearest ? '#c49a45' : DESK_WOOD_COLOR} />
       </Box>
 
       {/* Legs */}
