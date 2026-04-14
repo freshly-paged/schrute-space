@@ -131,16 +131,20 @@ export const OfficeEnvironment = () => {
     <Box args={[46, OFFICE_CEILING_Y, 0.5]} position={[0, OFFICE_CEILING_Y / 2, -23]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
-    {/* South perimeter wall — split around the entryway exit door (gap at x≈-7.1→-4.9) */}
-    {/* Left segment: x=-23 → -7.1  (width 15.9, centre -15.05) */}
-    <Box args={[15.9, OFFICE_CEILING_Y, 0.5]} position={[-15.05, OFFICE_CEILING_Y / 2, 23]}>
+    <Box args={[46, OFFICE_CEILING_Y, 0.5]} position={[0, OFFICE_CEILING_Y / 2, 23]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
-    {/* Right segment: x=-4.9 → 23  (width 27.9, centre 9.05) */}
-    <Box args={[27.9, OFFICE_CEILING_Y, 0.5]} position={[9.05, OFFICE_CEILING_Y / 2, 23]}>
+    {/* West perimeter wall — split around the entryway exit door (gap at z=19.9→22.1) */}
+    {/* North segment: z=-23 → 19.9  (length 42.9, centre -1.55) */}
+    <Box args={[0.5, OFFICE_CEILING_Y, 42.9]} position={[-23, OFFICE_CEILING_Y / 2, -1.55]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
-    <Box args={[0.5, OFFICE_CEILING_Y, 46]} position={[-23, OFFICE_CEILING_Y / 2, 0]}>
+    {/* South segment: z=22.1 → 23  (length 0.9, centre 22.55) */}
+    <Box args={[0.5, OFFICE_CEILING_Y, 0.9]} position={[-23, OFFICE_CEILING_Y / 2, 22.55]}>
+      <meshStandardMaterial color="#D8D0B8" />
+    </Box>
+    {/* Lintel above exit door (door height → ceiling) */}
+    <Box args={[0.5, OFFICE_CEILING_Y - 4.8, 2.2]} position={[-23, 4.8 + (OFFICE_CEILING_Y - 4.8) / 2, 21]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
     <Box args={[0.5, OFFICE_CEILING_Y, 46]} position={[23, OFFICE_CEILING_Y / 2, 0]}>

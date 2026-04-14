@@ -1,13 +1,14 @@
 /**
- * Entryway — corridor along the east side of the manager's office.
+ * Entryway — the lobby corridor south of the manager's office.
  *
- * World extents: X[-9, -3], Z[5, 23]  (6 units wide, 18 units long)
- *   West  boundary: manager's office east wall at x=-9 (already exists)
- *   East  boundary: new wall at x=-3 (this file)
- *   South boundary: south perimeter wall at z=23, split in OfficeEnvironment for the door gap
- *   North end: open — players enter from the working area
+ * World extents: X[-23, -9], Z[19, 23]  (14 units wide, 4 units deep)
+ *   North boundary: manager's office south wall (z=19, already exists)
+ *   South boundary: south perimeter wall (z=23, already exists)
+ *   West boundary:  west perimeter wall (x=-23), split in OfficeEnvironment for the exit door
+ *   East side:      open into the working area at x=-9
  *
- * The ONLY way to exit the office is through the door in the south wall.
+ * Exit door is in the west perimeter wall, centred at z=21.
+ * Press [E] near the door to leave the office.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -18,32 +19,26 @@ import { useGameStore } from '../../store/useGameStore';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
 
 // ── Layout constants ────────────────────────────────────────────────────────
-const WALL_COLOR   = '#D8D0B8';
-const DOOR_COLOR   = '#8B6914';
-const SOFA_COLOR   = '#6b7280'; // gray-500
-const ARM_COLOR    = '#4b5563'; // gray-600
-const TABLE_COLOR  = '#78716c'; // warm gray
+const DOOR_COLOR  = '#8B6914';
+const SOFA_COLOR  = '#6b7280';
+const ARM_COLOR   = '#4b5563';
+const TABLE_COLOR = '#78716c';
 
-const CORRIDOR_Z_START  = 5;
-const CORRIDOR_Z_END    = 23;
-const CORRIDOR_Z_LEN    = CORRIDOR_Z_END - CORRIDOR_Z_START;        // 18
-const CORRIDOR_Z_CENTER = (CORRIDOR_Z_START + CORRIDOR_Z_END) / 2;  // 14
-const EAST_WALL_X       = -3;
-
-// Exit door — centred at x=-6 (mid-corridor), in south perimeter wall z=23
-const DOOR_CX    = -6;
-const DOOR_W     = 2.2;
+// Exit door in the west perimeter wall (x=-23), centred at z=21
+const DOOR_Z      = 21;
+const DOOR_W      = 2.2;    // gap in the z direction
 const DOOR_HEIGHT = 4.8;
-const UPPER_H    = OFFICE_CEILING_Y - DOOR_HEIGHT;
+const UPPER_H     = OFFICE_CEILING_Y - DOOR_HEIGHT;
 
-const EXIT_DOOR_POS = new THREE.Vector3(DOOR_CX, 0, CORRIDOR_Z_END);
-const INTERACT_RADIUS = 3.5;
+const EXIT_DOOR_POS   = new THREE.Vector3(-23, 0, DOOR_Z);
+const INTERACT_RADIUS = 2.5;
 
-// Frame rail dims
 const FT = 0.08;
 const FD = 0.14;
 
-// ── Sofa (seat faces +z in local space; rotate π/2 so it faces –x / west) ──
+// ── Sofa ───────────────────────────────────────────────────────────────────
+// Default orientation: backrest at local -z, seat faces +z.
+// rotation=Math.PI → backrest faces +z (south wall), seat faces -z (north/into corridor).
 function Sofa({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
   const W = 1.8, D = 0.85, SEAT_H = 0.42, BACK_H = 0.65, ARM_H = 0.52;
   return (
@@ -64,33 +59,34 @@ function Sofa({ position, rotation = 0 }: { position: [number, number, number]; 
   );
 }
 
-// ── Exit door frame + closed panel ─────────────────────────────────────────
+// ── Exit door frame (sits on the interior face of the west perimeter wall) ──
+// The frame protrudes eastward (+x) from x=-23.
 function ExitDoorFrame() {
   return (
-    <group position={[DOOR_CX, 0, CORRIDOR_Z_END]}>
+    <group position={[-23, 0, DOOR_Z]}>
       {/* Vertical rails */}
-      <Box args={[FT, OFFICE_CEILING_Y, FD]} position={[-DOOR_W / 2, OFFICE_CEILING_Y / 2, 0]}>
+      <Box args={[FD, OFFICE_CEILING_Y, FT]} position={[0, OFFICE_CEILING_Y / 2, -DOOR_W / 2]}>
         <meshStandardMaterial color="#111" />
       </Box>
-      <Box args={[FT, OFFICE_CEILING_Y, FD]} position={[ DOOR_W / 2, OFFICE_CEILING_Y / 2, 0]}>
+      <Box args={[FD, OFFICE_CEILING_Y, FT]} position={[0, OFFICE_CEILING_Y / 2,  DOOR_W / 2]}>
         <meshStandardMaterial color="#111" />
       </Box>
       {/* Top rail at door height */}
-      <Box args={[DOOR_W + FT, FT, FD]} position={[0, DOOR_HEIGHT, 0]}>
+      <Box args={[FD, FT, DOOR_W + FT]} position={[0, DOOR_HEIGHT, 0]}>
         <meshStandardMaterial color="#111" />
       </Box>
-      {/* Door panel */}
-      <Box args={[DOOR_W - FT * 2, DOOR_HEIGHT - FT * 2, 0.1]}
-           position={[0, DOOR_HEIGHT / 2, -0.05]}>
+      {/* Door panel — visible from corridor side */}
+      <Box args={[0.1, DOOR_HEIGHT - FT * 2, DOOR_W - FT * 2]}
+           position={[0.05, DOOR_HEIGHT / 2, 0]}>
         <meshStandardMaterial color={DOOR_COLOR} roughness={0.6} />
       </Box>
-      {/* Transom glass */}
-      <Box args={[DOOR_W, UPPER_H, 0.06]} position={[0, DOOR_HEIGHT + UPPER_H / 2, 0]}>
+      {/* Transom glass above door */}
+      <Box args={[0.06, UPPER_H, DOOR_W]} position={[0, DOOR_HEIGHT + UPPER_H / 2, 0]}>
         <meshPhysicalMaterial transmission={0.8} roughness={0} metalness={0}
           transparent opacity={0.3} color="#a8c8d8" />
       </Box>
-      {/* Door knob */}
-      <Box args={[0.07, 0.07, 0.07]} position={[0.72, 1.1, -0.08]}>
+      {/* Knob */}
+      <Box args={[0.07, 0.07, 0.07]} position={[0.08, 1.1, 0.72]}>
         <meshStandardMaterial color="#c4a055" metalness={0.7} roughness={0.2} />
       </Box>
     </group>
@@ -127,25 +123,12 @@ export function Entryway() {
 
   return (
     <group>
-      {/* ── Corridor east wall (x=-3, z=5→23) ── */}
-      <Box
-        args={[0.3, OFFICE_CEILING_Y, CORRIDOR_Z_LEN]}
-        position={[EAST_WALL_X, OFFICE_CEILING_Y / 2, CORRIDOR_Z_CENTER]}
-      >
-        <meshStandardMaterial color={WALL_COLOR} />
-      </Box>
-
-      {/* ── Lintel above exit door (fills the gap above the door in south wall) ── */}
-      <Box args={[DOOR_W, UPPER_H, 0.5]} position={[DOOR_CX, DOOR_HEIGHT + UPPER_H / 2, 23]}>
-        <meshStandardMaterial color={WALL_COLOR} />
-      </Box>
-
-      {/* ── Exit door ── */}
+      {/* ── Exit door frame ── */}
       <ExitDoorFrame />
 
       {/* ── [E] Exit Office prompt ── */}
       {showHint && (
-        <Billboard position={[DOOR_CX, 3.4, 21]}>
+        <Billboard position={[-21, 3.2, DOOR_Z]}>
           <Text
             fontSize={0.22}
             color="#fde68a"
@@ -158,35 +141,30 @@ export function Entryway() {
         </Billboard>
       )}
 
-      {/* ── Gray sofas along the east wall ── */}
-      {/* rotation=Math.PI/2: back faces east wall (x=-3), seat faces west into corridor */}
-      <Sofa position={[-3.85, 0,  9]} rotation={Math.PI / 2} />
-      <Sofa position={[-3.85, 0, 13]} rotation={Math.PI / 2} />
-      <Sofa position={[-3.85, 0, 17]} rotation={Math.PI / 2} />
+      {/* ── Gray sofas along south wall (z≈22.3, facing north into corridor) ── */}
+      {/* rotation=Math.PI: backrest faces south (toward z=23 wall), seat faces north */}
+      <Sofa position={[-20, 0, 22.3]} rotation={Math.PI} />
+      <Sofa position={[-15, 0, 22.3]} rotation={Math.PI} />
+      <Sofa position={[-10.5, 0, 22.3]} rotation={Math.PI} />
 
-      {/* Small side tables between sofas */}
-      <Box args={[0.45, 0.45, 0.45]} position={[-4.1, 0.225, 11]}>
+      {/* Side tables between sofas */}
+      <Box args={[0.45, 0.45, 0.45]} position={[-17.5, 0.225, 22.3]}>
         <meshStandardMaterial color={TABLE_COLOR} roughness={0.7} />
       </Box>
-      <Box args={[0.45, 0.45, 0.45]} position={[-4.1, 0.225, 15]}>
+      <Box args={[0.45, 0.45, 0.45]} position={[-12.5, 0.225, 22.3]}>
         <meshStandardMaterial color={TABLE_COLOR} roughness={0.7} />
       </Box>
     </group>
   );
 }
 
-// ── Static collision boxes (merged into COLLISION_BOXES in constants.ts) ────
+// ── Collision boxes (merged into COLLISION_BOXES via constants.ts) ───────────
 export const ENTRYWAY_COLLISION_BOXES: THREE.Box3[] = [
-  // Corridor east wall (x=-3, thickness=0.3)
-  new THREE.Box3(
-    new THREE.Vector3(EAST_WALL_X - 0.15, 0, CORRIDOR_Z_START),
-    new THREE.Vector3(EAST_WALL_X + 0.15, OFFICE_CEILING_Y, CORRIDOR_Z_END)
-  ),
-  // Sofas — after rotation π/2, W(1.8) is in Z, D(0.85) is in X
-  // Sofa at z=9:  x∈[-4.28,-3.43], z∈[8.1,9.9]
-  new THREE.Box3(new THREE.Vector3(-4.3, 0,  8.1), new THREE.Vector3(-3.4, 1.1,  9.9)),
-  // Sofa at z=13: x∈[-4.28,-3.43], z∈[12.1,13.9]
-  new THREE.Box3(new THREE.Vector3(-4.3, 0, 12.1), new THREE.Vector3(-3.4, 1.1, 13.9)),
-  // Sofa at z=17: x∈[-4.28,-3.43], z∈[16.1,17.9]
-  new THREE.Box3(new THREE.Vector3(-4.3, 0, 16.1), new THREE.Vector3(-3.4, 1.1, 17.9)),
+  // Sofas (W=1.8 in x, D=0.85 in z; rotation π doesn't change axis-aligned footprint)
+  // Sofa at x=-20, z=22.3 → x∈[-20.9,-19.1], z∈[21.87,22.73]
+  new THREE.Box3(new THREE.Vector3(-20.9, 0, 21.87), new THREE.Vector3(-19.1, 1.1, 22.73)),
+  // Sofa at x=-15, z=22.3
+  new THREE.Box3(new THREE.Vector3(-15.9, 0, 21.87), new THREE.Vector3(-14.1, 1.1, 22.73)),
+  // Sofa at x=-10.5, z=22.3
+  new THREE.Box3(new THREE.Vector3(-11.4, 0, 21.87), new THREE.Vector3(-9.6,  1.1, 22.73)),
 ];
