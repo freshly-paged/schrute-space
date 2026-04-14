@@ -95,7 +95,7 @@ function CopierModel({
     promptLine = `Cooling down… ${formatMs(copierCooldownUntil - now)} (${copiesLeft} left)`;
     promptColor = '#fde68a';
   } else {
-    promptLine = `[E] Double your papers (${copiesLeft}/${COPIER_MAX_COPIES} left)`;
+    promptLine = `[E] Double your papers, up to 20 reams (${copiesLeft}/${COPIER_MAX_COPIES} left)`;
     promptColor = '#86efac';
   }
 

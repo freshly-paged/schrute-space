@@ -1,5 +1,6 @@
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense, useMemo, useRef, useState, useEffect } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { MONITOR_UPGRADE_MAX_LEVEL } from '../../../monitorUpgradeConstants';
 import { DESK_WOOD_COLOR } from '../../../officeTheme';
@@ -7,7 +8,7 @@ import { useGameStore } from '../../../store/useGameStore';
 import { Chair } from '../shared/props/Chair';
 import { onOverlayTextSync } from '../../../utils/overlayTextSync';
 import type { DeskItemPlacement } from '../../../types';
-import { DESK_ITEM_CATALOG } from '../../../deskItemCatalog';
+import { DESK_ITEM_CATALOG, type DeskItemDef } from '../../../deskItemCatalog';
 import { useGameAsset, type AssetKey } from '../../../hooks/useGameAsset';
 
 // Shared materials — avoids creating hundreds of duplicate instances
@@ -97,6 +98,85 @@ function DeskItemAssetModel({ assetKey, x, z, yOffset = 0 }: { assetKey: AssetKe
   return <primitive object={scene.clone()} position={[x, 1.05 + yOffset, z]} scale={0.45} />;
 }
 
+function DeskItemInteractable({ def, item }: { def: DeskItemDef; item: DeskItemPlacement }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [isNear, setIsNear] = useState(false);
+  const isNearRef = useRef(false);
+
+  useFrame((rfState) => {
+    if (!groupRef.current) return;
+    const playerGroup = rfState.scene.getObjectByName('localPlayer');
+    if (!playerGroup) return;
+    const playerPos = new THREE.Vector3();
+    playerGroup.getWorldPosition(playerPos);
+    const itemPos = new THREE.Vector3();
+    groupRef.current.getWorldPosition(itemPos);
+    const near = itemPos.distanceTo(playerPos) < 2.0;
+    const store = useGameStore.getState();
+    if (near && store.nearDeskItemId !== def.id) store.setNearDeskItem(def.id);
+    else if (!near && store.nearDeskItemId === def.id) store.setNearDeskItem(null);
+    if (near !== isNearRef.current) {
+      isNearRef.current = near;
+      setIsNear(near);
+    }
+  });
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyF') return;
+      const store = useGameStore.getState();
+      if (store.nearDeskItemId !== def.id) return;
+      if (store.isChatFocused || store.isTimerActive || store.inspectedObject !== null) return;
+      store.openInspect({
+        id: def.id,
+        label: def.name,
+        description: def.description,
+        assetKey: def.modelKey,
+      });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [def]);
+
+  return (
+    <group ref={groupRef} position={[item.x, 0, item.z]}>
+      <Suspense fallback={null}>
+        <DeskItemAssetModel assetKey={def.modelKey} x={0} z={0} yOffset={def.yOffset} />
+      </Suspense>
+      {isNear && (
+        <>
+          <Billboard position={[0, 1.8, 0]}>
+            <Text
+              fontSize={0.2}
+              color="white"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.012}
+              outlineColor="black"
+              onSync={onOverlayTextSync}
+            >
+              {def.name}
+            </Text>
+          </Billboard>
+          <Billboard position={[0, 1.55, 0]}>
+            <Text
+              fontSize={0.18}
+              color="#aaaaaa"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.01}
+              outlineColor="black"
+              onSync={onOverlayTextSync}
+            >
+              [F] Inspect
+            </Text>
+          </Billboard>
+        </>
+      )}
+    </group>
+  );
+}
+
 function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
   const deskItemsByEmail = useGameStore((s) => s.deskItemsByEmail);
   if (!ownerEmail) return null;
@@ -107,11 +187,7 @@ function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
       {items.map((item) => {
         const def = DESK_ITEM_CATALOG.find((d) => d.id === item.id);
         if (!def) return null;
-        return (
-          <Suspense key={item.id} fallback={null}>
-            <DeskItemAssetModel assetKey={def.modelKey} x={item.x} z={item.z} yOffset={def.yOffset} />
-          </Suspense>
-        );
+        return <DeskItemInteractable key={item.id} def={def} item={item} />;
       })}
     </>
   );
