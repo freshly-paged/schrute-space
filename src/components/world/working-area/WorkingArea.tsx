@@ -5,6 +5,7 @@ import { FloorPlanRect } from '../../../types';
 import { useGameStore } from '../../../store/useGameStore';
 import { DeskItem } from '../../../types';
 import { Desk } from './Desk';
+import { ManagerDesk } from '../managers-office/ManagerDesk';
 import { Plant } from '../shared/props/Plant';
 import { PrinterStation } from './props/PrinterStation';
 import { WORKING_AREA_BOUNDS } from '../../../officeLayout';
@@ -68,20 +69,23 @@ export const WorkingArea = () => {
       <PrinterStation position={[12, 0, 12]} rotation={[0, Math.PI / 2, 0]} />
 
       {/* Desks (dynamic from room layout) */}
-      {desks.map((desk) => (
-        <Desk
-          key={desk.id}
-          id={desk.id}
-          position={desk.position}
-          rotation={desk.rotation}
-          ownerName={String(desk.config.ownerName)}
-          ownerEmail={desk.config.ownerEmail}
-          groupRef={(el) => {
+      {desks.map((desk) => {
+        const commonProps = {
+          key: desk.id,
+          id: desk.id,
+          position: desk.position,
+          rotation: desk.rotation,
+          ownerName: String(desk.config.ownerName),
+          ownerEmail: desk.config.ownerEmail,
+          groupRef: (el: THREE.Group | null) => {
             if (el) deskRefsMap.current.set(desk.id, el);
             else deskRefsMap.current.delete(desk.id);
-          }}
-        />
-      ))}
+          },
+        };
+        return desk.config.variant === 'manager'
+          ? <ManagerDesk {...commonProps} />
+          : <Desk {...commonProps} />;
+      })}
     </group>
   );
 };

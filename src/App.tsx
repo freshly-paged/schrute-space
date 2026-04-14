@@ -166,6 +166,15 @@ export default function App() {
     handleExitRoom();
   }, [requestExitRoom]);
 
+  // Office-plan frame sets requestCustomizeOffice; open the layout editor here.
+  const requestCustomizeOffice = useGameStore((s) => s.requestCustomizeOffice);
+  const setRequestCustomizeOffice = useGameStore((s) => s.setRequestCustomizeOffice);
+  useEffect(() => {
+    if (!requestCustomizeOffice) return;
+    setRequestCustomizeOffice(false);
+    setView('customize-office');
+  }, [requestCustomizeOffice]);
+
   const storeUser = useGameStore((s) => s.user);
 
   useEffect(() => {
@@ -334,18 +343,6 @@ export default function App() {
     );
   }
 
-  // ── Office customization (in-room) ──────────────────────────────────────
-  if (currentRoom && view === 'customize-office') {
-    return (
-      <OfficeCustomizationPage
-        roomId={currentRoom}
-        initialLayout={roomLayout}
-        onBack={() => setView('landing')}
-        onSave={handleSaveOfficeLayout}
-      />
-    );
-  }
-
   // ── Room selection ───────────────────────────────────────────────────────
   if (!currentRoom) {
     return (
@@ -377,7 +374,6 @@ export default function App() {
               currentRoom={currentRoom}
               paperReams={paperReams}
               focusEnergy={focusEnergy}
-              onCustomizeOffice={() => setView('customize-office')}
               myRole={roomInfo?.myRole ?? null}
             />
           </motion.div>
@@ -489,6 +485,18 @@ export default function App() {
             </React.Suspense>
           </Canvas>
         </KeyboardControls>
+      )}
+
+      {/* Office customization overlay — rendered on top of the live Canvas so player position is preserved */}
+      {currentRoom && view === 'customize-office' && (
+        <div className="absolute inset-0 z-50">
+          <OfficeCustomizationPage
+            roomId={currentRoom}
+            initialLayout={roomLayout}
+            onBack={() => setView('landing')}
+            onSave={handleSaveOfficeLayout}
+          />
+        </div>
       )}
 
       {!isConnected && (

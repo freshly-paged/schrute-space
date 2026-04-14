@@ -18,6 +18,7 @@ import {
   DESK_SPAWN_SPACING,
   WATER_COOLER_WORLD_POSITION,
   WATER_COOLER_RADIUS,
+  MANAGER_OFFICE_DESK_SLOTS,
 } from "./src/officeLayout.js";
 import { isAllowedHeldThrowableId } from "./src/networkThrowables.js";
 import {
@@ -723,6 +724,28 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
   return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
+/** Returns the first unoccupied manager-office desk slot for the given role. */
+function generateManagerSpawnPosition(
+  existingDesks: DeskItem[],
+  role: "admin" | "manager"
+): { position: [number, number, number]; rotation: [number, number, number] } {
+  // Admin always gets slot 0 (the canonical boss desk position); managers get slots 1-3.
+  const slots = role === "admin"
+    ? [MANAGER_OFFICE_DESK_SLOTS[0]]
+    : MANAGER_OFFICE_DESK_SLOTS.slice(1);
+
+  for (const slot of slots) {
+    const occupied = existingDesks.some((d) => {
+      const dx = d.position[0] - slot.position[0];
+      const dz = d.position[2] - slot.position[2];
+      return Math.sqrt(dx * dx + dz * dz) < 2;
+    });
+    if (!occupied) return slot;
+  }
+  // Fallback: use last slot in the candidate list even if occupied
+  return slots[slots.length - 1];
+}
+
 function layoutHasDeskForEmail(layout: FurnitureItem[], email: string): boolean {
   return layout.some((f) => {
     if (f.type !== "desk") return false;
@@ -737,23 +760,58 @@ function layoutHasDeskForEmail(layout: FurnitureItem[], email: string): boolean 
 async function ensurePlayerDeskBody(
   roomId: string,
   email: string,
-  name: string
+  name: string,
+  role: RoomRole | null = null
 ): Promise<FurnitureItem[]> {
   const layout = await getRoomLayout(roomId);
-  if (layoutHasDeskForEmail(layout, email)) {
-    return layout;
+
+  // Determine what desk variant this role should have.
+  // admin/manager → 'manager' variant (executive desk in manager's office)
+  // worker / null → undefined (regular worker desk in working area)
+  const expectedVariant = (role === 'admin' || role === 'manager') ? 'manager' : undefined;
+
+  // Find any existing desk for this user.
+  const existingIdx = layout.findIndex(
+    (f): f is DeskItem => f.type === 'desk' && (f as DeskItem).config?.ownerEmail === email
+  );
+
+  if (existingIdx !== -1) {
+    const existingVariant = (layout[existingIdx] as DeskItem).config.variant as string | undefined;
+    // Desk already has the right type for this role — nothing to do.
+    if (existingVariant === expectedVariant) return layout;
+    // Role changed (promotion or demotion) — remove the old desk so we can
+    // allocate a new one in the correct location below.
+    console.log(
+      `[desk] replacing desk for ${email}: variant ${existingVariant ?? 'worker'} → ${expectedVariant ?? 'worker'}`
+    );
   }
 
-  const desks = layout.filter((f): f is DeskItem => f.type === 'desk');
-  const position = generateSpawnPosition(desks);
+  // Build the base layout without the old desk (if any).
+  const baseLayout = existingIdx !== -1 ? layout.filter((_, i) => i !== existingIdx) : layout;
+  const desks = baseLayout.filter((f): f is DeskItem => f.type === 'desk');
+
+  let position: [number, number, number];
+  let rotation: [number, number, number];
+  let variant: string | undefined;
+
+  if (role === 'admin' || role === 'manager') {
+    const spawn = generateManagerSpawnPosition(desks, role);
+    position = spawn.position;
+    rotation = spawn.rotation;
+    variant = 'manager';
+  } else {
+    position = generateSpawnPosition(desks);
+    rotation = [0, 0, 0];
+  }
+
   const newDesk: DeskItem = {
     id: `desk-${email}`,
     type: 'desk',
     position,
-    rotation: [0, 0, 0],
-    config: { ownerEmail: email, ownerName: name },
+    rotation,
+    config: { ownerEmail: email, ownerName: name, ...(variant ? { variant } : {}) },
   };
-  const updated = [...layout, newDesk];
+  const updated = [...baseLayout, newDesk];
   await saveRoomLayout(roomId, updated);
   return updated;
 }
@@ -762,8 +820,13 @@ async function ensurePlayerDeskBody(
  * Ensures a desk exists for this member. Serialized per roomId so concurrent async
  * joinRoom handlers cannot overwrite each other (late roomLayoutUpdated would drop desks).
  */
-function ensurePlayerDesk(roomId: string, email: string, name: string): Promise<FurnitureItem[]> {
-  return runSerializedRoomLayout(roomId, () => ensurePlayerDeskBody(roomId, email, name));
+function ensurePlayerDesk(
+  roomId: string,
+  email: string,
+  name: string,
+  role: RoomRole | null = null
+): Promise<FurnitureItem[]> {
+  return runSerializedRoomLayout(roomId, () => ensurePlayerDeskBody(roomId, email, name, role));
 }
 
 // ── Room Management ───────────────────────────────────────────────────────────
@@ -1182,7 +1245,7 @@ export async function createApp(injectedPool?: pg.Pool) {
       const onlineEntry = Object.entries(rooms[roomId] ?? {})
         .find(([, p]: [string, any]) => p.email === email);
       if (onlineEntry) {
-        const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name);
+        const layout = await ensurePlayerDesk(roomId, email, (onlineEntry[1] as any).name, role as RoomRole);
         io.to(roomId).emit("roomLayoutUpdated", layout);
         void broadcastDeskChairLevels(io, roomId, layout);
         io.to(onlineEntry[0]).emit("roleChanged", { newRole: role });
@@ -1460,7 +1523,7 @@ io.on("connection", (socket) => {
 
       // Desk: only for members (admin/manager/worker)
       if (isMember) {
-        ensurePlayerDesk(room, user.email, visibleName)
+        ensurePlayerDesk(room, user.email, visibleName, role)
           .then(async (layout) => {
             socket.emit("roomLayoutLoaded", layout);
             socket.to(room).emit("roomLayoutUpdated", layout);
