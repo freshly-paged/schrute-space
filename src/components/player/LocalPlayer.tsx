@@ -128,6 +128,16 @@ export const LocalPlayer = ({
   const focusProgress = isTimerActive ? 1 - timeLeft / POMODORO_FOCUS_DURATION_SEC : 0;
   const sessionPaper = useGameStore((state) => state.sessionPaper);
 
+  // Snap OrbitControls target to spawn position on first mount so the camera
+  // doesn't slowly drift from [0,0,0] to the actual spawn location.
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const [x, , z] = positionRef.current;
+    controls.target.set(x, 1.5, z);
+    controls.update();
+  }, []);
+
   // Emit focus state to server whenever it changes
   useEffect(() => {
     if (!socket) return;
