@@ -66,7 +66,8 @@ export const LocalPlayer = ({
   playerName,
   players,
 }: LocalPlayerProps) => {
-  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
+  // Spawn beside the entryway exit door (west wall x=-23, door centred at z=21).
+  const positionRef = useRef<[number, number, number]>([-21, 0, 21]);
   const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
   const [isMoving, setIsMoving] = useState(false);
   const [, get] = useKeyboardControls();
