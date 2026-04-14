@@ -11,6 +11,7 @@ import { WORKING_AREA_COLLISION_BOXES } from './components/world/working-area/Wo
 import { BREAK_ROOM_COLLISION_BOXES } from './components/world/break-room/BreakRoom';
 import { CONFERENCE_ROOM_COLLISION_BOXES } from './components/world/conference-room/ConferenceRoom';
 import { MANAGERS_OFFICE_COLLISION_BOXES } from './components/world/managers-office/ManagersOffice';
+import { ENTRYWAY_COLLISION_BOXES } from './components/world/Entryway';
 
 export { DESK_WOOD_COLOR } from './officeTheme';
 
@@ -58,4 +59,5 @@ export const COLLISION_BOXES = [
   ...BREAK_ROOM_COLLISION_BOXES,
   ...CONFERENCE_ROOM_COLLISION_BOXES,
   ...MANAGERS_OFFICE_COLLISION_BOXES,
+  ...ENTRYWAY_COLLISION_BOXES,
 ];

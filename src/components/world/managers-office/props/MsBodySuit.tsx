@@ -3,10 +3,12 @@ import { ThrowableObject } from '../../ThrowableObject';
 import { useGameAsset } from '../../../../hooks/useGameAsset';
 import { MS_BODY_THROWABLE_ID } from '../../../../propIds';
 
-// World space — on BossDesk tabletop (same room group [-16,0,12], desk at [-1,0,0] rot π/2).
-// Between mug and Dundie area, slightly toward the visitor side.
-const REST_POSITION: [number, number, number] = [-16.85, 1.02, 12.35];
-const REST_ROTATION: [number, number, number] = [0, (2 * Math.PI) / 3, 0];
+// World space — on top of the manager's bookshelf.
+// Bookshelf is at office-local x=-5, flushed against north wall (office-local z≈-6.85).
+// Group offset [-16, 0, 12] → world x=-21, world z≈5.3.
+// Adjust REST_POSITION[1] (y) if the bookshelf GLB height differs from this estimate.
+const REST_POSITION: [number, number, number] = [-21, 2.05, 5.5];
+const REST_ROTATION: [number, number, number] = [0, Math.PI / 4, 0];
 
 function MsBodyDeskModel() {
   const { scene } = useGameAsset('ms_body');

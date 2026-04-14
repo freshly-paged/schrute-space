@@ -66,7 +66,8 @@ export const LocalPlayer = ({
   playerName,
   players,
 }: LocalPlayerProps) => {
-  const positionRef = useRef<[number, number, number]>([0, 0, 0]);
+  // Spawn in the working area.
+  const positionRef = useRef<[number, number, number]>([-5, 0, 0]);
   const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
   const [isMoving, setIsMoving] = useState(false);
   const [, get] = useKeyboardControls();
@@ -82,6 +83,7 @@ export const LocalPlayer = ({
   const cameraRayRef = useRef(new THREE.Ray());
   const cameraHitRef = useRef(new THREE.Vector3());
   const lastMovementEmitRef = useRef(0);
+  const initialSnapDoneRef = useRef(false);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -140,6 +142,21 @@ export const LocalPlayer = ({
   }, [socket, isTimerActive, activeDeskId, focusSitPoseIndex]);
 
   useFrame((state, delta) => {
+    // First-frame snap: position the player mesh and camera immediately so there
+    // is no single-frame flash of the player sitting at world origin [0,0,0].
+    // Done here (not in useEffect) so controlsRef is guaranteed to be populated.
+    if (!initialSnapDoneRef.current) {
+      initialSnapDoneRef.current = true;
+      const [sx, , sz] = positionRef.current;
+      if (playerRef.current) playerRef.current.position.set(sx, 0, sz);
+      playerWorldPos.set(sx, 0, sz);
+      if (controlsRef.current) {
+        controlsRef.current.target.set(sx, 1.5, sz);
+        state.camera.position.set(sx, 7, sz + 10);
+        controlsRef.current.update();
+      }
+    }
+
     // Keep camera below ceiling
     if (state.camera.position.y > CAMERA_MAX_Y) state.camera.position.y = CAMERA_MAX_Y;
 

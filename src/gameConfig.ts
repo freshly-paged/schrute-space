@@ -113,6 +113,25 @@ export const ICE_CREAM_QUARTERS_MAX = 4;
 export const ICE_CREAM_BITE_FOCUS_ENERGY = 4;
 
 // ---------------------------------------------------------------------------
+// Copier
+// ---------------------------------------------------------------------------
+
+/** Maximum number of copies a player can make before the reset cooldown kicks in. */
+export const COPIER_MAX_COPIES = 5;
+
+/** Maximum paper reams that can be doubled in a single copier use. */
+export const COPIER_MAX_DOUBLE_REAMS = 20;
+
+/** Cooldown between individual copies in milliseconds (60 seconds). */
+export const COPIER_PER_COPY_COOLDOWN_MS = 60_000;
+
+/**
+ * Cooldown after all copies are exhausted before the counter resets (5 minutes).
+ * Replaces the per-copy cooldown once the cap is hit.
+ */
+export const COPIER_RESET_COOLDOWN_MS = 5 * 60_000;
+
+// ---------------------------------------------------------------------------
 // Vending machine — Team Pyramid (room buff)
 // ---------------------------------------------------------------------------
 

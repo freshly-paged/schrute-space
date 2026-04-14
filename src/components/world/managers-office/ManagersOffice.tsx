@@ -10,7 +10,6 @@ import { OFFICE_CEILING_Y } from '../../../officeLayout';
 import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
 import { Chair } from '../shared/props/Chair';
-import { OfficeWindow } from '../shared/props/OfficeWindow';
 
 // Room: 14 wide × 14 deep, group at world [-16, 0, 12]
 // World extents: X[-23, -9], Z[+5, +19]
@@ -24,6 +23,65 @@ const BC = '#111111'; // border colour
 const FT = 0.08;      // rail thickness in wall plane
 const FD = 0.14;      // rail depth (protrudes from wall face)
 const FX = 7.16;      // frame x position (at wall outer face)
+
+// ── South wall window (visible from both office and entryway corridor) ───────
+// Window centred at local x=0, y=3.0, z=7.  Width=3 u, height=2 u.
+const SW_W     = 3.0;
+const SW_LOWER = 1.4;   // lower pane (venetian blinds)
+const SW_UPPER = 0.6;   // upper pane (clear glass)
+const SW_H     = SW_LOWER + SW_UPPER;         // 2.0
+const SW_CY    = 3.0;                          // vertical centre of window
+const SW_BOT   = SW_CY - SW_H / 2;            // 2.0
+const SW_TOP   = SW_CY + SW_H / 2;            // 4.0
+const SW_MID   = SW_BOT + SW_LOWER;           // 3.4 — lower/upper split
+const SW_LCCY  = (SW_BOT + SW_MID) / 2;      // 2.7
+const SW_UCCY  = (SW_MID + SW_TOP) / 2;      // 3.7
+
+// Blind slat Y positions within the lower pane
+const SW_SLAT_YS: number[] = [];
+for (let y = SW_BOT + 0.12; y < SW_MID - 0.1; y += 0.22) SW_SLAT_YS.push(y);
+
+/** Window that sits in a hole in the south wall and is visible from both sides. */
+function SouthWallWindow() {
+  // Frame rail depth spans slightly past the wall thickness so rails show on both sides.
+  const RAIL_D = 0.35;
+  return (
+    <group position={[0, 0, 7]}>
+      {/* Lower glass pane — double-sided so the corridor sees it too */}
+      <Box args={[SW_W, SW_LOWER, 0.06]} position={[0, SW_LCCY, 0]}>
+        <meshPhysicalMaterial transmission={0.8} roughness={0} metalness={0}
+          transparent opacity={0.3} color="#a8c8d8" side={THREE.DoubleSide} />
+      </Box>
+      {/* Blind slats — span wall thickness */}
+      {SW_SLAT_YS.map((y, i) => (
+        <Box key={i} args={[SW_W - 0.1, 0.065, RAIL_D]} position={[0, y, 0]}>
+          <meshStandardMaterial color="#cbc7bc" />
+        </Box>
+      ))}
+      {/* Upper glass pane — double-sided */}
+      <Box args={[SW_W, SW_UPPER, 0.06]} position={[0, SW_UCCY, 0]}>
+        <meshPhysicalMaterial transmission={0.8} roughness={0} metalness={0}
+          transparent opacity={0.3} color="#a8c8d8" side={THREE.DoubleSide} />
+      </Box>
+      {/* Frame rails (box geometry — visible from both sides without DoubleSide) */}
+      <Box args={[SW_W + FT, FT, RAIL_D]} position={[0, SW_BOT, 0]}>
+        <meshStandardMaterial color={BC} />
+      </Box>
+      <Box args={[SW_W + FT, FT, RAIL_D]} position={[0, SW_MID, 0]}>
+        <meshStandardMaterial color={BC} />
+      </Box>
+      <Box args={[SW_W + FT, FT, RAIL_D]} position={[0, SW_TOP, 0]}>
+        <meshStandardMaterial color={BC} />
+      </Box>
+      <Box args={[FT, SW_H + FT, RAIL_D]} position={[-SW_W / 2, SW_CY, 0]}>
+        <meshStandardMaterial color={BC} />
+      </Box>
+      <Box args={[FT, SW_H + FT, RAIL_D]} position={[ SW_W / 2, SW_CY, 0]}>
+        <meshStandardMaterial color={BC} />
+      </Box>
+    </group>
+  );
+}
 
 // Transom / upper-pane sizing
 // UPPER_H is sized so the top frame rail sits exactly FT below the ceiling
@@ -55,8 +113,7 @@ export const MANAGERS_OFFICE_COLLISION_BOXES: THREE.Box3[] = [
   ...wallsToBoxes(COLLISION_WALL_DEFS, GROUP_OFFSET),
   // Boss desk (local [-1,0,0] rotated 90° → world [-17,0,12])
   new THREE.Box3(new THREE.Vector3(-17.7, 0, 10.6), new THREE.Vector3(-16.3, 1.1, 13.4)),
-  // Bookshelf (local [-5,0,-6] → world [-21,0,6])
-  new THREE.Box3(new THREE.Vector3(-21.6, 0, 5.85), new THREE.Vector3(-20.4, 2.2, 6.45)),
+  // Bookshelf collision is registered dynamically via useGlbCollision in Bookshelf.tsx
 ];
 
 /** Four black rails forming a closed frame around a pane.
@@ -209,11 +266,25 @@ interface ManagersOfficeProps {
 export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
   <group position={GROUP_OFFSET}>
 
-    {/* ── South wall (interior) ── */}
-    <Box args={[14, OFFICE_CEILING_Y, 0.3]} position={[0, OFFICE_CEILING_Y / 2, 7]}>
+    {/* ── South wall — split around window opening (x=−1.5→1.5, y=2→4) ── */}
+    {/* Left section */}
+    <Box args={[5.5, OFFICE_CEILING_Y, 0.3]} position={[-4.25, OFFICE_CEILING_Y / 2, 7]}>
       <meshStandardMaterial color={WALL_COLOR} />
     </Box>
-    <OfficeWindow position={[0, 3.0, 6.85]} rotation={[0, Math.PI, 0]} />
+    {/* Right section */}
+    <Box args={[5.5, OFFICE_CEILING_Y, 0.3]} position={[4.25, OFFICE_CEILING_Y / 2, 7]}>
+      <meshStandardMaterial color={WALL_COLOR} />
+    </Box>
+    {/* Below window */}
+    <Box args={[SW_W, SW_BOT, 0.3]} position={[0, SW_BOT / 2, 7]}>
+      <meshStandardMaterial color={WALL_COLOR} />
+    </Box>
+    {/* Above window */}
+    <Box args={[SW_W, OFFICE_CEILING_Y - SW_TOP, 0.3]} position={[0, SW_TOP + (OFFICE_CEILING_Y - SW_TOP) / 2, 7]}>
+      <meshStandardMaterial color={WALL_COLOR} />
+    </Box>
+    {/* Double-sided window in the opening */}
+    <SouthWallWindow />
 
     {/* ── East wall ── */}
 
@@ -244,9 +315,12 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
 
     {/* ── Furniture ── */}
     <BossDesk position={[-1, 0, 0]} rotation={[0, Math.PI / 2, 0]} ownerName={ownerName} />
+    {/* Manager's chair behind the desk, facing east toward visitors */}
+    <Chair position={[-2.8, 0, 0]} rotation={[0, Math.PI / 2, 0]} />
+    {/* Visitor chairs in front of the desk */}
     <Chair position={[2.5, 0, -0.8]} rotation={[0, -Math.PI / 2 + Math.PI / 8, 0]} />
     <Chair position={[2.5, 0, 0.8]} rotation={[0, -Math.PI / 2 - Math.PI / 8, 0]} />
-    <Bookshelf position={[-5, 0, -6]} />
+    <Bookshelf x={-5} />
 
     {/* ── Lighting ── */}
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />

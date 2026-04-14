@@ -23,8 +23,7 @@ export const BEET_FARM_FLOOR_PLAN_RECT: FloorPlanRect = {
 export const WORKING_AREA_COLLISION_BOXES: THREE.Box3[] = [
   // Beet Farm (NW corner, outside main working area)
   new THREE.Box3(new THREE.Vector3(-21, 0, -21), new THREE.Vector3(-15, 0.1, -15)),
-  // Printer station (world [12, 0, 12])
-  new THREE.Box3(new THREE.Vector3(11.5, 0, 11.5), new THREE.Vector3(13.5, 1, 12.5)),
+  // Copier collision is registered dynamically via useGlbCollision in PrinterStation
 ];
 
 export const WorkingArea = () => {

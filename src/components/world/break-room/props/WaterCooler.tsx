@@ -1,11 +1,46 @@
-import React, { useRef } from 'react';
-import { Box, Cylinder, Billboard, Text } from '@react-three/drei';
+import React, { Suspense, useMemo, useRef } from 'react';
+import { Billboard, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FOCUS_ENERGY_WATER_BUFF_DURATION_MS } from '../../../../focusEnergyModel';
 import { WATER_COOLER_RADIUS } from '../../../../officeLayout';
 import { useGameStore } from '../../../../store/useGameStore';
+import { useGameAsset } from '../../../../hooks/useGameAsset';
+import { computeFloorLift } from '../../../../utils/glbFloorLift';
+import { useGlbCollision } from '../../../../hooks/useGlbCollision';
 import { onOverlayTextSync } from '../../../../utils/overlayTextSync';
+
+function WaterCoolerModel({
+  position,
+  rotation,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const { scene } = useGameAsset('water_cooler');
+
+  const { cloned, zFlush, yLift } = useMemo(() => {
+    const cloned = scene.clone();
+    // Apply scale before computing bounds so offsets are correct at render size.
+    cloned.scale.setScalar(1.2);
+    cloned.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(cloned);
+    const yLift = -box.min.y;
+    // Outer group sits at the north wall inner face (z=0 relative to itself).
+    // Push model's back face (min.z) flush against that face.
+    const zFlush = -box.min.z;
+    return { cloned, zFlush, yLift };
+  }, [scene]);
+
+  useGlbCollision('water_cooler', groupRef);
+
+  return (
+    <group ref={groupRef} position={position} rotation={rotation}>
+      <primitive object={cloned} position={[0, yLift, zFlush]} />
+    </group>
+  );
+}
 
 export const WaterCooler = ({
   position,
@@ -44,7 +79,7 @@ export const WaterCooler = ({
   });
 
   return (
-    <group ref={groupRef} position={position} rotation={rotation}>
+    <group ref={groupRef} position={position}>
       {nearWaterCooler && (
         <Billboard position={[0, 2.1, 0]}>
           <Text
@@ -58,34 +93,9 @@ export const WaterCooler = ({
           </Text>
         </Billboard>
       )}
-      {/* Main body cylinder */}
-      <Cylinder args={[0.2, 0.22, 0.9, 12]} position={[0, 0.45, 0]}>
-        <meshStandardMaterial color="#cdd9e5" />
-      </Cylinder>
-      {/* Water bottle (inverted cone shape — use a cylinder narrowing upward) */}
-      <Cylinder args={[0.12, 0.18, 0.5, 12]} position={[0, 1.15, 0]}>
-        <meshStandardMaterial color="#6ab4e8" transparent opacity={0.7} />
-      </Cylinder>
-      {/* Water bottle cap/top */}
-      <Cylinder args={[0.05, 0.12, 0.05, 12]} position={[0, 1.42, 0]}>
-        <meshStandardMaterial color="#6ab4e8" transparent opacity={0.7} />
-      </Cylinder>
-      {/* Water surface plane inside the top of the body */}
-      <Box args={[0.35, 0.02, 0.35]} position={[0, 0.92, 0]}>
-        <meshStandardMaterial color="#a8d4f0" transparent opacity={0.8} />
-      </Box>
-      {/* Hot button (red) */}
-      <Box args={[0.06, 0.06, 0.04]} position={[-0.08, 0.3, 0.23]}>
-        <meshStandardMaterial color="#e53e3e" />
-      </Box>
-      {/* Cold button (blue) */}
-      <Box args={[0.06, 0.06, 0.04]} position={[0.08, 0.3, 0.23]}>
-        <meshStandardMaterial color="#3182ce" />
-      </Box>
-      {/* Drip tray base */}
-      <Box args={[0.5, 0.04, 0.3]} position={[0, 0.1, 0.1]}>
-        <meshStandardMaterial color="#a0aec0" />
-      </Box>
+      <Suspense fallback={null}>
+        <WaterCoolerModel position={[0, 0, 0]} rotation={rotation} />
+      </Suspense>
     </group>
   );
 };

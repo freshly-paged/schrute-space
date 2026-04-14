@@ -45,8 +45,7 @@ export const BREAK_ROOM_COLLISION_BOXES: THREE.Box3[] = [
   new THREE.Box3(new THREE.Vector3(5.2, 0, -15.8), new THREE.Vector3(6.8, 0.8, -14.2)),
   // Round table 2 (local [9,0,−3] → world [15,0,−19])
   new THREE.Box3(new THREE.Vector3(14.2, 0, -19.8), new THREE.Vector3(15.8, 0.8, -18.2)),
-  // Vending machine (local [16.5,0,−1] → world [22.5,0,−17]; flush against east wall)
-  new THREE.Box3(new THREE.Vector3(22, 0, -17.8), new THREE.Vector3(23, 4, -16.2)),
+  // Vending machine collision is registered dynamically via useGlbCollision in VendingMachine.tsx
 ];
 
 // ── Door / frame constants ─────────────────────────────────────────────────────

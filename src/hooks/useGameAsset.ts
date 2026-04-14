@@ -22,6 +22,10 @@ const ASSETS = {
   dwight_bobblehead:        '/assets/dwight_bobblehead.glb',
   ms_body:                  '/assets/ms_body.glb',
   nuclear_launch_detector:  '/assets/nuclear_launch_detector.glb',
+  copier:                   '/assets/copier.glb',
+  manager_bookshelf:        '/assets/manager_bookshelf.glb',
+  water_cooler:             '/assets/water_cooler.glb',
+  ice_cream_vending_machine: '/assets/ice_cream_vending_machine.glb',
 } as const;
 
 export type AssetKey = keyof typeof ASSETS;

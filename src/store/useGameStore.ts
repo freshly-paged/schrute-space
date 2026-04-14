@@ -11,6 +11,10 @@ import { CHAIR_UPGRADE_MAX_LEVEL } from '../chairUpgradeConstants';
 import { MONITOR_UPGRADE_MAX_LEVEL, focusReamsPerMinute } from '../monitorUpgradeConstants';
 import {
   POMODORO_FOCUS_DURATION_SEC,
+  COPIER_MAX_COPIES,
+  COPIER_MAX_DOUBLE_REAMS,
+  COPIER_PER_COPY_COOLDOWN_MS,
+  COPIER_RESET_COOLDOWN_MS,
   POMODORO_BREAK_DURATION_SEC,
   TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER,
 } from '../gameConfig';
@@ -152,11 +156,26 @@ interface GameState {
   setShowAdminPanel: (show: boolean) => void;
   showComputerInterface: boolean;
   setShowComputerInterface: (show: boolean) => void;
+  /** Set to true by the entryway door; App.tsx watches and calls handleExitRoom. */
+  requestExitRoom: boolean;
+  setRequestExitRoom: (v: boolean) => void;
 
   nearVendingMachine: boolean;
   setNearVendingMachine: (near: boolean) => void;
   showVendingMenu: boolean;
   setShowVendingMenu: (show: boolean) => void;
+
+  nearCopier: boolean;
+  setNearCopier: (near: boolean) => void;
+  /** How many copies have been made this cooldown window (0–COPIER_MAX_COPIES). */
+  copierCopiesUsed: number;
+  /** Epoch ms after which the cooldown clears (0 = no active cooldown). */
+  copierCooldownUntil: number;
+  /**
+   * Attempt to use the copier: doubles current paper reams, increments copy count,
+   * sets appropriate cooldown. Returns false if still on cooldown.
+   */
+  useCopierCopy: () => boolean;
 
   /** Local Vend-O-Matic treat; cleared when `expiresAt` passes or quarters reach 0 (see LocalPlayer). */
   heldIceCream: { flavorIndex: number; expiresAt: number; remainingQuarters: number } | null;
@@ -498,6 +517,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   showAdminPanel: false,
   setShowAdminPanel: (show) => set({ showAdminPanel: show }),
+  requestExitRoom: false,
+  setRequestExitRoom: (v) => set({ requestExitRoom: v }),
   showComputerInterface: false,
   setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 
@@ -505,6 +526,36 @@ export const useGameStore = create<GameState>((set, get) => ({
   setNearVendingMachine: (near) => set({ nearVendingMachine: near }),
   showVendingMenu: false,
   setShowVendingMenu: (show) => set({ showVendingMenu: show }),
+
+  nearCopier: false,
+  setNearCopier: (near) => set({ nearCopier: near }),
+  copierCopiesUsed: 0,
+  copierCooldownUntil: 0,
+  useCopierCopy: () => {
+    const now = Date.now();
+    const s = get();
+
+    // If the reset cooldown has expired, treat copies as cleared
+    const effectiveCopies =
+      s.copierCooldownUntil > 0 && now >= s.copierCooldownUntil ? 0 : s.copierCopiesUsed;
+
+    // Still within an active cooldown
+    if (s.copierCooldownUntil > 0 && now < s.copierCooldownUntil) return false;
+
+    if (effectiveCopies >= COPIER_MAX_COPIES) return false;
+
+    const newCount = effectiveCopies + 1;
+    const cooldownUntil =
+      newCount >= COPIER_MAX_COPIES
+        ? now + COPIER_RESET_COOLDOWN_MS   // all copies used — longer reset
+        : now + COPIER_PER_COPY_COOLDOWN_MS; // per-copy cooldown
+
+    // Double current paper reams
+    const gain = Math.min(COPIER_MAX_DOUBLE_REAMS, Math.max(1, s.paperReams));
+    s.addPaper(gain);
+    set({ copierCopiesUsed: newCount, copierCooldownUntil: cooldownUntil });
+    return true;
+  },
 
   heldIceCream: null,
   setHeldIceCream: (value) => set({ heldIceCream: value }),

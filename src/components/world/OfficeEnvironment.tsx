@@ -11,8 +11,8 @@ import { ManagersOffice, FLOOR_PLAN_RECT as MANAGERS_OFFICE_RECT } from './manag
 import { DundieAward } from './managers-office/props/DundieAward';
 import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 import { MsBodySuit } from './managers-office/props/MsBodySuit';
-import { NuclearLaunchDetector } from './managers-office/props/NuclearLaunchDetector';
 import { TeamPyramidProp } from './working-area/TeamPyramidProp';
+import { Entryway } from './Entryway';
 
 
 // Window centres along the north/south walls (x varies)
@@ -134,7 +134,17 @@ export const OfficeEnvironment = () => {
     <Box args={[46, OFFICE_CEILING_Y, 0.5]} position={[0, OFFICE_CEILING_Y / 2, 23]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
-    <Box args={[0.5, OFFICE_CEILING_Y, 46]} position={[-23, OFFICE_CEILING_Y / 2, 0]}>
+    {/* West perimeter wall — split around the entryway exit door (gap at z=19.9→22.1) */}
+    {/* North segment: z=-23 → 19.9  (length 42.9, centre -1.55) */}
+    <Box args={[0.5, OFFICE_CEILING_Y, 42.9]} position={[-23, OFFICE_CEILING_Y / 2, -1.55]}>
+      <meshStandardMaterial color="#D8D0B8" />
+    </Box>
+    {/* South segment: z=22.1 → 23  (length 0.9, centre 22.55) */}
+    <Box args={[0.5, OFFICE_CEILING_Y, 0.9]} position={[-23, OFFICE_CEILING_Y / 2, 22.55]}>
+      <meshStandardMaterial color="#D8D0B8" />
+    </Box>
+    {/* Lintel above exit door (door height → ceiling) */}
+    <Box args={[0.5, OFFICE_CEILING_Y - 4.8, 2.2]} position={[-23, 4.8 + (OFFICE_CEILING_Y - 4.8) / 2, 21]}>
       <meshStandardMaterial color="#D8D0B8" />
     </Box>
     <Box args={[0.5, OFFICE_CEILING_Y, 46]} position={[23, OFFICE_CEILING_Y / 2, 0]}>
@@ -193,8 +203,8 @@ export const OfficeEnvironment = () => {
     <ManagersOffice />
     <DundieAward />
     <DwightBobblehead />
-    <NuclearLaunchDetector />
     <MsBodySuit />
+    <Entryway />
   </group>
   );
 };
