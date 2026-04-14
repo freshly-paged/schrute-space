@@ -38,6 +38,8 @@ export type InspectedObjectData = {
 interface GameState {
   // Throwable object system
   nearThrowableId: string | null;       // ID of the throwable the player is close enough to pick up
+  nearDeskItemId: string | null;        // ID of the desk decoration item the player is close enough to inspect
+  setNearDeskItem: (id: string | null) => void;
   heldObjectId: string | null;          // ID of the object the player is currently holding
   throwVelocity: [number, number, number]; // launch velocity set by LocalPlayer on throw
   setNearThrowable: (id: string | null) => void;
@@ -210,6 +212,8 @@ interface GameState {
 
 export const useGameStore = create<GameState>((set, get) => ({
   nearThrowableId: null,
+  nearDeskItemId: null,
+  setNearDeskItem: (id) => set({ nearDeskItemId: id }),
   heldObjectId: null,
   throwVelocity: [0, 0, 0],
   droppingObjectId: null,
