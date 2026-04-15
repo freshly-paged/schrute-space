@@ -107,24 +107,41 @@ export function InspectOverlay() {
     <div className="absolute inset-0 z-50 flex items-center justify-center p-6">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70"
         onClick={closeInspect}
       />
 
       {/* Panel */}
-      <div className="relative flex w-full max-w-2xl rounded-3xl border border-white/20 bg-slate-900/90 backdrop-blur-xl shadow-2xl overflow-hidden"
-           style={{ height: '420px' }}>
-
-        {/* Close button */}
-        <button
-          onClick={closeInspect}
-          className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all text-lg leading-none"
+      <div
+        className="pixel-panel font-pixel relative flex w-full max-w-2xl overflow-hidden p-0"
+        style={{ height: '420px' }}
+      >
+        {/* Schrute red header bar */}
+        <div
+          className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 py-2"
+          style={{ background: 'var(--color-schrute)' }}
         >
-          ×
-        </button>
+          <div>
+            <div className="text-white text-[8px] uppercase tracking-widest">
+              Item Inspection Report
+            </div>
+            <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
+              Dunder Mifflin Property Dept.
+            </div>
+          </div>
+          <button
+            onClick={closeInspect}
+            className="text-white/70 hover:text-white transition-colors text-[8px] uppercase"
+          >
+            ✕ Close
+          </button>
+        </div>
 
-        {/* 3D canvas — left half */}
-        <div className="w-1/2 h-full flex-shrink-0">
+        {/* 3D canvas — left half, dark panel for contrast */}
+        <div
+          className="w-1/2 h-full flex-shrink-0 mt-0"
+          style={{ background: 'var(--color-carbon)', paddingTop: '36px' }}
+        >
           {inspectedObject.previewKind === 'pyramid' ? (
             <PyramidInspectScene />
           ) : (
@@ -133,13 +150,26 @@ export function InspectOverlay() {
         </div>
 
         {/* Info — right half */}
-        <div className="flex flex-col justify-center gap-4 px-8 py-10 w-1/2">
-          <h2 className="text-white text-2xl font-bold leading-tight">
-            {inspectedObject.label}
-          </h2>
-          <p className="text-slate-300 text-sm leading-relaxed">
+        <div
+          className="flex flex-col gap-4 px-6 py-4 w-1/2 overflow-y-auto"
+          style={{ paddingTop: '48px', background: 'var(--color-paper)' }}
+        >
+          {/* Memo lines */}
+          <div className="space-y-1 text-[8px]">
+            <div className="flex gap-2">
+              <span className="w-10 shrink-0" style={{ color: 'var(--color-ink-faint)' }}>RE:</span>
+              <span className="font-bold uppercase" style={{ color: 'var(--color-ink)' }}>
+                {inspectedObject.label}
+              </span>
+            </div>
+          </div>
+
+          <hr className="memo-rule" />
+
+          <p className="text-[8px] leading-relaxed" style={{ color: 'var(--color-ink)' }}>
             {inspectedObject.description}
           </p>
+
           {(inspectedObject.linkUrl || inspectedObject.secondaryLinkUrl) && (
             <div className="flex flex-col gap-2">
               {inspectedObject.linkUrl ? (
@@ -147,9 +177,10 @@ export function InspectOverlay() {
                   href={inspectedObject.linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 text-sm font-medium underline underline-offset-2"
+                  className="text-[8px] underline"
+                  style={{ color: 'var(--color-beet)' }}
                 >
-                  {inspectedObject.linkLabel ?? 'Open link'}
+                  → {inspectedObject.linkLabel ?? 'Open link'}
                 </a>
               ) : null}
               {inspectedObject.secondaryLinkUrl ? (
@@ -157,16 +188,21 @@ export function InspectOverlay() {
                   href={inspectedObject.secondaryLinkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 text-sm font-medium underline underline-offset-2"
+                  className="text-[8px] underline"
+                  style={{ color: 'var(--color-beet)' }}
                 >
-                  {inspectedObject.secondaryLinkLabel ?? 'Open link'}
+                  → {inspectedObject.secondaryLinkLabel ?? 'Open link'}
                 </a>
               ) : null}
             </div>
           )}
-          <p className="text-slate-500 text-xs mt-auto">
-            Press [F] or [Esc] to close
-          </p>
+
+          <div className="mt-auto">
+            <hr className="memo-rule" />
+            <p className="text-[7px] uppercase" style={{ color: 'var(--color-ink-faint)' }}>
+              Press [F] or [Esc] to close
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Box, Cylinder, Html } from '@react-three/drei';
+import { useGameStore } from '../../../store/useGameStore';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { FloorPlanRect } from '../../../types';
@@ -160,6 +161,7 @@ function BreakInteractiveDoor() {
 
   const [showHint, setShowHint] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
+  const isCustomizingOffice = useGameStore((s) => s.isCustomizingOffice);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -218,7 +220,7 @@ function BreakInteractiveDoor() {
         <meshPhysicalMaterial transmission={0.8} roughness={0} metalness={0} transparent opacity={0.3} color="#a8c8d8" />
       </Box>
 
-      {showHint && (
+      {showHint && !isCustomizingOffice && (
         <Html center position={[0, 3.2, 6.2]}>
           <div style={{
             color: 'white',

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Timer, Coffee, Play, Square, Pause } from 'lucide-react';
+import { Square } from 'lucide-react';
 import { getEffectiveDeskUpgradeEmail } from '../../deskOwner';
 import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
@@ -77,105 +77,138 @@ export const PomodoroUI = () => {
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 50, opacity: 0 }}
-            className="bg-slate-900/80 backdrop-blur-xl border-2 border-indigo-500 p-6 rounded-3xl shadow-2xl flex flex-col items-center min-w-[240px]"
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            whileDrag={{ cursor: 'grabbing' }}
+            className="pixel-panel font-pixel flex flex-col items-center min-w-[260px] p-0 overflow-hidden"
+            style={{ cursor: 'grab' }}
           >
-            <div className="flex items-center gap-3 mb-2">
-              {timerMode === 'focus' ? (
-                <Timer className="text-red-400 w-5 h-5 animate-pulse" />
-              ) : (
-                <Coffee className="text-emerald-400 w-5 h-5 animate-bounce" />
-              )}
-              <span className="text-white font-bold uppercase tracking-widest text-sm">
-                {timerMode === 'focus' ? 'Focus Session' : 'Break Time'}
-              </span>
-            </div>
-
-            <div className="text-5xl font-mono text-white font-black mb-6 tracking-tighter">
-              {formatTime(timeLeft)}
-            </div>
-
-            {timerMode === 'focus' && (
-              <div className="flex flex-col items-center gap-1 mb-6 w-full max-w-[220px]">
-                <FocusEnergyBar focusEnergy={focusEnergy} className="w-full mb-3" showDecayHint />
-                <div className="text-indigo-300 text-[10px] uppercase tracking-[0.2em] font-bold animate-pulse text-center">
-                  {isTimerPaused ? 'Session Paused' : 'Stay Focused on your real tasks...'}
+            {/* Time sheet header — drag handle */}
+            <div
+              className="w-full px-5 py-2 select-none"
+              style={{ background: timerMode === 'focus' ? 'var(--color-schrute)' : '#166534' }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-white text-[8px] uppercase tracking-widest">
+                    {timerMode === 'focus' ? 'TIME SHEET' : 'BREAK LOG'}
+                  </div>
+                  <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                    Dunder Mifflin Paper Co.
+                  </div>
                 </div>
-                {teamPyramidActive && !isTimerPaused && (
-                  <div className="flex flex-col items-center gap-0.5 text-center px-1">
-                    <div className="text-fuchsia-300/95 text-[10px] uppercase tracking-[0.18em] font-bold">
-                      Power of The Pyramid
+                {/* Drag handle dots */}
+                <div className="flex flex-col gap-[3px] opacity-60 pr-1">
+                  {[0,1,2].map(r => (
+                    <div key={r} className="flex gap-[3px]">
+                      {[0,1].map(c => (
+                        <div key={c} style={{ width: 3, height: 3, background: '#fff' }} />
+                      ))}
                     </div>
-                    <div className="text-fuchsia-200/85 text-[9px] font-medium leading-snug italic">
-                      With the pyramid you have the connection to everything, in time, and space!
-                    </div>
-                  </div>
-                )}
-                <div className="text-slate-400 font-mono text-[10px]">
-                  Earn rate:{' '}
-                  <span className="text-cyan-300/90">
-                    {focusEarnPerMin} reams/min
-                  </span>
-                  {isTimerPaused ? ' (paused)' : ''}
-                </div>
-                {sessionPaper > 0 && (
-                  <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-full">
-                    <span className="text-sm">📄</span>
-                    <span className="text-emerald-300 text-[11px] font-bold">
-                      +{sessionPaper} ream{sessionPaper !== 1 ? 's' : ''} this session
-                    </span>
-                  </div>
-                )}
-                <div className="mt-2 w-full rounded-xl border border-indigo-400/35 bg-indigo-500/10 px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-left">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-200">
-                        Saving Mode
-                      </div>
-                      <div className="text-[10px] leading-snug text-indigo-100/80">
-                        Hide regular UI and reduce render cost.
-                      </div>
-                    </div>
-                    <button
-                      onClick={toggleFocusSavingMode}
-                      className={`px-3 py-1 rounded-full border text-[10px] uppercase tracking-widest font-bold transition-all ${
-                        focusSavingModeEnabled
-                          ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
-                          : 'border-white/25 bg-white/5 text-slate-300 hover:bg-white/10'
-                      }`}
-                      title="Toggle Saving Mode"
-                    >
-                      {focusSavingModeEnabled ? 'On' : 'Off'}
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
-            )}
+            </div>
 
-            <div className="flex items-center gap-4 w-full">
-              <button
-                onClick={togglePause}
-                className="flex-1 bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
-              >
-                {isTimerPaused ? (
-                  <>
-                    <Play className="w-4 h-4 fill-current" />
-                    Resume
-                  </>
-                ) : (
-                  <>
-                    <Pause className="w-4 h-4 fill-current" />
-                    Pause
-                  </>
-                )}
-              </button>
+            <div className="w-full px-5 py-4 flex flex-col items-center gap-3">
+              {/* Big timer */}
+              <div className="text-5xl font-mono font-black tracking-tighter" style={{ color: 'var(--color-ink)' }}>
+                {formatTime(timeLeft)}
+              </div>
 
-              <button
-                onClick={stopTimer}
-                className="bg-red-500/20 hover:bg-red-500/40 text-red-400 p-3 rounded-xl transition-all active:scale-95"
-                title="End Session"
-              >
-                <Square className="w-4 h-4 fill-current" />
-              </button>
+              {timerMode === 'focus' && (
+                <div className="flex flex-col items-center gap-2 w-full max-w-[220px]">
+                  <FocusEnergyBar focusEnergy={focusEnergy} className="w-full" showDecayHint />
+
+                  <div
+                    className="text-[8px] uppercase font-bold animate-pulse text-center"
+                    style={{ color: isTimerPaused ? '#b45309' : 'var(--color-schrute)' }}
+                  >
+                    {isTimerPaused ? 'SESSION PAUSED' : 'STAY FOCUSED...'}
+                  </div>
+
+                  {teamPyramidActive && !isTimerPaused && (
+                    <div className="flex flex-col items-center gap-0.5 text-center px-1">
+                      <div className="text-[8px] uppercase font-bold" style={{ color: 'var(--color-beet)' }}>
+                        Power of The Pyramid
+                      </div>
+                      <div className="text-[8px] leading-snug italic" style={{ color: 'var(--color-beet)' }}>
+                        With the pyramid you have the connection to everything, in time, and space!
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="font-mono text-[10px]" style={{ color: 'var(--color-ink-faint)' }}>
+                    Earn rate:{' '}
+                    <span style={{ color: 'var(--color-beet)' }}>{focusEarnPerMin} reams/min</span>
+                    {isTimerPaused ? ' (paused)' : ''}
+                  </div>
+
+                  {sessionPaper > 0 && (
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-1"
+                      style={{
+                        background: 'var(--color-legal)',
+                        border: '2px solid var(--color-ink)',
+                        color: 'var(--color-ink)',
+                      }}
+                    >
+                      <span className="text-sm">📄</span>
+                      <span className="text-[8px] font-bold">
+                        +{sessionPaper} ream{sessionPaper !== 1 ? 's' : ''} this session
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Saving mode row */}
+                  <div
+                    className="w-full px-3 py-2"
+                    style={{ border: '2px solid var(--color-ink)', background: 'var(--color-paper-dark)' }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-left">
+                        <div className="text-[8px] font-bold uppercase" style={{ color: 'var(--color-ink)' }}>
+                          Saving Mode
+                        </div>
+                        <div className="text-[8px] leading-snug" style={{ color: 'var(--color-ink-faint)' }}>
+                          Hide UI, reduce render cost.
+                        </div>
+                      </div>
+                      <button
+                        onClick={toggleFocusSavingMode}
+                        className="pixel-button text-[8px] uppercase"
+                        style={focusSavingModeEnabled
+                          ? { background: '#166534', padding: '4px 10px' }
+                          : { background: 'var(--color-ink)', padding: '4px 10px' }
+                        }
+                        title="Toggle Saving Mode"
+                      >
+                        {focusSavingModeEnabled ? 'ON' : 'OFF'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-3 w-full">
+                <button
+                  onClick={togglePause}
+                  className="pixel-button flex-1 text-[8px] uppercase"
+                  style={{ padding: '10px 12px', background: 'var(--color-ink)', color: '#fff', lineHeight: 1 }}
+                >
+                  {isTimerPaused ? '▶  RESUME' : '⏸  PAUSE'}
+                </button>
+                <button
+                  onClick={stopTimer}
+                  className="pixel-button text-[8px]"
+                  style={{ padding: '10px 12px', background: 'var(--color-schrute)' }}
+                  title="End Session"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

@@ -1,5 +1,4 @@
 import React from 'react';
-import { Users, Monitor, Coffee, Briefcase, Shield } from 'lucide-react';
 import { FocusEnergyBar } from './FocusEnergyBar';
 import { RoomRole } from '../../types';
 
@@ -20,72 +19,59 @@ export const HUDPanel = ({
   focusEnergy,
   myRole,
 }: HUDPanelProps) => (
-  <div className="flex flex-col gap-4">
-    <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-2xl max-w-xs">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-indigo-500 p-2 rounded-lg">
-          <Coffee className="text-white w-5 h-5" />
+  <div className="font-pixel">
+    <div className="pixel-panel max-w-xs overflow-hidden">
+      {/* Memo header band */}
+      <div className="px-4 py-2" style={{ background: 'var(--color-schrute)' }}>
+        <div className="text-white text-[8px] uppercase tracking-widest">DUNDER MIFFLIN</div>
+        <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
+          Internal Memorandum
         </div>
-        <h1 className="text-white font-bold text-xl tracking-tight">Schrute Space</h1>
       </div>
 
-      <p className="text-slate-300 text-sm mb-6 leading-relaxed">
-        Welcome to the Scranton branch. Explore the office, visit the beet farm, and meet your
-        colleagues.
-      </p>
+      <div className="p-4 space-y-3">
+        {/* Memo fields */}
+        <div className="space-y-2 text-[8px]">
+          <div className="flex gap-2">
+            <span className="w-10 shrink-0" style={{ color: 'var(--color-ink-faint)' }}>TO:</span>
+            <span style={{ color: 'var(--color-ink)' }}>{currentRoom} Branch</span>
+          </div>
+          <div className="flex gap-2">
+            <span className="w-10 shrink-0" style={{ color: 'var(--color-ink-faint)' }}>RE:</span>
+            <span style={{ color: 'var(--color-ink)' }}>Office Status Report</span>
+          </div>
+        </div>
 
-      <div className="space-y-3">
+        <hr className="memo-rule" />
+
         <FocusEnergyBar focusEnergy={focusEnergy} showDecayHint />
-        <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
-          <Briefcase className="w-4 h-4 text-amber-400" />
-          <span>
-            Paper Sold: <span className="text-white font-bold">{paperReams} reams</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
-          <Users className="w-4 h-4" />
-          <span>Active Employees: {playerCount}</span>
-        </div>
-        <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
-          <Monitor className="w-4 h-4" />
-          <span>Status: {isConnected ? 'Online' : 'Connecting...'}</span>
-        </div>
-        <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
-          <Briefcase className="w-4 h-4" />
-          <span>
-            Room: <span className="text-indigo-400">{currentRoom}</span>
-          </span>
-        </div>
-        {myRole && (
-          <div className="flex items-center gap-3 text-slate-400 text-xs uppercase tracking-widest font-semibold">
-            <Shield className="w-4 h-4 text-amber-400" />
-            <span>Role: <span className="text-white font-bold">{myRole}</span></span>
-          </div>
-        )}
-      </div>
 
-    </div>
-
-    <div className="bg-black/40 backdrop-blur-sm border border-white/10 p-4 rounded-xl">
-      <h3 className="text-white/60 text-[10px] uppercase tracking-widest font-bold mb-2">
-        Controls
-      </h3>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        {[
-          ['WASD', 'Move'],
-          ['Mouse', 'Look'],
-          ['Space', 'Jump'],
-          ['Space x2', 'Dbl Jump'],
-          ['W x2', 'Roll'],
-          ['E', 'Focus'],
-          ['F', 'Computer'],
-          ['B', 'Eat ice cream'],
-        ].map(([key, label]) => (
-          <div key={key} className="flex items-center gap-2 text-white/80 text-[10px]">
-            <kbd className="bg-white/20 px-1.5 py-0.5 rounded border border-white/10">{key}</kbd>
-            <span>{label}</span>
+        <div className="space-y-2 text-[8px]">
+          <div className="flex justify-between items-center">
+            <span style={{ color: 'var(--color-ink-faint)' }}>PAPER SOLD</span>
+            <span className="font-bold" style={{ color: 'var(--color-schrute)' }}>
+              {paperReams} reams
+            </span>
           </div>
-        ))}
+          <div className="flex justify-between items-center">
+            <span style={{ color: 'var(--color-ink-faint)' }}>EMPLOYEES</span>
+            <span style={{ color: 'var(--color-ink)' }}>{playerCount} on-site</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span style={{ color: 'var(--color-ink-faint)' }}>STATUS</span>
+            <span style={{ color: isConnected ? '#166534' : 'var(--color-stamp-red)' }}>
+              {isConnected ? 'CONNECTED' : 'OFFLINE...'}
+            </span>
+          </div>
+          {myRole && (
+            <div className="flex justify-between items-center">
+              <span style={{ color: 'var(--color-ink-faint)' }}>ROLE</span>
+              <span className="font-bold uppercase" style={{ color: 'var(--color-beet)' }}>
+                {myRole}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   </div>
