@@ -112,8 +112,12 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS rooms (
       room_id     TEXT PRIMARY KEY,
       max_workers INTEGER NOT NULL DEFAULT 20,
+      allow_new_employees BOOLEAN NOT NULL DEFAULT FALSE,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool!.query(`
+    ALTER TABLE rooms ADD COLUMN IF NOT EXISTS allow_new_employees BOOLEAN NOT NULL DEFAULT FALSE
   `);
   await pool!.query(`
     CREATE TABLE IF NOT EXISTS room_members (
@@ -931,6 +935,15 @@ async function getRoomMaxWorkers(roomId: string): Promise<number> {
   return rows[0]?.max_workers ?? 20;
 }
 
+async function getRoomAllowNewEmployees(roomId: string): Promise<boolean> {
+  if (isLocalTest()) return mem.memGetRoomAllowNewEmployees(roomId);
+  const { rows } = await pool!.query(
+    "SELECT allow_new_employees FROM rooms WHERE room_id = $1",
+    [roomId]
+  );
+  return Boolean(rows[0]?.allow_new_employees);
+}
+
 async function getRoomMemberCount(roomId: string): Promise<number> {
   if (isLocalTest()) return mem.memGetRoomMemberCount(roomId);
   const { rows } = await pool!.query(
@@ -1002,6 +1015,14 @@ async function updateRoomMaxWorkers(roomId: string, maxWorkers: number): Promise
   if (isLocalTest()) return mem.memUpdateRoomMaxWorkers(roomId, maxWorkers);
   await pool!.query("UPDATE rooms SET max_workers = $1 WHERE room_id = $2", [
     maxWorkers,
+    roomId,
+  ]);
+}
+
+async function updateRoomAllowNewEmployees(roomId: string, allowNewEmployees: boolean): Promise<void> {
+  if (isLocalTest()) return mem.memUpdateRoomAllowNewEmployees(roomId, allowNewEmployees);
+  await pool!.query("UPDATE rooms SET allow_new_employees = $1 WHERE room_id = $2", [
+    allowNewEmployees,
     roomId,
   ]);
 }
@@ -1319,17 +1340,34 @@ export async function createApp(injectedPool?: pg.Pool) {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     const { roomId } = req.params;
-    const { maxWorkers } = req.body ?? {};
+    const { maxWorkers, allowNewEmployees } = req.body ?? {};
     try {
       const requesterRole = await getMemberRole(roomId, user.email);
       if (requesterRole !== 'admin') {
         return res.status(403).json({ error: "Forbidden" });
       }
-      if (typeof maxWorkers !== 'number' || maxWorkers < 1 || maxWorkers > 100) {
+      const hasMaxWorkers = maxWorkers !== undefined;
+      const hasAllowNewEmployees = allowNewEmployees !== undefined;
+      if (!hasMaxWorkers && !hasAllowNewEmployees) {
+        return res.status(400).json({ error: "Nothing to update" });
+      }
+      if (hasMaxWorkers && (typeof maxWorkers !== 'number' || maxWorkers < 1 || maxWorkers > 100)) {
         return res.status(400).json({ error: "maxWorkers must be 1-100" });
       }
-      await updateRoomMaxWorkers(roomId, maxWorkers);
-      io.to(roomId).emit("roomMembersUpdated", { roomId, maxWorkers });
+      if (hasAllowNewEmployees && typeof allowNewEmployees !== 'boolean') {
+        return res.status(400).json({ error: "allowNewEmployees must be boolean" });
+      }
+      if (hasMaxWorkers) {
+        await updateRoomMaxWorkers(roomId, maxWorkers);
+      }
+      if (hasAllowNewEmployees) {
+        await updateRoomAllowNewEmployees(roomId, allowNewEmployees);
+      }
+      io.to(roomId).emit("roomMembersUpdated", {
+        roomId,
+        ...(hasMaxWorkers ? { maxWorkers } : {}),
+        ...(hasAllowNewEmployees ? { allowNewEmployees } : {}),
+      });
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "Internal server error" });
@@ -1462,7 +1500,19 @@ io.on("connection", (socket) => {
         await upsertMember(room, user.email, 'admin');
       }
 
-      const role = await getMemberRole(room, user.email);
+      let role = await getMemberRole(room, user.email);
+      const allowNewEmployees = await getRoomAllowNewEmployees(room);
+      if (role === null && allowNewEmployees) {
+        const [currentCount, maxWorkers] = await Promise.all([
+          getRoomMemberCount(room),
+          getRoomMaxWorkers(room),
+        ]);
+        if (currentCount < maxWorkers) {
+          await ensureUserRow(user.email);
+          await upsertMember(room, user.email, 'worker');
+          role = 'worker';
+        }
+      }
       const isMember = role !== null;
 
       // Initialize player using DB display name when set
@@ -1554,12 +1604,14 @@ io.on("connection", (socket) => {
           getRoomMembers(room),
           getRoomMaxWorkers(room),
         ]);
+        const allowNewEmployees = await getRoomAllowNewEmployees(room);
         const onlineEmails = new Set(
           Object.values(rooms[room]).map((p: any) => p.email)
         );
         socket.emit("roomInfoLoaded", {
           roomId: room,
           maxWorkers,
+          allowNewEmployees,
           myRole: role,
           memberCount: members.length,
           members: members.map(m => ({ ...m, isOnline: onlineEmails.has(m.email) }))

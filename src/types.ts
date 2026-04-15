@@ -108,6 +108,7 @@ export interface RoomMember {
 export interface RoomInfo {
   roomId: string;
   maxWorkers: number;
+  allowNewEmployees: boolean;
   myRole: RoomRole | null;
   memberCount: number;
   members: RoomMember[];
