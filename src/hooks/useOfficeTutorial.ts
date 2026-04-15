@@ -94,11 +94,14 @@ export function useOfficeTutorial(email: string | undefined, inRoom: boolean) {
     setPhase(null);
   }, [email]);
 
-  // desk → focus-energy: near own desk
+  // desk → focus-energy: player actually starts a focus session
   useEffect(() => {
-    if (phase !== 'desk' || !email) return;
-    if (nearestDeskId === `desk-${email}`) advance();
-  }, [phase, email, nearestDeskId, advance]);
+    if (phase !== 'desk') return;
+    if (isTimerActive && !triggeredRef.current) {
+      triggeredRef.current = true;
+      advance();
+    }
+  }, [phase, isTimerActive, advance]);
 
   // upgrades → water-cooler: computer interface opened
   useEffect(() => {
