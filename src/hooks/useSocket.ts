@@ -260,8 +260,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setRoomInfo(info);
     });
 
-    newSocket.on('roomMembersUpdated', (payload: { roomId: string; members?: RoomMember[]; maxWorkers?: number }) => {
-      console.log('[socket] roomMembersUpdated', payload.members ? `members=${payload.members.length}` : '', payload.maxWorkers !== undefined ? `maxWorkers=${payload.maxWorkers}` : '');
+    newSocket.on('roomMembersUpdated', (payload: { roomId: string; members?: RoomMember[]; maxWorkers?: number; allowNewEmployees?: boolean }) => {
+      console.log(
+        '[socket] roomMembersUpdated',
+        payload.members ? `members=${payload.members.length}` : '',
+        payload.maxWorkers !== undefined ? `maxWorkers=${payload.maxWorkers}` : '',
+        payload.allowNewEmployees !== undefined ? `allowNewEmployees=${payload.allowNewEmployees}` : ''
+      );
       const current = useGameStore.getState().roomInfo;
       if (!current) return;
       useGameStore.getState().setRoomInfo({
@@ -271,6 +276,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
           members: payload.members,
         }),
         ...(payload.maxWorkers !== undefined && { maxWorkers: payload.maxWorkers }),
+        ...(payload.allowNewEmployees !== undefined && { allowNewEmployees: payload.allowNewEmployees }),
       });
     });
 
