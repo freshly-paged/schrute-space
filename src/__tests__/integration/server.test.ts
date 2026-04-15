@@ -324,7 +324,7 @@ describe('Socket.IO — joinRoom', () => {
   });
 
   it('emits roomLayoutLoaded after joinRoom', async () => {
-    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    client = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     const layoutPromise = waitFor<any[]>(client, 'roomLayoutLoaded');
     client.emit('joinRoom', { roomId: 'test-room' });
     const layout = await layoutPromise;
@@ -333,7 +333,7 @@ describe('Socket.IO — joinRoom', () => {
   });
 
   it('emits currentPlayers after joinRoom with the joining player included', async () => {
-    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    client = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     const playersPromise = waitFor<Record<string, any>>(client, 'currentPlayers');
     client.emit('joinRoom', { roomId: 'test-room' });
     const players = await playersPromise;
@@ -343,7 +343,7 @@ describe('Socket.IO — joinRoom', () => {
   });
 
   it('emits roomInfoLoaded with role=admin for the first joiner', async () => {
-    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    client = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     const infoPromise = waitFor<any>(client, 'roomInfoLoaded');
     client.emit('joinRoom', { roomId: 'test-room' });
     const info = await infoPromise;
@@ -352,14 +352,14 @@ describe('Socket.IO — joinRoom', () => {
 
   it('single-session: second connection with same email gets forceDisconnect on first', async () => {
     // Connect first client
-    const client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    const client1 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     await waitFor(client1, 'connect');
     client1.emit('joinRoom', { roomId: 'test-room' });
     await waitFor(client1, 'currentPlayers');
 
     // Connect second client (same email via DEV_USER_EMAIL)
     const forceDisconnectPromise = waitFor(client1, 'forceDisconnect');
-    const client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    const client2 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     client2.emit('joinRoom', { roomId: 'test-room' });
 
     await forceDisconnectPromise;
@@ -394,26 +394,26 @@ describe('Socket.IO — playerMovement', () => {
     // For simplicity, use two sequential connections and override auth for client2.
     const OTHER_EMAIL = 'other@example.com';
 
-    client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    client1 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     await waitFor(client1, 'connect');
     client1.emit('joinRoom', { roomId: 'test-room' });
     await waitFor(client1, 'currentPlayers');
 
     // Switch DEV_USER_EMAIL so the second connection is a different user
     process.env.DEV_USER_EMAIL = OTHER_EMAIL;
-    client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    client2 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     await waitFor(client2, 'connect');
 
-    const playerMovedPromise = waitFor<any>(client1, 'playerMoved');
+    const playerMovedPromise = waitFor<any[]>(client1, 'playersMoved');
     client2.emit('joinRoom', { roomId: 'test-room' });
     await waitFor(client2, 'currentPlayers');
 
     const newPosition = [1, 0, 2];
     client2.emit('playerMovement', { position: newPosition, rotation: [0, 0, 0], isRolling: false, rollTimer: 0 });
 
-    const moved = await playerMovedPromise;
-    expect(moved.position).toEqual(newPosition);
-    expect(moved.email).toBe(OTHER_EMAIL);
+    const batch = await playerMovedPromise;
+    const moved = batch.find((s: any) => s.id === client2.id);
+    expect(moved?.position).toEqual(newPosition);
   });
 });
 
@@ -440,13 +440,13 @@ describe('Socket.IO — chatMessage', () => {
   it('broadcasts chatMessage to all clients in the room', async () => {
     const OTHER_EMAIL = 'chatter@example.com';
 
-    client1 = ioc(`http://localhost:${port}`, { reconnection: false });
+    client1 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     await waitFor(client1, 'connect');
     client1.emit('joinRoom', { roomId: 'chat-room' });
     await waitFor(client1, 'currentPlayers');
 
     process.env.DEV_USER_EMAIL = OTHER_EMAIL;
-    client2 = ioc(`http://localhost:${port}`, { reconnection: false });
+    client2 = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     await waitFor(client2, 'connect');
     client2.emit('joinRoom', { roomId: 'chat-room' });
     await waitFor(client2, 'currentPlayers');
@@ -478,6 +478,7 @@ describe('Socket.IO — playerFocusUpdate identity-theft system chat', () => {
   const connectAs = (email: string) =>
     ioc(`http://localhost:${port}`, {
       reconnection: false,
+      transports: ['websocket'],
       extraHeaders: {
         'x-goog-authenticated-user-email': `accounts.google.com:${email}`,
       },
@@ -574,6 +575,7 @@ describe('Socket.IO — contributeTeamUpgrade (pyramid)', () => {
   const connectAs = (email: string) =>
     ioc(`http://localhost:${port}`, {
       reconnection: false,
+      transports: ['websocket'],
       extraHeaders: {
         'x-goog-authenticated-user-email': `accounts.google.com:${email}`,
       },
@@ -668,7 +670,7 @@ describe('Socket.IO — ensurePlayerDesk', () => {
   });
 
   it('auto-creates a desk for the first joiner (admin)', async () => {
-    client = ioc(`http://localhost:${port}`, { reconnection: false });
+    client = ioc(`http://localhost:${port}`, { reconnection: false, transports: ['websocket'] });
     const layoutPromise = waitFor<any[]>(client, 'roomLayoutLoaded');
     client.emit('joinRoom', { roomId: 'desk-room' });
     const layout = await layoutPromise;
