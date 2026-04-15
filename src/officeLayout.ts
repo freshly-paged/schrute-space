@@ -100,22 +100,21 @@ export const COPIER_WORLD_POSITION: [number, number, number] = [12, 0, 12];
 export const COPIER_RADIUS = 2.5;
 
 /**
- * World-space desk slots inside the Manager's Office (group offset [-16, 0, 12]).
- * Slot 0 is reserved for the admin (the canonical boss desk position).
- * Slots 1-3 are assigned to managers in order.
+ * World-space desk slots inside the Manager's Office for the 'manager' role.
+ * Assigned in order; first unoccupied slot wins.
  * All desks face east ([0, -PI/2, 0]): drawers toward the east windows/door,
- * manager chair on the west side.
+ * chair on the west side.
  */
 export const MANAGER_OFFICE_DESK_SLOTS: Array<{
   position: [number, number, number];
   rotation: [number, number, number];
 }> = [
-  // Admin — canonical boss desk position
+  // Slot 0 — canonical boss desk position (west-centre)
   { position: [-17, 0, 12], rotation: [0, -Math.PI / 2, 0] },
-  // Manager slot 1 — north-east area, away from the door opening
+  // Slot 1 — north-east area, away from the door opening
   { position: [-14, 0, 7],  rotation: [0, -Math.PI / 2, 0] },
-  // Manager slot 2 — south-east area
+  // Slot 2 — south-east area
   { position: [-13, 0, 16], rotation: [0, -Math.PI / 2, 0] },
-  // Manager slot 3 — south-west area (clear of bookshelf at x≈-21)
+  // Slot 3 — south-west area (clear of bookshelf at x≈-21)
   { position: [-19, 0, 16], rotation: [0, -Math.PI / 2, 0] },
 ];
