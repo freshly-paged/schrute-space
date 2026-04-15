@@ -47,7 +47,8 @@ const KEYBOARD_MAP = [
 
 function getRoomFromURL(): string | null {
   if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get('room');
+  const room = new URLSearchParams(window.location.search).get('room');
+  return room ? room.trim().toLowerCase() : null;
 }
 
 export default function App() {
@@ -133,9 +134,11 @@ export default function App() {
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
-    console.log(`[app] joining room=${room}`);
-    localStorage.setItem('last_room', room);
-    window.location.search = `?room=${room}`;
+    const normalizedRoom = room.trim().toLowerCase();
+    if (!normalizedRoom) return;
+    console.log(`[app] joining room=${normalizedRoom}`);
+    localStorage.setItem('last_room', normalizedRoom);
+    window.location.search = `?room=${normalizedRoom}`;
   };
 
   const handleExitRoom = () => {
