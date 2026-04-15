@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useRef, useState, useEffect } from 'react';
+import React, { Suspense, useMemo, useRef, useState } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -121,57 +121,36 @@ function DeskItemInteractable({ def, item }: { def: DeskItemDef; item: DeskItemP
     }
   });
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'KeyF') return;
-      const store = useGameStore.getState();
-      if (store.nearDeskItemId !== def.id) return;
-      if (store.isChatFocused || store.isTimerActive || store.inspectedObject !== null) return;
-      store.openInspect({
-        id: def.id,
-        label: def.name,
-        description: def.description,
-        assetKey: def.modelKey,
-      });
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [def]);
+  const handleClick = () => {
+    const store = useGameStore.getState();
+    if (store.isChatFocused || store.isTimerActive || store.inspectedObject !== null) return;
+    store.openInspect({
+      id: def.id,
+      label: def.name,
+      description: def.description,
+      assetKey: def.modelKey,
+    });
+  };
 
   return (
-    <group ref={groupRef} position={[item.x, 0, item.z]}>
+    <group ref={groupRef} position={[item.x, 0, item.z]} onClick={handleClick}>
       <Suspense fallback={null}>
         <DeskItemAssetModel assetKey={def.modelKey} x={0} z={0} yOffset={def.yOffset} />
       </Suspense>
       {isNear && (
-        <>
-          <Billboard position={[0, 1.8, 0]}>
-            <Text
-              fontSize={0.2}
-              color="white"
-              anchorX="center"
-              anchorY="middle"
-              outlineWidth={0.012}
-              outlineColor="black"
-              onSync={onOverlayTextSync}
-            >
-              {def.name}
-            </Text>
-          </Billboard>
-          <Billboard position={[0, 1.55, 0]}>
-            <Text
-              fontSize={0.18}
-              color="#aaaaaa"
-              anchorX="center"
-              anchorY="middle"
-              outlineWidth={0.01}
-              outlineColor="black"
-              onSync={onOverlayTextSync}
-            >
-              [F] Inspect
-            </Text>
-          </Billboard>
-        </>
+        <Billboard position={[0, 1.8, 0]}>
+          <Text
+            fontSize={0.2}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.012}
+            outlineColor="black"
+            onSync={onOverlayTextSync}
+          >
+            {def.name} · click to inspect
+          </Text>
+        </Billboard>
       )}
     </group>
   );
