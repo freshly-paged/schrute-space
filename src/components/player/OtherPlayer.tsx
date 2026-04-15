@@ -6,9 +6,6 @@ import { Player, DEFAULT_AVATAR_CONFIG, DeskItem } from '../../types';
 import { ROLL_PIVOT_Y } from '../../constants';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 
-// Pre-allocated vectors reused every frame to avoid GC pressure
-const _otherPos = new THREE.Vector3();
-const _otherPrev = new THREE.Vector3();
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
@@ -39,7 +36,6 @@ export function getFocusedDeskTransform(
 }
 
 export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
-  const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
   const [, setIceCreamTick] = useState(0);
   const roomLayout = useGameStore((state) => state.roomLayout);
@@ -65,19 +61,58 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
     !player.heldThrowableId;
 
   const heldIceCreamColor = showHeldIceCream ? iceCreamColorForIndex(syncedIce!.flavorIndex) : null;
-  const renderPosition = focusedDeskTransform?.position ?? player.position;
-  const renderRotation = focusedDeskTransform?.rotation ?? player.rotation;
 
-  useFrame(() => {
-    _otherPos.set(player.position[0], player.position[1], player.position[2]);
-    _otherPrev.set(prevPos.current[0], prevPos.current[1], prevPos.current[2]);
-    const dist = _otherPos.distanceTo(_otherPrev);
-    setIsMoving(dist > 0.01);
-    prevPos.current = player.position;
+  // Interpolation: visual position/rotY lag-track the target from server snapshots
+  const groupRef = useRef<THREE.Group>(null);
+  const visualPos = useRef(new THREE.Vector3(...player.position));
+  const visualRotY = useRef(player.rotation[1]);
+  const isMovingRef = useRef(false);
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+
+    if (focusedDeskTransform) {
+      // Snap to desk — no interpolation needed
+      groupRef.current.position.set(...focusedDeskTransform.position);
+      groupRef.current.rotation.set(0, focusedDeskTransform.rotation[1], 0);
+      visualPos.current.set(...focusedDeskTransform.position);
+      visualRotY.current = focusedDeskTransform.rotation[1];
+      if (isMovingRef.current) { isMovingRef.current = false; setIsMoving(false); }
+      return;
+    }
+
+    const targetX = player.position[0];
+    const targetY = player.position[1];
+    const targetZ = player.position[2];
+    const targetRotY = player.rotation[1];
+
+    // Frame-rate independent lerp: converges in ~100ms
+    const alpha = Math.min(1, delta * 20);
+
+    const prevX = visualPos.current.x;
+    const prevZ = visualPos.current.z;
+
+    visualPos.current.x += (targetX - visualPos.current.x) * alpha;
+    visualPos.current.y += (targetY - visualPos.current.y) * alpha;
+    visualPos.current.z += (targetZ - visualPos.current.z) * alpha;
+
+    // Shortest-path rotation lerp
+    let rotDiff = targetRotY - visualRotY.current;
+    if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+    if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+    visualRotY.current += rotDiff * alpha;
+
+    groupRef.current.position.copy(visualPos.current);
+    groupRef.current.rotation.set(0, visualRotY.current, 0);
+
+    const dx = visualPos.current.x - prevX;
+    const dz = visualPos.current.z - prevZ;
+    const nowMoving = dx * dx + dz * dz > 0.0001;
+    if (nowMoving !== isMovingRef.current) { isMovingRef.current = nowMoving; setIsMoving(nowMoving); }
   });
 
   return (
-    <group position={renderPosition} rotation={[0, renderRotation[1], 0]}>
+    <group ref={groupRef} position={player.position} rotation={[0, player.rotation[1], 0]}>
       <group position={[0, ROLL_PIVOT_Y, 0]}>
         <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
           <group position={[0, -ROLL_PIVOT_Y, 0]}>
