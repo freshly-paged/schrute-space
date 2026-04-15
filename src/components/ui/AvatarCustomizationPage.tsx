@@ -78,7 +78,7 @@ export const AvatarCustomizationPage = ({
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="relative z-10 bg-[#f0f0f0] p-8 md:p-10 pixel-border text-black max-w-2xl w-full"
+        className="relative z-10 pixel-panel p-8 md:p-10 max-w-2xl w-full"
       >
         <div className="flex items-center gap-4 mb-6">
           <PixelBeet />
@@ -107,7 +107,7 @@ export const AvatarCustomizationPage = ({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={40}
-                className="w-full px-2 py-1.5 text-[10px] font-pixel border-2 border-slate-400 bg-white text-black outline-none focus:border-indigo-600"
+                className="pixel-input w-full"
                 placeholder="Name shown in-game"
                 autoComplete="nickname"
               />
@@ -118,7 +118,7 @@ export const AvatarCustomizationPage = ({
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
                 maxLength={60}
-                className="w-full px-2 py-1.5 text-[10px] font-pixel border-2 border-slate-400 bg-white text-black outline-none focus:border-indigo-600"
+                className="pixel-input w-full"
                 placeholder="e.g. Assistant to the Regional Manager"
                 autoComplete="organization-title"
               />
@@ -177,8 +177,9 @@ export const AvatarCustomizationPage = ({
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[9px] text-slate-500 uppercase tracking-widest mb-2">{label}</div>
-      {children}
+      <div className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>{label}</div>
+      <hr className="memo-rule" />
+      <div className="mt-2">{children}</div>
     </div>
   );
 }

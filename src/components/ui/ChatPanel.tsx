@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -17,7 +17,8 @@ function renderChatText(text: string) {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        className="underline decoration-indigo-400/80 hover:text-indigo-300 transition-colors break-all"
+        className="underline break-all"
+        style={{ color: 'var(--color-schrute)' }}
       >
         {part}
       </a>
@@ -49,31 +50,40 @@ export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
   };
 
   return (
-    <div className="w-64 h-[calc(100vh-120px)] flex flex-col gap-4">
-      {/* Chat history */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl shadow-2xl flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
-          <MessageSquare className="text-indigo-400 w-4 h-4" />
-          <h3 className="text-white font-bold text-xs uppercase tracking-widest">Chat Log</h3>
+    <div className="w-64 h-[calc(100vh-120px)] flex flex-col gap-4 font-pixel">
+      {/* Chat history panel */}
+      <div className="pixel-panel flex-1 flex flex-col overflow-hidden p-0">
+        {/* Header band */}
+        <div className="px-4 py-2" style={{ background: 'var(--color-schrute)' }}>
+          <div className="text-white text-[8px] uppercase tracking-widest">Message Log</div>
+          <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Dunder Mifflin Internal
+          </div>
         </div>
 
-        <div ref={chatLogRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
+        {/* Lined paper chat area */}
+        <div ref={chatLogRef} className="lined-paper flex-1 overflow-y-auto p-3 space-y-3">
           {chatHistory.length === 0 && (
-            <p className="text-white/20 text-[10px] text-center mt-10 italic">
+            <p
+              className="text-[8px] text-center mt-8 italic"
+              style={{ color: 'var(--color-ink-faint)' }}
+            >
               No messages yet...
             </p>
           )}
           {chatHistory.map((msg) => (
-            <div key={msg.id} className="text-[10px]">
-              <span className="text-indigo-400 font-bold">{msg.playerName}: </span>
-              <span className="text-white/80">{renderChatText(msg.text)}</span>
+            <div key={msg.id} className="text-[8px] leading-relaxed">
+              <span className="font-bold" style={{ color: 'var(--color-schrute)' }}>
+                {msg.playerName}:{' '}
+              </span>
+              <span style={{ color: 'var(--color-ink)' }}>{renderChatText(msg.text)}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Input */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-2xl">
+      {/* Input panel */}
+      <div className="pixel-panel p-3">
         <div className="flex gap-2 mb-2">
           {EMOTES.map((emoji) => (
             <button
@@ -85,19 +95,17 @@ export const ChatPanel = ({ chatHistory, onSendMessage }: ChatPanelProps) => {
             </button>
           ))}
         </div>
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <hr className="memo-rule" />
+        <form onSubmit={handleSubmit} className="flex gap-2 mt-2">
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onFocus={() => setChatFocused(true)}
             onBlur={() => setChatFocused(false)}
-            placeholder="Type a message..."
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 flex-1"
+            placeholder="Type message..."
+            className="pixel-input flex-1 min-w-0"
           />
-          <button
-            type="submit"
-            className="bg-indigo-500 hover:bg-indigo-600 text-white p-2 rounded-lg transition-colors"
-          >
+          <button type="submit" className="pixel-button" style={{ padding: '8px 12px' }}>
             <Send className="w-3 h-3" />
           </button>
         </form>

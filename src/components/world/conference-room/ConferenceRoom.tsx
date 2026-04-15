@@ -9,6 +9,7 @@ import { confDoorState, playerWorldPos } from '../../../doorState';
 import { DESK_WOOD_COLOR } from '../../../officeTheme';
 import { Chair } from '../shared/props/Chair';
 import { Whiteboard } from './props/Whiteboard';
+import { useGameStore } from '../../../store/useGameStore';
 
 // Room: 14 wide × 14 deep, group at world [-16, 0, -2]
 // World extents: X[-23, -9], Z[-9, +5]
@@ -124,6 +125,7 @@ function ConfInteractiveDoor() {
 
   const [showHint, setShowHint] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
+  const isCustomizingOffice = useGameStore((s) => s.isCustomizingOffice);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -167,7 +169,7 @@ function ConfInteractiveDoor() {
         </Box>
       </group>
 
-      {showHint && (
+      {showHint && !isCustomizingOffice && (
         <Html center position={[6.2, 2.8, 6]}>
           <div style={{
             color: 'white',

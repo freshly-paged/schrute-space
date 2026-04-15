@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Zap } from 'lucide-react';
 import { PARKOUR_MIN_ENERGY_REQUIRED } from '../../focusEnergyModel';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -22,12 +21,20 @@ export const ParkourEnergyHint = () => {
   if (until <= Date.now()) return null;
 
   return (
-    <div className="pointer-events-none absolute top-32 left-1/2 z-30 flex max-w-sm -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-amber-500/50 bg-amber-950/90 px-4 py-2.5 shadow-lg shadow-amber-900/40 backdrop-blur-md">
-      <div className="flex items-center gap-2 text-amber-100">
-        <Zap className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
-        <span className="text-sm font-bold tracking-tight">Not enough energy</span>
+    <div
+      className="pointer-events-none absolute top-32 left-1/2 z-30 -translate-x-1/2 rotate-1 font-pixel"
+      style={{
+        background: 'var(--color-legal)',
+        border: '3px solid var(--color-ink)',
+        boxShadow: '4px 4px 0 0 #000',
+        padding: '10px 16px',
+        maxWidth: '280px',
+      }}
+    >
+      <div className="text-[8px] font-bold uppercase mb-1" style={{ color: 'var(--color-stamp-red)' }}>
+        ⚠ LOW ENERGY
       </div>
-      <p className="text-center text-[11px] leading-snug text-amber-200/90">
+      <p className="text-[8px] leading-snug" style={{ color: 'var(--color-ink)' }}>
         Double jump and roll need at least {PARKOUR_MIN_ENERGY_REQUIRED} energy
       </p>
     </div>
