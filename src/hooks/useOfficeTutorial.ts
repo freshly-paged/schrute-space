@@ -27,6 +27,10 @@ function markOfficeTutorialComplete(email: string) {
   localStorage.setItem(tutorialStorageKey(email), '1');
 }
 
+function clearOfficeTutorialCompletion(email: string) {
+  localStorage.removeItem(tutorialStorageKey(email));
+}
+
 function findMyDeskPosition(layout: FurnitureItem[], email: string): [number, number, number] | null {
   const id = `desk-${email}`;
   const item = layout.find((f): f is DeskItem => f.type === 'desk' && f.id === id);
@@ -93,6 +97,12 @@ export function useOfficeTutorial(email: string | undefined, inRoom: boolean) {
     if (email) markOfficeTutorialComplete(email);
     setPhase(null);
   }, [email]);
+
+  const restart = useCallback(() => {
+    if (!email || !inRoom || !myDeskPosition) return;
+    clearOfficeTutorialCompletion(email);
+    setPhase('intro');
+  }, [email, inRoom, myDeskPosition]);
 
   // desk → focus-energy: player actually starts a focus session
   useEffect(() => {
@@ -173,5 +183,5 @@ export function useOfficeTutorial(email: string | undefined, inRoom: boolean) {
     }
   })();
 
-  return { active: visible, phase: currentPhase, targetPosition, advance, skip };
+  return { active: visible, phase: currentPhase, targetPosition, advance, skip, restart };
 }

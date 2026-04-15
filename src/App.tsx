@@ -416,6 +416,28 @@ export default function App() {
 
       {!isFocusSavingModeActive && !isTimerActive && (
         <div className="absolute bottom-6 right-6 z-10 flex gap-2 items-end font-pixel">
+          {/* Tutorial restart */}
+          <button
+            onClick={officeTutorial.restart}
+            title="Replay Office Tutorial"
+            style={{
+              background: 'var(--color-paper)',
+              color: 'var(--color-ink)',
+              boxShadow: '0 -2px 0 0 #000, 0 2px 0 0 #000, -2px 0 0 0 #000, 2px 0 0 0 #000',
+              border: 'none',
+              padding: '6px 10px',
+              fontSize: '8px',
+              cursor: 'pointer',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>🎬</span>
+            TUTORIAL
+          </button>
           {/* HUD memo toggle */}
           <button
             onClick={() => setShowHUD((v) => !v)}
