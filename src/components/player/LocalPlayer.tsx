@@ -15,6 +15,7 @@ import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import { FocusOverheadBar } from './FocusOverheadBar';
 import {
   PARKOUR_FOCUS_ENERGY_COST,
   PARKOUR_MIN_ENERGY_REQUIRED,
@@ -58,85 +59,6 @@ interface LocalPlayerProps {
   players: Record<string, Player>;
 }
 
-function RoundedPlaneMesh({ w, h, r, color, z = 0 }: { w: number; h: number; r: number; color: string; z?: number }) {
-  const shape = useMemo(() => {
-    const s = new THREE.Shape();
-    s.moveTo(-w / 2 + r, -h / 2);
-    s.lineTo(w / 2 - r, -h / 2);
-    s.absarc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0, false);
-    s.lineTo(w / 2, h / 2 - r);
-    s.absarc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2, false);
-    s.lineTo(-w / 2 + r, h / 2);
-    s.absarc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI, false);
-    s.lineTo(-w / 2, -h / 2 + r);
-    s.absarc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5, false);
-    return s;
-  }, [w, h, r]);
-  return (
-    <mesh position={[0, 0, z]}>
-      <shapeGeometry args={[shape]} />
-      <meshBasicMaterial color={color} />
-    </mesh>
-  );
-}
-
-function FocusBubble({ focusProgress, sessionPaper }: { focusProgress: number; sessionPaper: number }) {
-  const W = 1.72;
-  const H = sessionPaper > 0 ? 0.92 : 0.72;
-  const BAR_W = 1.44;
-  const BAR_H = 0.20;
-  const R = 0.08;       // panel corner radius
-  const BAR_R = 0.08;   // bar corner radius (matches track height for pill shape)
-  const textY = sessionPaper > 0 ? H / 2 - 0.22 : H / 2 - 0.20;
-  const barY  = sessionPaper > 0 ? 0.00 : -0.08;
-  const reamY = -(H / 2 - 0.18);
-
-  // Fill grows left→right; minimum width keeps shape valid (must be > 2*r)
-  const fillW = Math.max(BAR_R * 2 + 0.02, focusProgress * BAR_W);
-  const fillX = -(BAR_W - fillW) / 2; // left-anchored
-
-  return (
-    <Billboard position={[0, 3.1, 0]}>
-      {/* Black border */}
-      <RoundedPlaneMesh w={W + 0.06} h={H + 0.06} r={R + 0.02} color="#000000" z={-0.003} />
-      {/* Cream paper fill */}
-      <RoundedPlaneMesh w={W} h={H} r={R} color="#fdfaf3" z={-0.002} />
-
-      {/* "FOCUSING..." label — Press Start 2P pixel font */}
-      <Text
-        fontSize={0.11}
-        color="#7a0019"
-        font="/fonts/PressStart2P.ttf"
-        position={[0, textY, 0]}
-        anchorX="center"
-        anchorY="middle"
-      >
-        FOCUSING...
-      </Text>
-
-      {/* Bar track — rounded pill */}
-      <group position={[0, barY, 0.001]}>
-        <RoundedPlaneMesh w={BAR_W} h={BAR_H} r={BAR_R} color="#e8dfc8" />
-      </group>
-      {/* Bar fill — rounded pill, left-anchored */}
-      <group position={[fillX, barY, 0.002]}>
-        <RoundedPlaneMesh w={fillW} h={BAR_H - 0.04} r={BAR_R} color="#166534" />
-      </group>
-
-      {/* Percent on bar */}
-      <Text fontSize={0.09} color="#1a1207" position={[0, barY, 0.003]} anchorX="center" anchorY="middle">
-        {`${Math.round(focusProgress * 100)}%`}
-      </Text>
-
-      {/* Session reams */}
-      {sessionPaper > 0 && (
-        <Text fontSize={0.1} color="#6b5c3e" position={[0, reamY, 0.001]} anchorX="center" anchorY="middle">
-          {`+${sessionPaper} reams`}
-        </Text>
-      )}
-    </Billboard>
-  );
-}
 
 export const LocalPlayer = ({
   socket,
@@ -708,7 +630,7 @@ export const LocalPlayer = ({
           </group>
         </group>
         <Billboard position={[0, 2.2, 0]}>
-          <Text fontSize={0.3} color="yellow" anchorX="center" anchorY="middle">
+          <Text fontSize={0.3} color="white" anchorX="center" anchorY="middle">
             {playerName}
           </Text>
         </Billboard>
@@ -748,7 +670,9 @@ export const LocalPlayer = ({
               </Text>
             </Billboard>
           )}
-        {isTimerActive && <FocusBubble focusProgress={focusProgress} sessionPaper={sessionPaper} />}
+        {isTimerActive && (
+          <FocusOverheadBar focusProgress={focusProgress} sessionPaper={sessionPaper} />
+        )}
         <ChatBubble text={lastMessage} time={lastMessageTime} durationMs={lastMessageDurationMs} />
       </group>
     </>

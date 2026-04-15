@@ -52,6 +52,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       withCredentials: true,
       reconnectionAttempts: 5,
       timeout: 10000,
+      transports: ['websocket'],
     });
     setSocket(newSocket);
 
@@ -113,6 +114,23 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('playerMoved', (player: Player) => {
       setPlayers((prev) => {
         const next = { ...prev, [player.id]: player };
+        syncFromPlayerMap(next);
+        return next;
+      });
+    });
+
+    newSocket.on('playersMoved', (batch: { id: string; position: [number,number,number]; rotation: [number,number,number]; isRolling: boolean; rollTimer: number }[]) => {
+      setPlayers((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const snap of batch) {
+          if (snap.id === newSocket.id) continue;
+          const existing = prev[snap.id];
+          if (!existing) continue;
+          next[snap.id] = { ...existing, position: snap.position, rotation: snap.rotation, isRolling: snap.isRolling, rollTimer: snap.rollTimer };
+          changed = true;
+        }
+        if (!changed) return prev;
         syncFromPlayerMap(next);
         return next;
       });

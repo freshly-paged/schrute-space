@@ -16,6 +16,14 @@ steps:
       - --allow-unauthenticated
       - --platform=managed
       - --update-annotations=run.googleapis.com/iap-enabled=false
+      - --session-affinity
+      - --cpu=2
+      - --memory=1Gi
+      - --no-cpu-throttling
+      - --min-instances=1
+      - --concurrency=50
+      - --timeout=3600
+      - --use-http2
 
 images:
   - 'gcr.io/$PROJECT_ID/schrute-space:$COMMIT_SHA'

@@ -1076,6 +1076,10 @@ export async function createApp(injectedPool?: pg.Pool) {
       origin: "*",
       credentials: true,
     },
+    transports: ["websocket"],
+    pingInterval: 20000,
+    pingTimeout: 25000,
+    perMessageDeflate: { threshold: 1024 },
   });
 
   // Attach IAP-authenticated user to every request
@@ -1086,6 +1090,28 @@ export async function createApp(injectedPool?: pg.Pool) {
 
   // Track active users by email to prevent multiple sessions
   const activeUsers = new Map<string, string>(); // email -> socketId
+
+  // Buffered movement state: flushed to clients at MOVEMENT_TICK_MS intervals
+  const MOVEMENT_TICK_MS = 50; // 20 Hz
+  type MovementSnapshot = {
+    id: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    isRolling: boolean;
+    rollTimer: number;
+  };
+  const pendingMovements: Record<string, Record<string, MovementSnapshot>> = {};
+
+  setInterval(() => {
+    for (const roomId of Object.keys(pendingMovements)) {
+      const snapshots = pendingMovements[roomId];
+      const batch = Object.values(snapshots);
+      if (batch.length > 0) {
+        io.to(roomId).emit("playersMoved", batch);
+        pendingMovements[roomId] = {};
+      }
+    }
+  }, MOVEMENT_TICK_MS);
 
   // Auth Routes
   app.get("/api/auth/me", (req, res) => {
@@ -1921,7 +1947,14 @@ io.on("connection", (socket) => {
         rooms[playerRoom][socket.id].rotation = movementData.rotation;
         rooms[playerRoom][socket.id].isRolling = movementData.isRolling;
         rooms[playerRoom][socket.id].rollTimer = movementData.rollTimer;
-        socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+        if (!pendingMovements[playerRoom]) pendingMovements[playerRoom] = {};
+        pendingMovements[playerRoom][socket.id] = {
+          id: socket.id,
+          position: movementData.position,
+          rotation: movementData.rotation,
+          isRolling: movementData.isRolling,
+          rollTimer: movementData.rollTimer,
+        };
       }
     });
 

@@ -6,12 +6,10 @@ import { Player, DEFAULT_AVATAR_CONFIG, DeskItem } from '../../types';
 import { ROLL_PIVOT_Y } from '../../constants';
 import { MS_BODY_THROWABLE_ID } from '../../propIds';
 
-// Pre-allocated vectors reused every frame to avoid GC pressure
-const _otherPos = new THREE.Vector3();
-const _otherPrev = new THREE.Vector3();
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
+import { FocusOverheadBar } from './FocusOverheadBar';
 import { getSyncedIceCreamState, iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -38,7 +36,6 @@ export function getFocusedDeskTransform(
 }
 
 export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
-  const prevPos = useRef(player.position);
   const [isMoving, setIsMoving] = useState(false);
   const [, setIceCreamTick] = useState(0);
   const roomLayout = useGameStore((state) => state.roomLayout);
@@ -64,19 +61,58 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
     !player.heldThrowableId;
 
   const heldIceCreamColor = showHeldIceCream ? iceCreamColorForIndex(syncedIce!.flavorIndex) : null;
-  const renderPosition = focusedDeskTransform?.position ?? player.position;
-  const renderRotation = focusedDeskTransform?.rotation ?? player.rotation;
 
-  useFrame(() => {
-    _otherPos.set(player.position[0], player.position[1], player.position[2]);
-    _otherPrev.set(prevPos.current[0], prevPos.current[1], prevPos.current[2]);
-    const dist = _otherPos.distanceTo(_otherPrev);
-    setIsMoving(dist > 0.01);
-    prevPos.current = player.position;
+  // Interpolation: visual position/rotY lag-track the target from server snapshots
+  const groupRef = useRef<THREE.Group>(null);
+  const visualPos = useRef(new THREE.Vector3(...player.position));
+  const visualRotY = useRef(player.rotation[1]);
+  const isMovingRef = useRef(false);
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+
+    if (focusedDeskTransform) {
+      // Snap to desk — no interpolation needed
+      groupRef.current.position.set(...focusedDeskTransform.position);
+      groupRef.current.rotation.set(0, focusedDeskTransform.rotation[1], 0);
+      visualPos.current.set(...focusedDeskTransform.position);
+      visualRotY.current = focusedDeskTransform.rotation[1];
+      if (isMovingRef.current) { isMovingRef.current = false; setIsMoving(false); }
+      return;
+    }
+
+    const targetX = player.position[0];
+    const targetY = player.position[1];
+    const targetZ = player.position[2];
+    const targetRotY = player.rotation[1];
+
+    // Frame-rate independent lerp: converges in ~100ms
+    const alpha = Math.min(1, delta * 20);
+
+    const prevX = visualPos.current.x;
+    const prevZ = visualPos.current.z;
+
+    visualPos.current.x += (targetX - visualPos.current.x) * alpha;
+    visualPos.current.y += (targetY - visualPos.current.y) * alpha;
+    visualPos.current.z += (targetZ - visualPos.current.z) * alpha;
+
+    // Shortest-path rotation lerp
+    let rotDiff = targetRotY - visualRotY.current;
+    if (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+    if (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+    visualRotY.current += rotDiff * alpha;
+
+    groupRef.current.position.copy(visualPos.current);
+    groupRef.current.rotation.set(0, visualRotY.current, 0);
+
+    const dx = visualPos.current.x - prevX;
+    const dz = visualPos.current.z - prevZ;
+    const nowMoving = dx * dx + dz * dz > 0.0001;
+    if (nowMoving !== isMovingRef.current) { isMovingRef.current = nowMoving; setIsMoving(nowMoving); }
   });
 
   return (
-    <group position={renderPosition} rotation={[0, renderRotation[1], 0]}>
+    <group ref={groupRef} position={player.position} rotation={[0, player.rotation[1], 0]}>
       <group position={[0, ROLL_PIVOT_Y, 0]}>
         <group rotation={[player.isRolling ? -Math.PI * 2 * ((player.rollTimer || 0) / 0.5) : 0, 0, 0]}>
           <group position={[0, -ROLL_PIVOT_Y, 0]}>
@@ -108,34 +144,7 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
         </Text>
       </Billboard>
       {player.isFocused && player.focusProgress != null && (
-        <Billboard position={[0, 3.0, 0]}>
-          {/* Outer background */}
-          <mesh position={[0, 0.1, -0.001]}>
-            <planeGeometry args={[1.8, 0.58]} />
-            <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
-          </mesh>
-          {/* Label */}
-          <Text fontSize={0.18} color="#22c55e" position={[0, 0.22, 0]} anchorX="center" anchorY="middle">
-            FOCUS
-          </Text>
-          {/* Bar background */}
-          <mesh position={[0, 0, 0]}>
-            <planeGeometry args={[1.6, 0.22]} />
-            <meshBasicMaterial color="#1e293b" />
-          </mesh>
-          {/* Bar fill — fixed geometry, scaled via scale-x */}
-          <mesh
-            position={[-(1.6 - Math.max(0.001, player.focusProgress) * 1.6) / 2, 0, 0.001]}
-            scale={[Math.max(0.001, player.focusProgress), 1, 1]}
-          >
-            <planeGeometry args={[1.6, 0.18]} />
-            <meshBasicMaterial color="#22c55e" />
-          </mesh>
-          {/* Percent label */}
-          <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
-            {`${Math.round(player.focusProgress * 100)}%`}
-          </Text>
-        </Billboard>
+        <FocusOverheadBar focusProgress={player.focusProgress} />
       )}
       <ChatBubble
         text={player.lastMessage}
