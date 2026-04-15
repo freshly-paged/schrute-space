@@ -438,7 +438,7 @@ export default function App() {
       )}
 
       {!isFocusSavingModeActive && officeTutorial.active && officeTutorial.phase && (
-        <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
+        <TutorialBanner phase={officeTutorial.phase} onNext={officeTutorial.advance} onSkip={officeTutorial.skip} />
       )}
 
       {isFocusSavingModeActive ? (

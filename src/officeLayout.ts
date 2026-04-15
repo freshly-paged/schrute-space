@@ -105,6 +105,15 @@ export const COPIER_RADIUS = 2.5;
  * All desks face east ([0, -PI/2, 0]): drawers toward the east windows/door,
  * chair on the west side.
  */
+/** World-space position of the Office Plan Frame (floor-level, for tutorial path guide). */
+export const OFFICE_PLAN_FRAME_WORLD_POSITION: [number, number, number] = [-8.8, 0, 7];
+
+/** Approximate centre of the Conference Room floor (for tutorial path guide). */
+export const CONFERENCE_ROOM_CENTER_WORLD_POSITION: [number, number, number] = [-16, 0, -2];
+
+/** World-space position of the Entryway exit door. */
+export const EXIT_DOOR_WORLD_POSITION: [number, number, number] = [-23, 0, 21];
+
 export const MANAGER_OFFICE_DESK_SLOTS: Array<{
   position: [number, number, number];
   rotation: [number, number, number];
