@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Stars, Html, KeyboardControls } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
-import { Monitor, Info } from 'lucide-react';
+import { Monitor } from 'lucide-react';
 
 import { useAuth } from './hooks/useAuth';
 import { useFocusSessionCompleteFeedback } from './hooks/useFocusSessionCompleteFeedback';
@@ -25,6 +25,7 @@ import { RoomAdminPanel } from './components/ui/RoomAdminPanel';
 import { ComputerInterface } from './components/ui/ComputerInterface';
 import { VendingMenu } from './components/ui/VendingMenu';
 import { InspectOverlay } from './components/ui/InspectOverlay';
+import { FocusScreensaver } from './components/ui/FocusScreensaver';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -46,13 +47,15 @@ const KEYBOARD_MAP = [
 
 function getRoomFromURL(): string | null {
   if (typeof window === 'undefined') return null;
-  return new URLSearchParams(window.location.search).get('room');
+  const room = new URLSearchParams(window.location.search).get('room');
+  return room ? room.trim().toLowerCase() : null;
 }
 
 export default function App() {
   const { user, authLoading, logout } = useAuth();
   const [currentRoom, setCurrentRoom] = useState<string | null>(getRoomFromURL);
-  const [showUI, setShowUI] = useState(true);
+  const [showHUD, setShowHUD] = useState(true);
+  const [showChat, setShowChat] = useState(false);
 
   const { socket, players, isConnected, chatHistory, lastLocalMessage, disconnectReason, connectionError, sendMessage } =
     useSocket(user, currentRoom);
@@ -89,6 +92,11 @@ export default function App() {
   const setFocusEnergy = useGameStore((s) => s.setFocusEnergy);
   const tickFocusEnergyWallClock = useGameStore((s) => s.tickFocusEnergyWallClock);
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
+  const setIsCustomizingOffice = useGameStore((s) => s.setIsCustomizingOffice);
+
+  useEffect(() => {
+    setIsCustomizingOffice(view === 'customize-office');
+  }, [view]);
 
   useFocusSessionCompleteFeedback();
 
@@ -109,12 +117,28 @@ export default function App() {
     return () => window.removeEventListener('keydown', preventSpaceScroll);
   }, []);
 
+  // Esc: close leaderboard first, then hide HUD
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+      if (showVendingMenu || showComputerInterface || showAdminPanel) return;
+      if (showLeaderboard) { setShowLeaderboard(false); return; }
+      setShowHUD(false);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [showVendingMenu, showComputerInterface, showAdminPanel, showLeaderboard]);
+
   const keyboardMap = useMemo(() => KEYBOARD_MAP, []);
 
   const handleJoin = (room: string) => {
-    console.log(`[app] joining room=${room}`);
-    localStorage.setItem('last_room', room);
-    window.location.search = `?room=${room}`;
+    const normalizedRoom = room.trim().toLowerCase();
+    if (!normalizedRoom) return;
+    console.log(`[app] joining room=${normalizedRoom}`);
+    localStorage.setItem('last_room', normalizedRoom);
+    window.location.search = `?room=${normalizedRoom}`;
   };
 
   const handleExitRoom = () => {
@@ -361,7 +385,7 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-slate-900 overflow-hidden font-sans">
       <AnimatePresence>
-        {showUI && !isTimerActive && (
+        {showHUD && !isTimerActive && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -380,7 +404,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <PomodoroUI />
+      {!isFocusSavingModeActive && <PomodoroUI />}
       {!isFocusSavingModeActive && (
         <>
           <ParkourEnergyHint />
@@ -390,23 +414,84 @@ export default function App() {
         </>
       )}
 
-      {!isFocusSavingModeActive && (
-        <button
-          onClick={() => setShowUI((v) => !v)}
-          className="absolute bottom-6 right-6 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 p-3 rounded-full transition-all"
-        >
-          <Info className="text-white w-6 h-6" />
-        </button>
+      {!isFocusSavingModeActive && !isTimerActive && (
+        <div className="absolute bottom-6 right-6 z-10 flex gap-2 items-end font-pixel">
+          {/* Tutorial restart */}
+          <button
+            onClick={officeTutorial.restart}
+            title="Replay Office Tutorial"
+            style={{
+              background: 'var(--color-paper)',
+              color: 'var(--color-ink)',
+              boxShadow: '0 -2px 0 0 #000, 0 2px 0 0 #000, -2px 0 0 0 #000, 2px 0 0 0 #000',
+              border: 'none',
+              padding: '6px 10px',
+              fontSize: '8px',
+              cursor: 'pointer',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>🎬</span>
+            TUTORIAL
+          </button>
+          {/* HUD memo toggle */}
+          <button
+            onClick={() => setShowHUD((v) => !v)}
+            title={showHUD ? 'Hide Status Memo' : 'Show Status Memo'}
+            style={{
+              background: showHUD ? 'var(--color-schrute)' : 'var(--color-paper)',
+              color: showHUD ? '#fff' : 'var(--color-ink)',
+              boxShadow: '0 -2px 0 0 #000, 0 2px 0 0 #000, -2px 0 0 0 #000, 2px 0 0 0 #000',
+              border: 'none',
+              padding: '6px 10px',
+              fontSize: '8px',
+              cursor: 'pointer',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>📋</span>
+            {showHUD ? '— MEMO' : '+ MEMO'}
+          </button>
+          {/* Chat toggle */}
+          <button
+            onClick={() => setShowChat((v) => !v)}
+            title={showChat ? 'Hide Message Log' : 'Open Message Log'}
+            style={{
+              background: showChat ? 'var(--color-schrute)' : 'var(--color-paper)',
+              color: showChat ? '#fff' : 'var(--color-ink)',
+              boxShadow: '0 -2px 0 0 #000, 0 2px 0 0 #000, -2px 0 0 0 #000, 2px 0 0 0 #000',
+              border: 'none',
+              padding: '6px 10px',
+              fontSize: '8px',
+              cursor: 'pointer',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>💬</span>
+            {showChat ? '— MSG LOG' : '+ MSG LOG'}
+          </button>
+        </div>
       )}
 
-
       <AnimatePresence>
-        {showUI && !isTimerActive && (
+        {showChat && !isTimerActive && (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="absolute top-6 right-20 z-10"
+            className="absolute top-6 right-6 z-10"
           >
             <ChatPanel chatHistory={chatHistory} onSendMessage={sendMessage} />
           </motion.div>
@@ -414,9 +499,24 @@ export default function App() {
       </AnimatePresence>
 
       {!isFocusSavingModeActive && showLeaderboard && currentRoom && (
-        <div className="absolute top-6 right-[22rem] z-10">
-          <RoomLeaderboard roomId={currentRoom} onClose={() => setShowLeaderboard(false)} />
-        </div>
+        <>
+          {/* Click-outside backdrop */}
+          <div
+            className="absolute inset-0 z-20"
+            onClick={() => setShowLeaderboard(false)}
+          />
+          {/* Draggable leaderboard panel */}
+          <motion.div
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            whileDrag={{ cursor: 'grabbing' }}
+            className="absolute z-20"
+            style={{ top: 24, left: '50%', x: '-50%', cursor: 'grab' }}
+          >
+            <RoomLeaderboard roomId={currentRoom} onClose={() => setShowLeaderboard(false)} />
+          </motion.div>
+        </>
       )}
 
       {!isFocusSavingModeActive && showComputerInterface && currentRoom && (
@@ -438,53 +538,54 @@ export default function App() {
       )}
 
       {!isFocusSavingModeActive && officeTutorial.active && officeTutorial.phase && (
-        <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
+        <TutorialBanner phase={officeTutorial.phase} onNext={officeTutorial.advance} onSkip={officeTutorial.skip} />
       )}
 
-      {isFocusSavingModeActive ? (
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.16),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.18),transparent_50%)]" />
-        </div>
-      ) : (
-        <KeyboardControls map={keyboardMap}>
-          <Canvas
-            dpr={[1, 2]}
-            frameloop="always"
-            camera={{ position: [0, 2, 5], fov: 50 }}
+      {/* Canvas always stays mounted so the player doesn't respawn on saving-mode toggle */}
+      <KeyboardControls map={keyboardMap}>
+        <Canvas
+          dpr={[1, 2]}
+          frameloop="always"
+          camera={{ position: [0, 2, 5], fov: 50 }}
+        >
+          <color attach="background" args={['#1e293b']} />
+          <ambientLight intensity={1.2} />
+          <directionalLight position={[10, 10, 10]} intensity={0.5} />
+          <React.Suspense
+            fallback={
+              <Html center>
+                <div className="text-white font-pixel text-[8px] whitespace-nowrap">
+                  LOADING OFFICE...
+                </div>
+              </Html>
+            }
           >
-            <color attach="background" args={['#1e293b']} />
-            <ambientLight intensity={1.2} />
-            <directionalLight position={[10, 10, 10]} intensity={0.5} />
-            <React.Suspense
-              fallback={
-                <Html center>
-                  <div className="text-white font-pixel text-[8px] whitespace-nowrap">
-                    LOADING OFFICE...
-                  </div>
-                </Html>
-              }
-            >
-              <OfficeEnvironment />
-              <LocalPlayer
-                socket={socket}
-                lastMessage={lastLocalMessage?.text}
-                lastMessageTime={lastLocalMessage?.time}
-                lastMessageDurationMs={lastLocalMessage?.durationMs}
-                playerName={visibleDisplayName}
-                players={players}
-              />
-              {Object.values(players).map((player) => (
-                <OtherPlayer key={player.id} player={player} />
-              ))}
-              <TutorialPathGuide
-                visible={officeTutorial.active}
-                target={officeTutorial.targetPosition}
-              />
-              <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            </React.Suspense>
-          </Canvas>
-        </KeyboardControls>
+            <OfficeEnvironment />
+            <LocalPlayer
+              socket={socket}
+              lastMessage={lastLocalMessage?.text}
+              lastMessageTime={lastLocalMessage?.time}
+              lastMessageDurationMs={lastLocalMessage?.durationMs}
+              playerName={visibleDisplayName}
+              players={players}
+            />
+            {Object.values(players).map((player) => (
+              <OtherPlayer key={player.id} player={player} />
+            ))}
+            <TutorialPathGuide
+              visible={officeTutorial.active}
+              target={officeTutorial.targetPosition}
+            />
+            <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          </React.Suspense>
+        </Canvas>
+      </KeyboardControls>
+
+      {/* Screensaver overlays on top of the Canvas — Canvas stays mounted, player position preserved */}
+      {isFocusSavingModeActive && (
+        <div className="absolute inset-0 z-30">
+          <FocusScreensaver />
+        </div>
       )}
 
       {/* Office customization overlay — rendered on top of the live Canvas so player position is preserved */}

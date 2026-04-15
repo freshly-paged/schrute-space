@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Droplets } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 
 export const WaterEnergyBuffOverlay = () => {
@@ -21,9 +20,21 @@ export const WaterEnergyBuffOverlay = () => {
   if (waterBuffExpiresAt == null || Date.now() >= waterBuffExpiresAt) return null;
 
   return (
-    <div className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-2xl border border-sky-400/60 bg-sky-950/80 px-4 py-2 shadow-lg shadow-sky-500/20 backdrop-blur-md animate-pulse">
-      <Droplets className="h-5 w-5 shrink-0 text-sky-300" aria-hidden />
-      <span className="text-sm font-bold tracking-tight text-sky-100">Water energy refilled</span>
+    <div
+      className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 z-20 font-pixel animate-pulse"
+      style={{
+        background: 'var(--color-paper)',
+        border: '3px solid var(--color-ink)',
+        boxShadow: '4px 4px 0 0 #000',
+        padding: '8px 16px',
+      }}
+    >
+      <div className="text-[8px] font-bold uppercase" style={{ color: '#1d4ed8' }}>
+        💧 HYDRATION BUFF ACTIVE
+      </div>
+      <div className="text-[7px]" style={{ color: 'var(--color-ink-faint)' }}>
+        Energy regen boosted
+      </div>
     </div>
   );
 };

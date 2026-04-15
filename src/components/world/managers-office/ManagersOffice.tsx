@@ -187,6 +187,7 @@ function InteractiveDoor() {
   const nearRef   = useRef(false);
 
   const [showHint, setShowHint] = useState(false);
+  const isCustomizingOffice = useGameStore((s) => s.isCustomizingOffice);
   const [labelOpen, setLabelOpen] = useState(false);
 
   // Native keydown listener — more reliable than useKeyboardControls inside a sub-component
@@ -239,7 +240,7 @@ function InteractiveDoor() {
       </group>
 
       {/* [E] hint rendered in room-local space, above door centre */}
-      {showHint && (
+      {showHint && !isCustomizingOffice && (
         <Html center position={[6.2, 2.8, -2]}>
           <div style={{
             color: 'white',

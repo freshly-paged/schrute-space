@@ -217,6 +217,12 @@ function normalizeFocusDeskOwnerEmail(raw: unknown): string | null {
   return t;
 }
 
+function normalizeRoomId(raw: unknown): string {
+  if (typeof raw !== "string") return "default";
+  const value = raw.trim().toLowerCase();
+  return value.length > 0 ? value : "default";
+}
+
 async function loadAndSettleFocusEnergy(email: string): Promise<number> {
   if (isLocalTest()) return mem.memLoadAndSettleFocusEnergy(email);
   await ensureUserRow(email);
@@ -1175,11 +1181,12 @@ export async function createApp(injectedPool?: pg.Pool) {
     if (typeof roomId !== 'string' || !Array.isArray(layout)) {
       return res.status(400).json({ error: "Invalid layout" });
     }
-    await runSerializedRoomLayout(roomId, async () => {
-      await saveRoomLayout(roomId, layout as FurnitureItem[]);
+    const normalizedRoomId = normalizeRoomId(roomId);
+    await runSerializedRoomLayout(normalizedRoomId, async () => {
+      await saveRoomLayout(normalizedRoomId, layout as FurnitureItem[]);
     });
-    io.to(roomId).emit("roomLayoutUpdated", layout);
-    void broadcastDeskChairLevels(io, roomId, layout as FurnitureItem[]);
+    io.to(normalizedRoomId).emit("roomLayoutUpdated", layout);
+    void broadcastDeskChairLevels(io, normalizedRoomId, layout as FurnitureItem[]);
     res.json({ ok: true });
   });
 
@@ -1202,7 +1209,8 @@ export async function createApp(injectedPool?: pg.Pool) {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const leaderboard = await getRoomLeaderboard(req.params.roomId);
+      const roomId = normalizeRoomId(req.params.roomId);
+      const leaderboard = await getRoomLeaderboard(roomId);
       res.json(leaderboard);
     } catch {
       res.status(500).json({ error: "Internal server error" });
@@ -1212,7 +1220,7 @@ export async function createApp(injectedPool?: pg.Pool) {
   app.get("/api/room/:roomId/members", async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const { roomId } = req.params;
+    const roomId = normalizeRoomId(req.params.roomId);
     try {
       const members = await getRoomMembers(roomId);
       const onlineEmails = new Set(
@@ -1233,7 +1241,7 @@ export async function createApp(injectedPool?: pg.Pool) {
   app.post("/api/room/:roomId/members", express.json(), async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const { roomId } = req.params;
+    const roomId = normalizeRoomId(req.params.roomId);
     const { email, role = 'worker' } = req.body ?? {};
     if (!email || typeof email !== 'string' || !['worker', 'manager'].includes(role)) {
       return res.status(400).json({ error: "Invalid request" });
@@ -1280,7 +1288,8 @@ export async function createApp(injectedPool?: pg.Pool) {
   app.delete("/api/room/:roomId/members/:memberEmail", async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const { roomId, memberEmail } = req.params;
+    const roomId = normalizeRoomId(req.params.roomId);
+    const { memberEmail } = req.params;
     try {
       const requesterRole = await getMemberRole(roomId, user.email);
       if (!requesterRole || requesterRole === 'worker') {
@@ -1333,7 +1342,7 @@ export async function createApp(injectedPool?: pg.Pool) {
   app.patch("/api/room/:roomId", express.json(), async (req, res) => {
     const user = (req as any).user;
     if (!user?.email) return res.status(401).json({ error: "Unauthorized" });
-    const { roomId } = req.params;
+    const roomId = normalizeRoomId(req.params.roomId);
     const { maxWorkers, allowNewEmployees } = req.body ?? {};
     try {
       const requesterRole = await getMemberRole(roomId, user.email);
@@ -1475,7 +1484,7 @@ io.on("connection", (socket) => {
         typeof data.focusEnergy === 'number' && Number.isFinite(data.focusEnergy)
           ? clampFocusEnergy(data.focusEnergy)
           : null;
-      const room = roomId || "default";
+      const room = normalizeRoomId(roomId);
       socket.join(room);
 
       if (!rooms[room]) {

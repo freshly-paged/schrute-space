@@ -59,6 +59,7 @@ interface LocalPlayerProps {
   players: Record<string, Player>;
 }
 
+
 export const LocalPlayer = ({
   socket,
   lastMessage,

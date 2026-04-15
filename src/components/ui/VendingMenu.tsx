@@ -1,59 +1,92 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
 import type { Socket } from 'socket.io-client';
 import { useGameStore } from '../../store/useGameStore';
 import { ICE_CREAM_FLAVORS, ICE_CREAM_FLAVOR_COUNT } from '../../iceCreamFlavors';
-import { ICE_CREAM_QUARTERS_MAX, ICE_CREAM_COST_REAMS, ICE_CREAM_DURATION_MS } from '../../gameConfig';
+import {
+  ICE_CREAM_QUARTERS_MAX,
+  ICE_CREAM_COST_REAMS,
+  ICE_CREAM_DURATION_MS,
+  ICE_CREAM_BITE_FOCUS_ENERGY,
+} from '../../gameConfig';
 
 interface VendingMenuProps {
   onClose: () => void;
   socket: Socket | null;
 }
 
+/** Pixel-art ice cream scoop + cone drawn with plain divs. */
+function PixelCone({ color, selected }: { color: string; selected: boolean }) {
+  const border = selected ? '3px solid #000' : '2px solid rgba(0,0,0,0.25)';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+      {/* Scoop highlight dot */}
+      <div style={{
+        width: 6, height: 4,
+        background: 'rgba(255,255,255,0.55)',
+        borderRadius: '50%',
+        position: 'relative',
+        left: -6,
+        top: 8,
+        zIndex: 1,
+        pointerEvents: 'none',
+      }} />
+      {/* Scoop body */}
+      <div style={{
+        width: 32, height: 28,
+        background: color,
+        borderRadius: '16px 16px 4px 4px',
+        border,
+        borderBottom: 'none',
+        position: 'relative',
+        zIndex: 0,
+        imageRendering: 'pixelated',
+      }} />
+      {/* Cone body */}
+      <div style={{
+        width: 0, height: 0,
+        borderLeft: '16px solid transparent',
+        borderRight: '16px solid transparent',
+        borderTop: `28px solid #c2770a`,
+        filter: selected ? 'drop-shadow(0 0 0 2px #000)' : undefined,
+      }} />
+      {/* Cone tip */}
+      <div style={{
+        width: 4, height: 6,
+        background: '#92400e',
+        borderRadius: '0 0 2px 2px',
+      }} />
+    </div>
+  );
+}
+
 export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
   const paperReams = useGameStore((s) => s.paperReams);
   const addPaper = useGameStore((s) => s.addPaper);
   const setHeldIceCream = useGameStore((s) => s.setHeldIceCream);
-  const [subView, setSubView] = useState<'main' | 'flavor'>('main');
   const [selectedFlavor, setSelectedFlavor] = useState(0);
   const [feedback, setFeedback] = useState<'insufficient' | 'offline' | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (subView === 'flavor') {
-        e.preventDefault();
-        setSubView('main');
-        setFeedback(null);
-        return;
-      }
-      onClose();
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, subView]);
+  }, [onClose]);
 
   const canAfford = paperReams >= ICE_CREAM_COST_REAMS;
   const socketOk = socket?.connected === true;
+  const flavor = ICE_CREAM_FLAVORS[selectedFlavor]!;
+  const totalEnergy = ICE_CREAM_BITE_FOCUS_ENERGY * ICE_CREAM_QUARTERS_MAX;
 
-  const openFlavorSubmenu = () => {
-    setFeedback(null);
-    setSubView('flavor');
-  };
-
-  const handleConfirmBuy = () => {
+  const handleBuy = () => {
     if (!canAfford) { setFeedback('insufficient'); return; }
     if (!socket?.connected) { setFeedback('offline'); return; }
     const flavorIndex = Math.min(Math.max(0, selectedFlavor), ICE_CREAM_FLAVOR_COUNT - 1);
     const expiresAt = Date.now() + ICE_CREAM_DURATION_MS;
     addPaper(-ICE_CREAM_COST_REAMS);
     setHeldIceCream({ flavorIndex, expiresAt, remainingQuarters: ICE_CREAM_QUARTERS_MAX });
-    socket?.connected &&
-      socket.emit('playerIceCream', {
-        flavorIndex,
-        expiresAt,
-        remainingQuarters: ICE_CREAM_QUARTERS_MAX,
-      });
+    socket.emit('playerIceCream', { flavorIndex, expiresAt, remainingQuarters: ICE_CREAM_QUARTERS_MAX });
     onClose();
   };
 
@@ -64,130 +97,131 @@ export const VendingMenu = ({ onClose, socket }: VendingMenuProps) => {
       aria-modal="true"
       aria-labelledby="vending-title"
     >
-      <div
-        className="relative w-full max-w-sm bg-slate-900 border-4 border-black pixel-border p-4 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col"
-        style={{ boxShadow: '8px 8px 0 0 #1e1b4b' }}
-      >
-        <div className="flex items-start justify-between gap-3 pr-1 shrink-0">
-          <div>
-            <h2
-              id="vending-title"
-              className="font-pixel text-[10px] sm:text-xs text-violet-300 tracking-widest uppercase pr-8"
-            >
-              {subView === 'main' ? 'Vend-O-Matic' : 'Choose flavor'}
-            </h2>
-            {subView === 'main' ? (
-              <p className="text-slate-400 font-mono text-[10px] mt-2">
-                Your balance: <span className="text-amber-200">{paperReams.toLocaleString()}</span> reams
-              </p>
-            ) : (
-              <p className="text-slate-500 font-mono text-[9px] mt-2">
-                {ICE_CREAM_COST_REAMS} reams - balance {paperReams.toLocaleString()}
-              </p>
-            )}
+      <div className="font-pixel w-full max-w-sm overflow-hidden" style={{
+        background: 'var(--color-paper)',
+        boxShadow: '0 -4px 0 0 #000, 0 4px 0 0 #000, -4px 0 0 0 #000, 4px 0 0 0 #000',
+      }}>
+
+        {/* ── Shop sign ── */}
+        <div style={{ background: '#f472b6' }} className="px-4 py-3 text-center relative">
+          {/* Pixel bunting dots */}
+          <div className="flex justify-around mb-1">
+            {['#ef4444','#facc15','#34d399','#60a5fa','#d946ef'].map((c, i) => (
+              <div key={i} style={{ width: 8, height: 8, background: c, border: '2px solid #000' }} />
+            ))}
+          </div>
+          <h2 id="vending-title" className="text-white text-[9px] uppercase tracking-widest">
+            🍦 Sweet Treats
+          </h2>
+          <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            Vend-O-Matic · Breakroom Edition
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-violet-300 hover:text-white transition-colors z-10"
             aria-label="Close"
+            className="absolute top-2 right-3 text-[8px] text-white/70 hover:text-white"
+            style={{ fontFamily: 'var(--font-pixel)' }}
           >
-            <X className="w-5 h-5" />
+            ✕
           </button>
         </div>
 
-        {subView === 'main' ? (
-          <>
-            <div className="mt-4 flex-1 min-h-0 overflow-y-auto pr-1 space-y-3" style={{ scrollbarGutter: 'stable' }}>
-              <div className="border-2 border-violet-500/40 bg-violet-950/40 p-3">
-                <div className="grid grid-cols-[auto_minmax(92px,150px)_1fr] gap-3 items-start">
-                  <button
-                    type="button"
-                    onClick={openFlavorSubmenu}
-                    className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center min-w-[94px]"
-                  >
-                    Buy
-                  </button>
-                  <p className="font-pixel text-[8px] sm:text-[10px] text-white pt-1">🍦 Ice Cream</p>
-                  <p className="text-slate-400 text-[10px] sm:text-xs font-mono leading-snug pt-1">
-                    Pick a flavor after tapping buy. Hold for 1 minute. Cost: {ICE_CREAM_COST_REAMS} reams.
-                  </p>
-                </div>
+        {/* ── Display case ── */}
+        <div className="p-3" style={{ background: '#1e293b', borderTop: '4px solid #000', borderBottom: '4px solid #000' }}>
+          {/* Glass reflection strip */}
+          <div style={{ background: 'rgba(255,255,255,0.06)', height: 3, marginBottom: 8 }} />
+
+          <div className="grid grid-cols-5 gap-2 justify-items-center">
+            {ICE_CREAM_FLAVORS.map((f, i) => (
+              <button
+                key={f.label}
+                type="button"
+                onClick={() => { setSelectedFlavor(i); setFeedback(null); }}
+                className="flex flex-col items-center gap-1 transition-transform active:scale-95"
+                style={{
+                  padding: '6px 4px',
+                  background: i === selectedFlavor ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  border: i === selectedFlavor ? '2px solid #f472b6' : '2px solid transparent',
+                  outline: 'none',
+                }}
+                title={f.label}
+              >
+                <PixelCone color={f.color} selected={i === selectedFlavor} />
+                <span className="text-[6px] uppercase mt-1" style={{ color: i === selectedFlavor ? '#f9a8d4' : '#94a3b8' }}>
+                  {f.label}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ background: 'rgba(255,255,255,0.06)', height: 3, marginTop: 8 }} />
+        </div>
+
+        {/* ── Order panel ── */}
+        <div className="px-4 pt-3 pb-2 flex flex-col gap-3">
+
+          {/* Selected flavor info */}
+          <div className="flex items-center gap-3">
+            <div style={{
+              width: 12, height: 12, background: flavor.color,
+              border: '2px solid #000', flexShrink: 0,
+            }} />
+            <div>
+              <div className="text-[8px] font-bold uppercase" style={{ color: 'var(--color-ink)' }}>
+                {flavor.label} Ice Cream
+              </div>
+              <div className="text-[7px]" style={{ color: 'var(--color-ink-faint)' }}>
+                +{totalEnergy} ⚡ energy  ·  {ICE_CREAM_QUARTERS_MAX} bites  ·  press [B] to eat
               </div>
             </div>
-
-            <p className="mt-3 text-center text-slate-500 font-mono text-[10px]">
-              For desk upgrades, press [F] at your desk.
-            </p>
-            <p className="mt-2 text-center text-slate-500 font-mono text-[10px] shrink-0">Press Esc to close</p>
-          </>
-        ) : (
-          <div className="mt-4 overflow-y-auto pr-1 flex-1 min-h-0" style={{ scrollbarGutter: 'stable' }}>
-            <button
-              type="button"
-              onClick={() => { setSubView('main'); setFeedback(null); }}
-              className="flex items-center gap-1.5 text-violet-300 hover:text-white font-mono text-[10px] mb-4"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back
-            </button>
-
-            <p className="font-pixel text-[7px] sm:text-[8px] text-slate-500 uppercase tracking-wider mb-2">
-              Flavor
-            </p>
-            <div className="flex flex-wrap gap-2 mb-5">
-              {ICE_CREAM_FLAVORS.map((f, i) => (
-                <button
-                  key={f.label}
-                  type="button"
-                  onClick={() => setSelectedFlavor(i)}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded border-2 font-mono text-[10px] transition-colors ${
-                    selectedFlavor === i
-                      ? 'border-violet-400 bg-violet-950/80 text-white'
-                      : 'border-slate-600 bg-slate-800/60 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  <span
-                    className="w-4 h-4 rounded-sm border border-black/40 shrink-0"
-                    style={{ backgroundColor: f.color }}
-                    aria-hidden
-                  />
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={handleConfirmBuy}
-                disabled={!canAfford || !socketOk}
-                className="pixel-button font-pixel text-[8px] sm:text-[10px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Purchase ({ICE_CREAM_COST_REAMS} reams)
-              </button>
-              {!socketOk && (
-                <p className="text-center text-amber-400/90 text-[10px] font-mono">
-                  Connect to the office so others can see your treat.
-                </p>
-              )}
-              {feedback === 'insufficient' && (
-                <p className="text-center text-rose-400/90 text-xs font-mono">
-                  Not enough reams.
-                </p>
-              )}
-              {feedback === 'offline' && (
-                <p className="text-center text-rose-400/90 text-xs font-mono">
-                  Not connected - try again when online.
-                </p>
-              )}
-            </div>
-
-            <p className="mt-5 text-center text-slate-500 font-mono text-[10px]">
-              Esc - back to machine · Close (X) exits
-            </p>
           </div>
-        )}
+
+          <hr className="memo-rule" />
+
+          {/* Price & balance */}
+          <div className="flex justify-between text-[8px]">
+            <span style={{ color: 'var(--color-ink-faint)' }}>PRICE</span>
+            <span className="font-bold" style={{ color: 'var(--color-schrute)' }}>{ICE_CREAM_COST_REAMS} reams</span>
+          </div>
+          <div className="flex justify-between text-[8px]">
+            <span style={{ color: 'var(--color-ink-faint)' }}>YOUR BALANCE</span>
+            <span className="font-bold" style={{ color: canAfford ? '#166534' : 'var(--color-stamp-red)' }}>
+              {paperReams.toLocaleString()} reams
+            </span>
+          </div>
+
+          {/* Buy button */}
+          <button
+            type="button"
+            onClick={handleBuy}
+            disabled={!canAfford || !socketOk}
+            className="pixel-button text-[8px] w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ padding: '10px', textAlign: 'center' }}
+          >
+            {canAfford ? `🍦 Buy ${flavor.label}` : 'Not enough reams'}
+          </button>
+
+          {/* Feedback */}
+          {!socketOk && (
+            <p className="text-center text-[8px]" style={{ color: '#b45309' }}>
+              Connect to office so others can see your treat.
+            </p>
+          )}
+          {feedback === 'offline' && (
+            <p className="text-center text-[8px]" style={{ color: 'var(--color-stamp-red)' }}>
+              Not connected — try again when online.
+            </p>
+          )}
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="px-4 py-2 text-center text-[7px]" style={{
+          borderTop: '2px solid var(--color-ink)',
+          color: 'var(--color-ink-faint)',
+        }}>
+          © DUNDER MIFFLIN PAPER CO. · Press Esc to close
+        </div>
       </div>
     </div>
   );
