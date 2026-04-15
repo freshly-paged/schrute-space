@@ -138,6 +138,11 @@ function DeskItemInteractable({ def, item }: { def: DeskItemDef; item: DeskItemP
         <DeskItemAssetModel assetKey={def.modelKey} x={0} z={0} yOffset={def.yOffset} />
       </Suspense>
       {isNear && (
+        <Cylinder args={[0.22, 0.22, 0.01, 16]} position={[0, 1.01, 0]}>
+          <meshStandardMaterial color="#ffd700" emissive="#ffd700" emissiveIntensity={1.0} transparent opacity={0.55} />
+        </Cylinder>
+      )}
+      {isNear && (
         <Billboard position={[0, 1.8, 0]}>
           <Text
             fontSize={0.2}
