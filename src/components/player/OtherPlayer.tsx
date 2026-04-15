@@ -12,6 +12,7 @@ const _otherPrev = new THREE.Vector3();
 import { CharacterAvatar } from './CharacterAvatar';
 import { OtherPlayerHeldThrowable } from './OtherPlayerHeldThrowable';
 import { ChatBubble } from '../ui/ChatBubble';
+import { FocusOverheadBar } from './FocusOverheadBar';
 import { getSyncedIceCreamState, iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -108,34 +109,7 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
         </Text>
       </Billboard>
       {player.isFocused && player.focusProgress != null && (
-        <Billboard position={[0, 3.0, 0]}>
-          {/* Outer background */}
-          <mesh position={[0, 0.1, -0.001]}>
-            <planeGeometry args={[1.8, 0.58]} />
-            <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
-          </mesh>
-          {/* Label */}
-          <Text fontSize={0.18} color="#22c55e" position={[0, 0.22, 0]} anchorX="center" anchorY="middle">
-            FOCUS
-          </Text>
-          {/* Bar background */}
-          <mesh position={[0, 0, 0]}>
-            <planeGeometry args={[1.6, 0.22]} />
-            <meshBasicMaterial color="#1e293b" />
-          </mesh>
-          {/* Bar fill — fixed geometry, scaled via scale-x */}
-          <mesh
-            position={[-(1.6 - Math.max(0.001, player.focusProgress) * 1.6) / 2, 0, 0.001]}
-            scale={[Math.max(0.001, player.focusProgress), 1, 1]}
-          >
-            <planeGeometry args={[1.6, 0.18]} />
-            <meshBasicMaterial color="#22c55e" />
-          </mesh>
-          {/* Percent label */}
-          <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
-            {`${Math.round(player.focusProgress * 100)}%`}
-          </Text>
-        </Billboard>
+        <FocusOverheadBar focusProgress={player.focusProgress} />
       )}
       <ChatBubble
         text={player.lastMessage}

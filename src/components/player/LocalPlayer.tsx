@@ -15,6 +15,7 @@ import { iceCreamColorForIndex } from '../../iceCreamFlavors';
 import { CharacterAvatar } from './CharacterAvatar';
 import { WaterEnergyAura } from './WaterEnergyAura';
 import { ChatBubble } from '../ui/ChatBubble';
+import { FocusOverheadBar } from './FocusOverheadBar';
 import {
   PARKOUR_FOCUS_ENERGY_COST,
   PARKOUR_MIN_ENERGY_REQUIRED,
@@ -628,7 +629,7 @@ export const LocalPlayer = ({
           </group>
         </group>
         <Billboard position={[0, 2.2, 0]}>
-          <Text fontSize={0.3} color="yellow" anchorX="center" anchorY="middle">
+          <Text fontSize={0.3} color="white" anchorX="center" anchorY="middle">
             {playerName}
           </Text>
         </Billboard>
@@ -669,40 +670,7 @@ export const LocalPlayer = ({
             </Billboard>
           )}
         {isTimerActive && (
-          <Billboard position={[0, 3.0, 0]}>
-            {/* Outer background */}
-            <mesh position={[0, 0.1, -0.001]} scale={[1.8, sessionPaper > 0 ? 0.78 : 0.58, 1]}>
-              <planeGeometry args={[1, 1]} />
-              <meshBasicMaterial color="#0f172a" transparent opacity={0.9} />
-            </mesh>
-            {/* Label */}
-            <Text fontSize={0.18} color="#22c55e" position={[0, 0.22, 0]} anchorX="center" anchorY="middle">
-              FOCUS
-            </Text>
-            {/* Bar background */}
-            <mesh position={[0, 0, 0]}>
-              <planeGeometry args={[1.6, 0.22]} />
-              <meshBasicMaterial color="#1e293b" />
-            </mesh>
-            {/* Bar fill — fixed geometry, scaled via scale-x */}
-            <mesh
-              position={[-(1.6 - Math.max(0.001, focusProgress) * 1.6) / 2, 0, 0.001]}
-              scale={[Math.max(0.001, focusProgress), 1, 1]}
-            >
-              <planeGeometry args={[1.6, 0.18]} />
-              <meshBasicMaterial color="#22c55e" />
-            </mesh>
-            {/* Percent label */}
-            <Text fontSize={0.1} color="white" position={[0, 0, 0.002]} anchorX="center" anchorY="middle">
-              {`${Math.round(focusProgress * 100)}%`}
-            </Text>
-            {/* Session paper count */}
-            {sessionPaper > 0 && (
-              <Text fontSize={0.11} color="#86efac" position={[0, -0.22, 0.001]} anchorX="center" anchorY="middle">
-                {`+${sessionPaper} paper`}
-              </Text>
-            )}
-          </Billboard>
+          <FocusOverheadBar focusProgress={focusProgress} sessionPaper={sessionPaper} />
         )}
         <ChatBubble text={lastMessage} time={lastMessageTime} durationMs={lastMessageDurationMs} />
       </group>
