@@ -106,7 +106,13 @@ export function OfficePlanFrame() {
     >
       {/* Dark wood outer frame — front face at z=+0.03 */}
       <Box args={[1.5, 1.1, 0.06]}>
-        <meshStandardMaterial color="#3B2506" roughness={0.7} metalness={0.05} />
+        <meshStandardMaterial
+          color="#3B2506"
+          roughness={0.7}
+          metalness={0.05}
+          emissive={showHint ? '#6B3510' : '#000000'}
+          emissiveIntensity={showHint ? 0.4 : 0}
+        />
       </Box>
 
       {/* Cream mat border — center at z=0.04, front face at z=+0.06 */}

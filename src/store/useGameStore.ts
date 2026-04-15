@@ -99,6 +99,7 @@ interface GameState {
   nearestDeskId: string | null;
   activeDeskId: string | null;
   isChatFocused: boolean;
+  isCustomizingOffice: boolean;
   occupiedDeskIds: string[];
   user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
@@ -108,6 +109,7 @@ interface GameState {
   playerProfileJobTitle: string | null;
   setNearestDeskId: (id: string | null) => void;
   setChatFocused: (focused: boolean) => void;
+  setIsCustomizingOffice: (v: boolean) => void;
   setOccupiedDeskIds: (ids: string[]) => void;
   setUser: (user: { email: string; name: string; picture?: string } | null) => void;
   setAvatarConfig: (config: AvatarConfig) => void;
@@ -444,6 +446,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   nearestDeskId: null,
   activeDeskId: null,
   isChatFocused: false,
+  isCustomizingOffice: false,
   occupiedDeskIds: [],
   user: null,
   playerProfileLoaded: false,
@@ -459,6 +462,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   })(),
   setNearestDeskId: (id) => set({ nearestDeskId: id }),
   setChatFocused: (focused) => set({ isChatFocused: focused }),
+  setIsCustomizingOffice: (v) => set({ isCustomizingOffice: v }),
   setOccupiedDeskIds: (ids) => set({ occupiedDeskIds: ids }),
   setUser: (user) => set({ user }),
   setPlayerProfileFromServer: (profile) =>

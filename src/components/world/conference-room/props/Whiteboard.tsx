@@ -144,7 +144,7 @@ export const Whiteboard = ({ position, rotation = [0, 0, 0] }: WhiteboardProps) 
 
       {/* Proximity prompt */}
       {nearWhiteboard && (
-        <Billboard position={[0, 2.5, 0]}>
+        <Billboard position={[0, 1.9, 0]}>
           <Text
             fontSize={0.2}
             color="white"

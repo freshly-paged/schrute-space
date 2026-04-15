@@ -130,32 +130,35 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
     name ?? email.split('@')[0];
 
   return (
-    <div className="bg-[#f0f0f0] pixel-border font-pixel text-black w-[640px] max-h-[85vh] overflow-y-auto">
+    <div className="pixel-panel font-pixel w-[640px] max-h-[85vh] overflow-y-auto p-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-5 border-b-4 border-black bg-[#cbd5e1]">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-6 py-4" style={{ background: 'var(--color-schrute)' }}>
+        <div className="flex items-center gap-2 text-white">
           <Settings className="w-4 h-4" />
-          <h2 className="text-xs uppercase font-bold">Office Management</h2>
+          <h2 className="text-[8px] uppercase">Office Management</h2>
         </div>
-        <button onClick={onClose} className="hover:text-red-600 transition-colors">
+        <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       <div className="p-4 flex flex-col gap-5">
         {error && (
-          <div className="bg-red-100 pixel-border border-red-400 px-3 py-2 text-[9px] text-red-700 uppercase">
+          <div
+            className="pixel-border px-3 py-2 text-[8px] uppercase"
+            style={{ background: '#fee2e2', color: 'var(--color-stamp-red)', border: '2px solid var(--color-stamp-red)' }}
+          >
             {error}
           </div>
         )}
 
         {/* Members list */}
         <div>
-          <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">
+          <h3 className="text-[8px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>
             Workers ({members.length}/{roomInfo?.maxWorkers ?? '?'})
           </h3>
           {members.length === 0 ? (
-            <p className="text-[9px] text-slate-400">No members yet.</p>
+            <p className="text-[8px]" style={{ color: 'var(--color-ink-faint)' }}>No members yet.</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {members.map(m => (
@@ -177,7 +180,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                     <button
                       onClick={() => addMember(m.email, 'manager')}
                       disabled={loading}
-                      className="text-indigo-500 hover:text-indigo-700 disabled:opacity-40 transition-colors"
+                      className="disabled:opacity-40 transition-colors"
+                      style={{ color: 'var(--color-beet)' }}
                       title="Promote to Manager"
                     >
                       <ShieldPlus className="w-3.5 h-3.5" />
@@ -187,7 +191,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                     <button
                       onClick={() => addMember(m.email, 'worker')}
                       disabled={loading}
-                      className="text-slate-500 hover:text-slate-700 disabled:opacity-40 transition-colors"
+                      className="disabled:opacity-40 transition-colors"
+                      style={{ color: 'var(--color-ink-faint)' }}
                       title="Demote to Worker"
                     >
                       <ShieldMinus className="w-3.5 h-3.5" />
@@ -197,7 +202,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                     <button
                       onClick={() => removeMember(m.email)}
                       disabled={loading}
-                      className="text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors"
+                      className="disabled:opacity-40 transition-colors"
+                      style={{ color: 'var(--color-stamp-red)' }}
                       title="Remove"
                     >
                       <UserMinus className="w-3.5 h-3.5" />
@@ -212,19 +218,20 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
         {/* Online visitors */}
         {visitors.length > 0 && (
           <div>
-            <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">Visitors Online</h3>
+            <h3 className="text-[8px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>Visitors Online</h3>
             <div className="flex flex-col gap-1.5">
               {visitors.map(v => (
                 <div key={v.email} className="flex items-center gap-2 bg-white pixel-border px-3 py-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold truncate">{displayName(v.email, v.name)}</div>
-                    <div className="text-[8px] text-slate-400 truncate">{v.email}</div>
+                    <div className="text-[9px] font-bold truncate" style={{ color: 'var(--color-ink)' }}>{displayName(v.email, v.name)}</div>
+                    <div className="text-[8px] truncate" style={{ color: 'var(--color-ink-faint)' }}>{v.email}</div>
                   </div>
                   {myRole !== 'worker' && (
                     <button
                       onClick={() => addMember(v.email)}
                       disabled={loading}
-                      className="text-emerald-600 hover:text-emerald-800 disabled:opacity-40 transition-colors"
+                      className="disabled:opacity-40 transition-colors"
+                      style={{ color: '#166534' }}
                       title="Hire as worker"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
@@ -239,14 +246,14 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
         {/* Add by email */}
         {myRole !== 'worker' && (
           <div>
-            <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">Add Worker by Email</h3>
+            <h3 className="text-[8px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>Add Worker by Email</h3>
             <div className="flex gap-2">
               <input
                 value={addEmail}
                 onChange={e => setAddEmail(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && addEmail.trim()) addMember(addEmail.trim()); }}
                 placeholder="user@example.com"
-                className="flex-1 bg-white border-4 border-black px-2 py-1.5 text-[9px] focus:outline-none focus:bg-yellow-50"
+                className="pixel-input flex-1"
               />
               <button
                 onClick={() => { if (addEmail.trim()) addMember(addEmail.trim()); }}
@@ -262,7 +269,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
         {/* Max workers (admin only) */}
         {myRole === 'admin' && (
           <div>
-            <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">Max Workers</h3>
+            <h3 className="text-[8px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>Max Workers</h3>
             <div className="flex gap-2 items-center">
               <input
                 type="number"
@@ -270,7 +277,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                 max={100}
                 value={maxWorkers}
                 onChange={e => setMaxWorkers(Number(e.target.value))}
-                className="w-20 bg-white border-4 border-black px-2 py-1.5 text-[9px] focus:outline-none focus:bg-yellow-50"
+                className="pixel-input w-20"
               />
               <button
                 onClick={() => saveRoomSettings({ maxWorkers })}
@@ -285,11 +292,11 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
 
         {myRole === 'admin' && (
           <div>
-            <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">New Employee Mode</h3>
-            <div className="bg-white pixel-border px-3 py-2 text-[9px] flex items-center justify-between gap-3">
-              <div className="flex-1">
+            <h3 className="text-[8px] uppercase tracking-widest mb-2" style={{ color: 'var(--color-ink-faint)' }}>New Employee Mode</h3>
+            <div className="bg-white pixel-border px-3 py-2 text-[8px] flex items-center justify-between gap-3">
+              <div className="flex-1" style={{ color: 'var(--color-ink)' }}>
                 <div className="font-bold">Auto-hire new joiners</div>
-                <div className="text-slate-500 mt-0.5">
+                <div className="mt-0.5" style={{ color: 'var(--color-ink-faint)' }}>
                   ON: newcomers become workers automatically and get a desk.
                 </div>
               </div>
@@ -300,9 +307,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                   void saveRoomSettings({ allowNewEmployees: next });
                 }}
                 disabled={loading}
-                className={`pixel-button text-[9px] px-3 py-1.5 disabled:opacity-50 ${
-                  allowNewEmployees ? 'bg-emerald-300' : ''
-                }`}
+                className="pixel-button text-[8px] disabled:opacity-50"
+                style={allowNewEmployees ? { background: '#166534', padding: '6px 12px' } : { padding: '6px 12px' }}
               >
                 {allowNewEmployees ? 'ON' : 'OFF'}
               </button>

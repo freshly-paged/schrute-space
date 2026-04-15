@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
+import { getDeterministicColor } from '../../constants';
 import { RoomRole } from '../../types';
 
 interface LeaderboardEntry {
@@ -17,106 +18,181 @@ interface RoomLeaderboardProps {
 }
 
 const RoleBadge = ({ role }: { role: RoomRole }) => (
-  <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${
-    role === 'admin' ? 'bg-amber-500/30 text-amber-300' :
-    role === 'manager' ? 'bg-indigo-500/30 text-indigo-300' :
-    'bg-slate-500/30 text-slate-300'
-  }`}>
+  <span
+    className="text-[6px] px-1 py-0.5 font-pixel shrink-0"
+    style={{
+      background: role === 'admin' ? '#fef3c7' : role === 'manager' ? '#ede9fe' : '#f1f5f9',
+      color: role === 'admin' ? '#92400e' : role === 'manager' ? '#4c1d95' : '#334155',
+      border: '1px solid rgba(0,0,0,0.25)',
+      marginLeft: 4,
+    }}
+  >
     {role.toUpperCase()}
   </span>
 );
+
+/** Small deterministic pixel-art avatar: coloured square with initial. */
+const PlayerAvatar = ({ email, name }: { email: string; name: string | null }) => {
+  const colour = getDeterministicColor(email);
+  const initial = (name ?? email)[0]?.toUpperCase() ?? '?';
+  return (
+    <div
+      style={{
+        width: 28,
+        height: 28,
+        background: colour,
+        boxShadow: '0 -2px 0 0 #000, 0 2px 0 0 #000, -2px 0 0 0 #000, 2px 0 0 0 #000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        color: '#fff',
+        fontSize: 10,
+        fontFamily: 'var(--font-pixel)',
+        textShadow: '1px 1px 0 rgba(0,0,0,0.4)',
+      }}
+    >
+      {initial}
+    </div>
+  );
+};
 
 export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const currentUserEmail = useGameStore(s => s.user?.email);
 
-  const fetchLeaderboard = () => {
+  useEffect(() => {
+    setLoading(true);
     fetch(`/api/room/${roomId}/leaderboard`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          console.log(`[leaderboard] loaded ${data.length} entries for room=${roomId}`);
-          setEntries(data);
-        } else {
-          console.warn('[leaderboard] unexpected response:', data);
-        }
+        if (Array.isArray(data)) setEntries(data);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error(`[leaderboard] fetch failed for room=${roomId}:`, err);
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 5 * 60_000);
-    return () => clearInterval(interval);
+      .catch(() => setLoading(false));
   }, [roomId]);
 
   const primaryName = (entry: LeaderboardEntry) =>
     entry.name ?? entry.email.split('@')[0];
 
+  const maxReams = entries.length > 0
+    ? Math.max(...entries.map(e => e.totalReamsEarned), 1)
+    : 1;
+
   return (
-    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl w-72 overflow-hidden">
+    <div
+      className="pixel-panel font-pixel overflow-hidden p-0 flex flex-col"
+      style={{ width: 480, maxHeight: '80vh' }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
-            <h2 className="text-white font-bold text-sm">Leaderboard</h2>
+      <div className="px-5 py-3 shrink-0" style={{ background: 'var(--color-schrute)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-white text-[8px] uppercase tracking-widest flex items-center gap-2">
+              <Trophy className="w-3 h-3" />
+              Employee Rankings
+            </div>
+            <div className="text-[7px] uppercase mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+              Total reams earned — all-time
+            </div>
           </div>
-          <p className="text-[9px] text-slate-400 leading-tight pl-6">Total reams earned (all-time)</p>
+          <button onClick={onClose} className="text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            ✕
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="text-white/40 hover:text-white/80 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
 
-      {/* Body */}
-      <div className="p-4">
+      {/* Body — scrollable */}
+      <div className="lined-paper overflow-y-auto flex-1 p-3">
         {loading ? (
-          <div className="flex justify-center py-6">
-            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="flex justify-center py-10">
+            <div
+              className="w-5 h-5 border-2 animate-spin"
+              style={{ borderColor: 'var(--color-schrute)', borderTopColor: 'transparent' }}
+            />
           </div>
         ) : entries.length === 0 ? (
-          <p className="text-slate-400 text-xs text-center py-6">No workers yet.</p>
+          <p className="text-[8px] text-center py-8" style={{ color: 'var(--color-ink-faint)' }}>
+            No workers yet.
+          </p>
         ) : (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-2">
             {entries.map((entry, i) => {
               const isMe = entry.email === currentUserEmail;
+              const barPct = maxReams > 0 ? (entry.totalReamsEarned / maxReams) * 100 : 0;
+              const rankColour = i === 0 ? '#b45309' : i === 1 ? '#475569' : i === 2 ? '#92400e' : 'var(--color-ink-faint)';
+
               return (
                 <div
                   key={entry.email}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
-                    isMe ? 'bg-indigo-500/20 border border-indigo-500/40' : 'bg-white/5'
-                  }`}
+                  className="flex flex-col gap-1.5 px-3 py-2"
+                  style={isMe
+                    ? { background: 'var(--color-legal)', border: '2px solid var(--color-ink)' }
+                    : { background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)' }
+                  }
                 >
-                  <span className={`text-sm font-bold w-5 text-center ${
-                    i === 0 ? 'text-amber-400' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-amber-700' : 'text-slate-500'
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0 flex flex-col gap-1">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className={`text-xs font-semibold truncate ${isMe ? 'text-indigo-200' : 'text-white'}`}>
-                        {primaryName(entry)}
-                        {isMe && <span className="text-indigo-400 ml-1">(you)</span>}
-                      </span>
-                      {entry.jobTitle ? (
-                        <span className="text-[9px] text-slate-400 truncate leading-tight">{entry.jobTitle}</span>
-                      ) : null}
+                  {/* Top row: rank + avatar + name/role + reams */}
+                  <div className="flex items-center gap-2">
+                    {/* Rank */}
+                    <span
+                      className="text-[10px] font-bold w-5 text-center shrink-0"
+                      style={{ color: rankColour }}
+                    >
+                      {i === 0 ? '★' : i + 1}
+                    </span>
+
+                    {/* Avatar */}
+                    <PlayerAvatar email={entry.email} name={entry.name} />
+
+                    {/* Name + job + role */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="text-[8px] font-bold truncate"
+                          style={{ color: 'var(--color-ink)' }}
+                        >
+                          {primaryName(entry)}
+                        </span>
+                        {isMe && (
+                          <span className="text-[7px]" style={{ color: 'var(--color-beet)' }}>(you)</span>
+                        )}
+                        <RoleBadge role={entry.role} />
+                      </div>
+                      {entry.jobTitle && (
+                        <span className="text-[7px] truncate" style={{ color: 'var(--color-ink-faint)' }}>
+                          {entry.jobTitle}
+                        </span>
+                      )}
                     </div>
-                    <RoleBadge role={entry.role} />
+
+                    {/* Reams count */}
+                    <div className="text-right shrink-0">
+                      <div className="text-[8px] font-bold" style={{ color: 'var(--color-ink)' }}>
+                        {entry.totalReamsEarned.toLocaleString()}
+                      </div>
+                      <div className="text-[7px]" style={{ color: 'var(--color-ink-faint)' }}>reams</div>
+                    </div>
                   </div>
-                  <span className="text-xs font-bold text-white whitespace-nowrap text-right">
-                    {entry.totalReamsEarned.toLocaleString()}
-                    <span className="text-slate-400 font-normal block text-[9px] leading-tight">total earned</span>
-                  </span>
+
+                  {/* Relative bar */}
+                  <div
+                    style={{
+                      height: 6,
+                      background: '#e8dfc8',
+                      border: '1px solid rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${barPct}%`,
+                        height: '100%',
+                        background: i === 0 ? '#b45309' : 'var(--color-schrute)',
+                        transition: 'width 0.6s ease',
+                        minWidth: barPct > 0 ? 4 : 0,
+                      }}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -124,8 +200,12 @@ export const RoomLeaderboard = ({ roomId, onClose }: RoomLeaderboardProps) => {
         )}
       </div>
 
-      <div className="px-4 pb-3 text-[10px] text-slate-500 text-center">
-        Updates every 5 min
+      {/* Footer */}
+      <div
+        className="px-4 py-2 text-[7px] text-center shrink-0"
+        style={{ borderTop: '2px solid var(--color-ink)', color: 'var(--color-ink-faint)' }}
+      >
+        DUNDER MIFFLIN PAPER CO.
       </div>
     </div>
   );
