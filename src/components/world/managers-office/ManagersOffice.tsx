@@ -7,7 +7,6 @@ import { DESK_WOOD_COLOR } from '../../../officeTheme';
 import { FloorPlanRect } from '../../../types';
 import { WallDef, wallsToBoxes } from '../../../utils/walls';
 import { OFFICE_CEILING_Y } from '../../../officeLayout';
-import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
 import { Chair } from '../shared/props/Chair';
 
@@ -259,11 +258,7 @@ function InteractiveDoor() {
   );
 }
 
-interface ManagersOfficeProps {
-  ownerName?: string;
-}
-
-export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
+export const ManagersOffice = () => (
   <group position={GROUP_OFFSET}>
 
     {/* ── South wall — split around window opening (x=−1.5→1.5, y=2→4) ── */}
@@ -314,10 +309,8 @@ export const ManagersOffice = ({ ownerName = '' }: ManagersOfficeProps) => (
     </Box>
 
     {/* ── Furniture ── */}
-    <BossDesk position={[-1, 0, 0]} rotation={[0, Math.PI / 2, 0]} ownerName={ownerName} />
-    {/* Manager's chair behind the desk, facing east toward visitors */}
-    <Chair position={[-2.8, 0, 0]} rotation={[0, Math.PI / 2, 0]} />
-    {/* Visitor chairs in front of the desk */}
+    {/* The admin/manager desk is rendered from roomLayout by WorkingArea (ManagerDesk component). */}
+    {/* Visitor chairs face the boss desk position */}
     <Chair position={[2.5, 0, -0.8]} rotation={[0, -Math.PI / 2 + Math.PI / 8, 0]} />
     <Chair position={[2.5, 0, 0.8]} rotation={[0, -Math.PI / 2 - Math.PI / 8, 0]} />
     <Bookshelf x={-5} />

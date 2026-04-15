@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { FurnitureItem, DeskItem } from '../../types';
 import { getDeterministicColor } from '../../constants';
+import { useGameStore } from '../../store/useGameStore';
 import { PixelBeet } from './LandingPage';
 import { FLOOR_PLAN_RECT as BREAK_ROOM_RECT } from '../world/break-room/BreakRoom';
 import { FLOOR_PLAN_RECT as CONFERENCE_ROOM_RECT } from '../world/conference-room/ConferenceRoom';
@@ -113,6 +114,8 @@ export const OfficeCustomizationPage = ({
   onBack,
   onSave,
 }: OfficeCustomizationPageProps) => {
+  const userEmail = useGameStore((s) => s.user?.email);
+
   const [layout, setLayout] = useState<FurnitureItem[]>(initialLayout);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -137,6 +140,8 @@ export const OfficeCustomizationPage = ({
   const handleDeskMouseDown = useCallback((e: React.MouseEvent, desk: DeskItem) => {
     e.stopPropagation();
     setSelectedId(desk.id);
+    // Only allow dragging the player's own desk
+    if (desk.config.ownerEmail !== userEmail) return;
     dragging.current = {
       deskId: desk.id,
       startClientX: e.clientX,
@@ -144,7 +149,7 @@ export const OfficeCustomizationPage = ({
       startWorldX: desk.position[0],
       startWorldZ: desk.position[2],
     };
-  }, []);
+  }, [userEmail]);
 
   const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!dragging.current || !svgRef.current) return;
@@ -175,6 +180,9 @@ export const OfficeCustomizationPage = ({
   }, [layout]);
 
   const handleRotate = useCallback((deskId: string, direction: 1 | -1) => {
+    // Only allow rotating the player's own desk
+    const target = layout.find((f): f is DeskItem => f.type === 'desk' && f.id === deskId);
+    if (!target || target.config.ownerEmail !== userEmail) return;
     setLayout((prev) => {
       const newLayout = prev.map((f) =>
         f.id === deskId
@@ -188,7 +196,7 @@ export const OfficeCustomizationPage = ({
       setIntersectionError(false);
       return newLayout;
     });
-  }, []);
+  }, [layout, userEmail]);
 
   useEffect(() => {
     const stopDrag = () => {
@@ -198,6 +206,14 @@ export const OfficeCustomizationPage = ({
     window.addEventListener('mouseup', stopDrag);
     return () => window.removeEventListener('mouseup', stopDrag);
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hasChanges]);
 
   const selectedDesk = selectedId ? desks.find((d) => d.id === selectedId) : null;
 
@@ -291,6 +307,7 @@ export const OfficeCustomizationPage = ({
               const rotDeg = -(desk.rotation[1] * 180) / Math.PI;
               const color = getDeterministicColor(String(desk.config.ownerName));
               const isSelected = desk.id === selectedId;
+              const isOwn = desk.config.ownerEmail === userEmail;
               const label = String(desk.config.ownerName).split(' ')[0];
 
               return (
@@ -298,7 +315,7 @@ export const OfficeCustomizationPage = ({
                   key={desk.id}
                   transform={`translate(${sx}, ${sy}) rotate(${rotDeg})`}
                   onMouseDown={(e) => handleDeskMouseDown(e, desk)}
-                  style={{ cursor: 'grab' }}
+                  style={{ cursor: isOwn ? 'grab' : 'default' }}
                 >
                   <rect
                     x="-20"
@@ -306,13 +323,17 @@ export const OfficeCustomizationPage = ({
                     width="40"
                     height="24"
                     fill={color}
-                    fillOpacity="0.8"
+                    fillOpacity={isOwn ? 0.8 : 0.35}
                     stroke={isSelected ? '#111' : '#444'}
                     strokeWidth={isSelected ? 2.5 : 1}
                     rx="2"
                   />
                   {/* Monitor stub */}
                   <rect x="-6" y="-11" width="12" height="6" fill="rgba(0,0,0,0.25)" rx="1" />
+                  {/* Lock icon for desks the player cannot move */}
+                  {!isOwn && (
+                    <text x="10" y="-5" fontSize="8" fill="rgba(255,255,255,0.7)" style={{ pointerEvents: 'none' }}>🔒</text>
+                  )}
                   <text
                     x="0"
                     y="0"
@@ -340,26 +361,30 @@ export const OfficeCustomizationPage = ({
               <span className="text-xs text-amber-300">
                 Selected: <span className="text-white">{String(selectedDesk.config.ownerName)}'s Desk</span>
               </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleRotate(selectedDesk.id, 1)}
-                  className="pixel-button text-xs px-3 py-1"
-                  title="Rotate counter-clockwise 45°"
-                >
-                  ↺ CCW
-                </button>
-                <button
-                  onClick={() => handleRotate(selectedDesk.id, -1)}
-                  className="pixel-button text-xs px-3 py-1"
-                  title="Rotate clockwise 45°"
-                >
-                  CW ↻
-                </button>
-              </div>
+              {selectedDesk.config.ownerEmail === userEmail ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRotate(selectedDesk.id, 1)}
+                    className="pixel-button text-xs px-3 py-1"
+                    title="Rotate counter-clockwise 45°"
+                  >
+                    ↺ CCW
+                  </button>
+                  <button
+                    onClick={() => handleRotate(selectedDesk.id, -1)}
+                    className="pixel-button text-xs px-3 py-1"
+                    title="Rotate clockwise 45°"
+                  >
+                    CW ↻
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-slate-400">You can only move your own desk</span>
+              )}
             </>
           ) : (
             <span className="text-xs text-amber-500/70">
-              Click a desk to select it · Drag to reposition · Changes broadcast live to all players
+              Click a desk to select · Drag or rotate your own desk
             </span>
           )}
         </div>

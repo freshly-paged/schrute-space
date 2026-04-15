@@ -161,6 +161,9 @@ interface GameState {
   /** Set to true by the entryway door; App.tsx watches and calls handleExitRoom. */
   requestExitRoom: boolean;
   setRequestExitRoom: (v: boolean) => void;
+  /** Set to true by the office-plan frame; App.tsx watches and opens customize-office view. */
+  requestCustomizeOffice: boolean;
+  setRequestCustomizeOffice: (v: boolean) => void;
 
   nearVendingMachine: boolean;
   setNearVendingMachine: (near: boolean) => void;
@@ -523,6 +526,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShowAdminPanel: (show) => set({ showAdminPanel: show }),
   requestExitRoom: false,
   setRequestExitRoom: (v) => set({ requestExitRoom: v }),
+  requestCustomizeOffice: false,
+  setRequestCustomizeOffice: (v) => set({ requestCustomizeOffice: v }),
   showComputerInterface: false,
   setShowComputerInterface: (show) => set({ showComputerInterface: show }),
 

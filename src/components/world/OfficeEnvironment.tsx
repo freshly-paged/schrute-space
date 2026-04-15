@@ -9,6 +9,7 @@ import { BreakRoom } from './break-room/BreakRoom';
 import { ConferenceRoom, FLOOR_PLAN_RECT as CONFERENCE_ROOM_RECT } from './conference-room/ConferenceRoom';
 import { ManagersOffice, FLOOR_PLAN_RECT as MANAGERS_OFFICE_RECT } from './managers-office/ManagersOffice';
 import { DundieAward } from './managers-office/props/DundieAward';
+import { OfficePlanFrame } from './managers-office/props/OfficePlanFrame';
 import { DwightBobblehead } from './managers-office/props/DwightBobblehead';
 import { MsBodySuit } from './managers-office/props/MsBodySuit';
 import { TeamPyramidProp } from './working-area/TeamPyramidProp';
@@ -201,6 +202,7 @@ export const OfficeEnvironment = () => {
     <BreakRoom />
     <ConferenceRoom />
     <ManagersOffice />
+    <OfficePlanFrame />
     <DundieAward />
     <DwightBobblehead />
     <MsBodySuit />

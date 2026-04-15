@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, UserPlus, UserMinus, Wifi, WifiOff } from 'lucide-react';
+import { X, Settings, UserPlus, UserMinus, ShieldPlus, ShieldMinus, Wifi, WifiOff } from 'lucide-react';
 import { useGameStore } from '../../store/useGameStore';
 import { RoomRole, RoomMember } from '../../types';
 
@@ -171,6 +171,26 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                       }
                     </div>
                   </div>
+                  {m.role === 'worker' && myRole === 'admin' && (
+                    <button
+                      onClick={() => addMember(m.email, 'manager')}
+                      disabled={loading}
+                      className="text-indigo-500 hover:text-indigo-700 disabled:opacity-40 transition-colors"
+                      title="Promote to Manager"
+                    >
+                      <ShieldPlus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {m.role === 'manager' && myRole === 'admin' && (
+                    <button
+                      onClick={() => addMember(m.email, 'worker')}
+                      disabled={loading}
+                      className="text-slate-500 hover:text-slate-700 disabled:opacity-40 transition-colors"
+                      title="Demote to Worker"
+                    >
+                      <ShieldMinus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {m.role !== 'admin' && myRole !== 'worker' && (
                     <button
                       onClick={() => removeMember(m.email)}
