@@ -513,7 +513,7 @@ export default function App() {
       )}
 
       {!isFocusSavingModeActive && officeTutorial.active && officeTutorial.phase && (
-        <TutorialBanner phase={officeTutorial.phase} onSkip={officeTutorial.skip} />
+        <TutorialBanner phase={officeTutorial.phase} onNext={officeTutorial.advance} onSkip={officeTutorial.skip} />
       )}
 
       {/* Canvas always stays mounted so the player doesn't respawn on saving-mode toggle */}
