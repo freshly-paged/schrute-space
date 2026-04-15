@@ -724,17 +724,11 @@ function generateSpawnPosition(existingDesks: DeskItem[]): [number, number, numb
   return [xMin + Math.random() * (xMax - xMin), 0, zMin + Math.random() * (zMax - zMin)];
 }
 
-/** Returns the first unoccupied manager-office desk slot for the given role. */
+/** Returns the first unoccupied manager-office desk slot. */
 function generateManagerSpawnPosition(
   existingDesks: DeskItem[],
-  role: "admin" | "manager"
 ): { position: [number, number, number]; rotation: [number, number, number] } {
-  // Admin always gets slot 0 (the canonical boss desk position); managers get slots 1-3.
-  const slots = role === "admin"
-    ? [MANAGER_OFFICE_DESK_SLOTS[0]]
-    : MANAGER_OFFICE_DESK_SLOTS.slice(1);
-
-  for (const slot of slots) {
+  for (const slot of MANAGER_OFFICE_DESK_SLOTS) {
     const occupied = existingDesks.some((d) => {
       const dx = d.position[0] - slot.position[0];
       const dz = d.position[2] - slot.position[2];
@@ -742,8 +736,8 @@ function generateManagerSpawnPosition(
     });
     if (!occupied) return slot;
   }
-  // Fallback: use last slot in the candidate list even if occupied
-  return slots[slots.length - 1];
+  // Fallback: use last slot even if occupied
+  return MANAGER_OFFICE_DESK_SLOTS[MANAGER_OFFICE_DESK_SLOTS.length - 1];
 }
 
 function layoutHasDeskForEmail(layout: FurnitureItem[], email: string): boolean {
@@ -766,9 +760,9 @@ async function ensurePlayerDeskBody(
   const layout = await getRoomLayout(roomId);
 
   // Determine what desk variant this role should have.
-  // admin/manager → 'manager' variant (executive desk in manager's office)
-  // worker / null → undefined (regular worker desk in working area)
-  const expectedVariant = (role === 'admin' || role === 'manager') ? 'manager' : undefined;
+  // manager → 'manager' variant (executive desk in manager's office)
+  // admin / worker / null → undefined (regular worker desk in working area)
+  const expectedVariant = role === 'manager' ? 'manager' : undefined;
 
   // Find any existing desk for this user.
   const existingIdx = layout.findIndex(
@@ -794,8 +788,8 @@ async function ensurePlayerDeskBody(
   let rotation: [number, number, number];
   let variant: string | undefined;
 
-  if (role === 'admin' || role === 'manager') {
-    const spawn = generateManagerSpawnPosition(desks, role);
+  if (role === 'manager') {
+    const spawn = generateManagerSpawnPosition(desks);
     position = spawn.position;
     rotation = spawn.rotation;
     variant = 'manager';
