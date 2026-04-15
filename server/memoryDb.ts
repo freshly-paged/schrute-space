@@ -50,6 +50,7 @@ interface UserRow {
 
 interface RoomRow {
   max_workers: number;
+  allow_new_employees: boolean;
   created_at: Date;
 }
 
@@ -128,7 +129,7 @@ export async function memSaveRoomLayout(roomId: string, layout: FurnitureItem[])
 
 export async function memEnsureRoom(roomId: string): Promise<boolean> {
   if (rooms.has(roomId)) return false;
-  rooms.set(roomId, { max_workers: 20, created_at: new Date() });
+  rooms.set(roomId, { max_workers: 20, allow_new_employees: false, created_at: new Date() });
   return true;
 }
 
@@ -231,6 +232,10 @@ export async function memGetMyRooms(
 
 export async function memGetRoomMaxWorkers(roomId: string): Promise<number> {
   return rooms.get(roomId)?.max_workers ?? 20;
+}
+
+export async function memGetRoomAllowNewEmployees(roomId: string): Promise<boolean> {
+  return rooms.get(roomId)?.allow_new_employees ?? false;
 }
 
 export async function memGetRoomMemberCount(roomId: string): Promise<number> {
@@ -484,6 +489,15 @@ export async function memUpdateRoomMaxWorkers(roomId: string, maxWorkers: number
   if (r) {
     r.max_workers = maxWorkers;
   } else {
-    rooms.set(roomId, { max_workers: maxWorkers, created_at: new Date() });
+    rooms.set(roomId, { max_workers: maxWorkers, allow_new_employees: false, created_at: new Date() });
+  }
+}
+
+export async function memUpdateRoomAllowNewEmployees(roomId: string, allowNewEmployees: boolean): Promise<void> {
+  const r = rooms.get(roomId);
+  if (r) {
+    r.allow_new_employees = allowNewEmployees;
+  } else {
+    rooms.set(roomId, { max_workers: 20, allow_new_employees: allowNewEmployees, created_at: new Date() });
   }
 }

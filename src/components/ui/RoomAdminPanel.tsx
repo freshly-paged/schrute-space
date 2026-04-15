@@ -32,6 +32,7 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [addEmail, setAddEmail] = useState('');
   const [maxWorkers, setMaxWorkers] = useState(roomInfo?.maxWorkers ?? 20);
+  const [allowNewEmployees, setAllowNewEmployees] = useState(roomInfo?.allowNewEmployees ?? false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +56,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
   // Sync maxWorkers from store when it updates
   useEffect(() => {
     if (roomInfo?.maxWorkers !== undefined) setMaxWorkers(roomInfo.maxWorkers);
-  }, [roomInfo?.maxWorkers]);
+    if (roomInfo?.allowNewEmployees !== undefined) setAllowNewEmployees(roomInfo.allowNewEmployees);
+  }, [roomInfo?.maxWorkers, roomInfo?.allowNewEmployees]);
 
   const addMember = async (email: string, role: RoomRole = 'worker') => {
     console.log(`[admin] adding member email=${email} role=${role} to room=${roomId}`);
@@ -102,8 +104,8 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
     }
   };
 
-  const saveMaxWorkers = async () => {
-    console.log(`[admin] saving maxWorkers=${maxWorkers} for room=${roomId}`);
+  const saveRoomSettings = async (patch: { maxWorkers?: number; allowNewEmployees?: boolean }) => {
+    console.log(`[admin] saving room settings for room=${roomId}`, patch);
     setError(null);
     setLoading(true);
     try {
@@ -111,13 +113,13 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ maxWorkers }),
+        body: JSON.stringify(patch),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to update');
-      console.log(`[admin] maxWorkers updated to ${maxWorkers}`);
+      console.log(`[admin] room settings updated`);
     } catch (e: any) {
-      console.error(`[admin] saveMaxWorkers failed:`, e.message);
+      console.error(`[admin] saveRoomSettings failed:`, e.message);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -271,11 +273,38 @@ export const RoomAdminPanel = ({ roomId, onClose }: RoomAdminPanelProps) => {
                 className="w-20 bg-white border-4 border-black px-2 py-1.5 text-[9px] focus:outline-none focus:bg-yellow-50"
               />
               <button
-                onClick={saveMaxWorkers}
+                onClick={() => saveRoomSettings({ maxWorkers })}
                 disabled={loading}
                 className="pixel-button text-[9px] px-3 py-1.5 disabled:opacity-50"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        )}
+
+        {myRole === 'admin' && (
+          <div>
+            <h3 className="text-[9px] uppercase text-slate-500 tracking-widest mb-2">New Employee Mode</h3>
+            <div className="bg-white pixel-border px-3 py-2 text-[9px] flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <div className="font-bold">Auto-hire new joiners</div>
+                <div className="text-slate-500 mt-0.5">
+                  ON: newcomers become workers automatically and get a desk.
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const next = !allowNewEmployees;
+                  setAllowNewEmployees(next);
+                  void saveRoomSettings({ allowNewEmployees: next });
+                }}
+                disabled={loading}
+                className={`pixel-button text-[9px] px-3 py-1.5 disabled:opacity-50 ${
+                  allowNewEmployees ? 'bg-emerald-300' : ''
+                }`}
+              >
+                {allowNewEmployees ? 'ON' : 'OFF'}
               </button>
             </div>
           </div>
