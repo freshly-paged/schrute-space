@@ -4,9 +4,11 @@ import { Box, Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { doorState, playerWorldPos } from '../../../doorState';
 import { DESK_WOOD_COLOR } from '../../../officeTheme';
-import { FloorPlanRect } from '../../../types';
+import { FloorPlanRect, DeskItem } from '../../../types';
 import { WallDef, wallsToBoxes } from '../../../utils/walls';
 import { OFFICE_CEILING_Y } from '../../../officeLayout';
+import { useGameStore } from '../../../store/useGameStore';
+import { BossDesk } from './props/BossDesk';
 import { Bookshelf } from './props/Bookshelf';
 import { Chair } from '../shared/props/Chair';
 
@@ -258,7 +260,12 @@ function InteractiveDoor() {
   );
 }
 
-export const ManagersOffice = () => (
+export const ManagersOffice = () => {
+  const hasManagerDesk = useGameStore((s) =>
+    s.roomLayout.some((f): f is DeskItem => f.type === 'desk' && (f as DeskItem).config?.variant === 'manager')
+  );
+
+  return (
   <group position={GROUP_OFFSET}>
 
     {/* ── South wall — split around window opening (x=−1.5→1.5, y=2→4) ── */}
@@ -309,7 +316,10 @@ export const ManagersOffice = () => (
     </Box>
 
     {/* ── Furniture ── */}
-    {/* The admin/manager desk is rendered from roomLayout by WorkingArea (ManagerDesk component). */}
+    {/* Fallback decorative desk shown when no manager has claimed the office */}
+    {!hasManagerDesk && (
+      <BossDesk position={[-1, 0, 0]} rotation={[0, -Math.PI / 2, 0]} />
+    )}
     {/* Visitor chairs face the boss desk position */}
     <Chair position={[2.5, 0, -0.8]} rotation={[0, -Math.PI / 2 + Math.PI / 8, 0]} />
     <Chair position={[2.5, 0, 0.8]} rotation={[0, -Math.PI / 2 - Math.PI / 8, 0]} />
@@ -318,4 +328,5 @@ export const ManagersOffice = () => (
     {/* ── Lighting ── */}
     <pointLight position={[0, 5, 0]} intensity={0.6} distance={12} color="#fff3d0" />
   </group>
-);
+  );
+};

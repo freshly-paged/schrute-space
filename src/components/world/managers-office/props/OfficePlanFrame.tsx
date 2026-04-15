@@ -9,7 +9,7 @@
  * World position: x ≈ -8.8, y = 2.5, z ≈ 7 (centred on the solid section of
  * the east wall). Rotation [0, PI/2, 0] so local +z faces world +x (east).
  */
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Box, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
@@ -82,16 +82,6 @@ export function OfficePlanFrame() {
   const [showHint, setShowHint] = useState(false);
   const setRequestCustomizeOffice = useGameStore((s) => s.setRequestCustomizeOffice);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'KeyE' && nearRef.current) {
-        setRequestCustomizeOffice(true);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [setRequestCustomizeOffice]);
-
   useFrame((state) => {
     const player = state.scene.getObjectByName('localPlayer');
     if (!player) return;
@@ -106,8 +96,14 @@ export function OfficePlanFrame() {
 
   const planTexture = useMemo(() => createFloorPlanTexture(), []);
 
+  const handleClick = () => setRequestCustomizeOffice(true);
+
   return (
-    <group position={[FRAME_WORLD.x, FRAME_WORLD.y, FRAME_WORLD.z]} rotation={[0, Math.PI / 2, 0]}>
+    <group
+      position={[FRAME_WORLD.x, FRAME_WORLD.y, FRAME_WORLD.z]}
+      rotation={[0, Math.PI / 2, 0]}
+      onClick={handleClick}
+    >
       {/* Dark wood outer frame — front face at z=+0.03 */}
       <Box args={[1.5, 1.1, 0.06]}>
         <meshStandardMaterial color="#3B2506" roughness={0.7} metalness={0.05} />
@@ -137,7 +133,7 @@ export function OfficePlanFrame() {
             outlineWidth={0.02}
             onSync={onOverlayTextSync}
           >
-            [E] Customize Office
+            Click to Customize Office
           </Text>
         </Billboard>
       )}
