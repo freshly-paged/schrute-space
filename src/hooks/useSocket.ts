@@ -64,6 +64,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
         roomId: currentRoom,
         focusEnergy: useGameStore.getState().focusEnergy,
       });
+      useGameStore.getState().setKickFromDeskFn((deskId) => newSocket.emit('kickFromDesk', { deskId }));
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -278,6 +279,11 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setRoomInfo(info);
     });
 
+    newSocket.on('kickedFromDesk', (_data: { deskId: string }) => {
+      console.log('[socket] kickedFromDesk — ending focus session');
+      useGameStore.getState().stopTimer();
+    });
+
     newSocket.on('roomMembersUpdated', (payload: { roomId: string; members?: RoomMember[]; maxWorkers?: number; allowNewEmployees?: boolean }) => {
       console.log(
         '[socket] roomMembersUpdated',
@@ -364,6 +370,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       useGameStore.getState().setNearWaterCooler(false);
       useGameStore.getState().setWaterBuffExpiresAt(null);
       useGameStore.getState().setTeamPyramidBuffExpiresAt(null);
+      useGameStore.getState().setKickFromDeskFn(null);
       newSocket.disconnect();
     };
   }, [user, currentRoom]);
@@ -382,6 +389,13 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     [socket]
   );
 
+  const kickFromDesk = useCallback(
+    (deskId: string) => {
+      socket?.emit('kickFromDesk', { deskId });
+    },
+    [socket]
+  );
+
   return {
     socket,
     players,
@@ -392,5 +406,6 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     connectionError,
     sendMessage,
     saveAvatarConfig,
+    kickFromDesk,
   };
 }

@@ -86,6 +86,9 @@ export const LocalPlayer = ({
   const cameraHitRef = useRef(new THREE.Vector3());
   const lastMovementEmitRef = useRef(0);
   const initialSnapDoneRef = useRef(false);
+  // Tracks whether we've sent the final "settled at chair" position after arriving at the desk.
+  // Reset each time a new focus session begins so the settled emit fires once per session.
+  const focusSettledEmittedRef = useRef(false);
 
   const avatarConfig = useGameStore((state) => state.avatarConfig);
   const playerColor = avatarConfig?.shirtColor ?? getDeterministicColor(playerName);
@@ -134,6 +137,10 @@ export const LocalPlayer = ({
   // Emit focus state to server whenever it changes
   useEffect(() => {
     if (!socket) return;
+    if (isTimerActive) {
+      // New session starting — allow the settled-position emit to fire once more
+      focusSettledEmittedRef.current = false;
+    }
     socket.emit('playerFocusUpdate', {
       isFocused: isTimerActive,
       focusProgress,
@@ -363,7 +370,8 @@ export const LocalPlayer = ({
     if (isTimerActive && activeDeskId) {
       const desk = roomLayout.find((d) => d.id === activeDeskId);
       if (desk) {
-        _chairOffset.set(0, 0, 0.8).applyAxisAngle(_upAxis, desk.rotation[1]);
+        const chairZ = desk.config?.variant === 'manager' ? 1.8 : 0.8;
+        _chairOffset.set(0, 0, chairZ).applyAxisAngle(_upAxis, desk.rotation[1]);
         const targetPos: [number, number, number] = [
           desk.position[0] + _chairOffset.x,
           desk.position[1],
@@ -374,6 +382,7 @@ export const LocalPlayer = ({
         _currentVec.set(positionRef.current[0], positionRef.current[1], positionRef.current[2]);
         _targetVec.set(targetPos[0], targetPos[1], targetPos[2]);
         if (_currentVec.distanceTo(_targetVec) > 0.01) {
+          // Still moving toward the chair — lerp and broadcast at the throttled rate
           _currentVec.lerp(_targetVec, 0.1);
           const lerpedPos: [number, number, number] = [_currentVec.x, _currentVec.y, _currentVec.z];
           positionRef.current = lerpedPos;
@@ -394,6 +403,27 @@ export const LocalPlayer = ({
               lastMovementEmitRef.current = now;
             }
           }
+        } else if (!focusSettledEmittedRef.current) {
+          // Just arrived at the chair — snap to the exact position and emit once so the
+          // server stores the precise chair coordinates.  Without this, the server keeps
+          // the last mid-lerp position, which means clients that join later (before the
+          // room layout loads) see the focused player floating slightly off the chair.
+          positionRef.current = targetPos;
+          rotationRef.current = targetRot;
+          if (playerRef.current) {
+            playerRef.current.position.set(...targetPos);
+            playerRef.current.rotation.set(0, targetRot[1], 0);
+          }
+          if (socket?.connected) {
+            socket.emit('playerMovement', {
+              position: targetPos,
+              rotation: targetRot,
+              isRolling: false,
+              rollTimer: 0,
+            });
+            lastMovementEmitRef.current = performance.now();
+          }
+          focusSettledEmittedRef.current = true;
         }
 
         // Apply camera follow and bounds clamping during focus session

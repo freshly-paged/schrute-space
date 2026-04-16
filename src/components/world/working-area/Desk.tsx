@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useMemo, useRef, useState, useEffect } from 'react';
 import { Box, Billboard, Text, Cylinder } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -227,6 +227,21 @@ export const Desk = ({
   const isOwnAdminDesk = isOwnDesk && (myRole === 'admin' || myRole === 'manager');
 
   const isNearest = nearestDeskId === id;
+  // Show kick prompt when the owner is near their own occupied desk
+  const canKick = isNearest && isOwnDesk && isOccupied && !isTimerActive;
+
+  // [K] key — kick the squatter from the owner's desk
+  useEffect(() => {
+    if (!canKick) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyK') return;
+      const gs = useGameStore.getState();
+      if (gs.isChatFocused) return;
+      gs.kickFromDeskFn?.(id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canKick, id]);
 
   return (
     <group ref={groupRef} position={position} rotation={rotation}>
@@ -264,6 +279,18 @@ export const Desk = ({
               onSync={onOverlayTextSync}
             >
               Press [F] to Use Computer
+            </Text>
+          )}
+          {canKick && (
+            <Text
+              fontSize={0.17}
+              color="#fb923c"
+              outlineColor="black"
+              outlineWidth={0.02}
+              position={[0, -0.28, 0]}
+              onSync={onOverlayTextSync}
+            >
+              Press [K] to Kick Squatter
             </Text>
           )}
         </Billboard>

@@ -1419,6 +1419,20 @@ const IDENTITY_THEFT_SYSTEM_CHAT_TEXT = `Identity theft is not a joke! ${IDENTIT
 const IDENTITY_THEFT_OVERHEAD_TEXT = "Identity theft is not a joke!";
 const IDENTITY_THEFT_OVERHEAD_DURATION_MS = 10_000;
 
+const DESK_KICK_YELLS = [
+  "That is MY chair. MY chair.",
+  "MICHAEL! Someone's at my desk again!",
+  "You have until the count of three. One… two… two and a half…",
+  "Get out. Get out. GET OUT.",
+  "This is not a hotel! This is a workspace!",
+  "Bears. Beets. BACK TO YOUR OWN DESK.",
+  "I am assistant TO the regional manager and I WILL not stand for this.",
+  "Security! … We don't have security. BUT IF WE DID.",
+  "This desk is a sacred space. You have violated it.",
+  "FACT: You are sitting in my chair. FACT: I want you to stop.",
+];
+const DESK_KICK_DURATION_MS = 8_000;
+
 function getOrCreatePool(roomId: string, upgradeType: string): TeamUpgradePool {
   if (!roomTeamUpgradePools[roomId]) roomTeamUpgradePools[roomId] = {};
   if (!roomTeamUpgradePools[roomId][upgradeType]) {
@@ -2016,6 +2030,56 @@ io.on("connection", (socket) => {
         }
         socket.to(playerRoom).emit("playerMoved", player);
       }
+    });
+
+    socket.on("kickFromDesk", (data: { deskId: string }) => {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (!playerRoom || !rooms[playerRoom]) return;
+
+      const deskId = typeof data?.deskId === "string" ? data.deskId : null;
+      if (!deskId) return;
+
+      // Verify the requester owns this desk
+      void getRoomLayout(playerRoom).then((layout) => {
+        const ownerEmail = deskOwnerEmailByDeskId(layout, deskId);
+        if (!ownerEmail || ownerEmail.toLowerCase() !== user.email.toLowerCase()) return;
+
+        // Find the socket that is currently sitting at this desk (and is not the owner)
+        const roomPlayers = rooms[playerRoom];
+        const victimEntry = Object.entries(roomPlayers).find(
+          ([sid, p]) => sid !== socket.id && p.activeDeskId === deskId
+        );
+        if (!victimEntry) return;
+
+        const [victimSocketId, victimPlayer] = victimEntry;
+
+        // Tell the victim their session is being ended
+        io.to(victimSocketId).emit("kickedFromDesk", { deskId });
+
+        // Owner yells something funny
+        const yell = DESK_KICK_YELLS[Math.floor(Math.random() * DESK_KICK_YELLS.length)];
+        const now = Date.now();
+        const ownerPlayer = roomPlayers[socket.id];
+        if (ownerPlayer) {
+          ownerPlayer.lastMessage = yell;
+          ownerPlayer.lastMessageTime = now;
+          ownerPlayer.lastMessageDurationMs = DESK_KICK_DURATION_MS;
+        }
+        io.to(playerRoom).emit("ambientSpeech", {
+          playerId: socket.id,
+          text: yell,
+          time: now,
+          durationMs: DESK_KICK_DURATION_MS,
+        });
+
+        // Also clear the victim's desk state on the server so the room updates immediately
+        victimPlayer.isFocused = false;
+        victimPlayer.activeDeskId = null;
+        delete victimPlayer.focusSitPoseIndex;
+        socket.to(playerRoom).emit("playerMoved", victimPlayer);
+      }).catch((err) => {
+        console.error("kickFromDesk getRoomLayout failed:", err);
+      });
     });
 
     socket.on("disconnect", () => {

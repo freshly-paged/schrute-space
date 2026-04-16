@@ -122,14 +122,15 @@ export const COPIER_MAX_COPIES = 5;
 /** Maximum paper reams that can be doubled in a single copier use. */
 export const COPIER_MAX_DOUBLE_REAMS = 20;
 
-/** Cooldown between individual copies in milliseconds (60 seconds). */
-export const COPIER_PER_COPY_COOLDOWN_MS = 60_000;
+/** How long the player must stand at the copier for one job to complete (1 minute). */
+export const COPIER_JOB_DURATION_MS = 60_000;
 
 /**
- * Cooldown after all copies are exhausted before the counter resets (5 minutes).
- * Replaces the per-copy cooldown once the cap is hit.
+ * Cooldown after all daily copies are exhausted before the counter resets (24 hours).
+ * Once a player has used all COPIER_MAX_COPIES in a day, the copier is locked until
+ * this duration has elapsed.
  */
-export const COPIER_RESET_COOLDOWN_MS = 5 * 60_000;
+export const COPIER_RESET_COOLDOWN_MS = 24 * 60 * 60_000;
 
 // ---------------------------------------------------------------------------
 // Vending machine — Team Pyramid (room buff)

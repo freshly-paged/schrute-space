@@ -13,7 +13,7 @@ import {
   POMODORO_FOCUS_DURATION_SEC,
   COPIER_MAX_COPIES,
   COPIER_MAX_DOUBLE_REAMS,
-  COPIER_PER_COPY_COOLDOWN_MS,
+  COPIER_JOB_DURATION_MS,
   COPIER_RESET_COOLDOWN_MS,
   POMODORO_BREAK_DURATION_SEC,
   TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER,
@@ -101,6 +101,9 @@ interface GameState {
   isChatFocused: boolean;
   isCustomizingOffice: boolean;
   occupiedDeskIds: string[];
+  /** Bound socket emit function set by useSocket; null when disconnected. */
+  kickFromDeskFn: ((deskId: string) => void) | null;
+  setKickFromDeskFn: (fn: ((deskId: string) => void) | null) => void;
   user: { email: string; name: string; picture?: string } | null;
   avatarConfig: AvatarConfig;
   /** After `/api/player`; null displayName means use auth `user.name` in UI. */
@@ -174,15 +177,23 @@ interface GameState {
 
   nearCopier: boolean;
   setNearCopier: (near: boolean) => void;
-  /** How many copies have been made this cooldown window (0–COPIER_MAX_COPIES). */
+  /** How many copies have been made today (0–COPIER_MAX_COPIES). */
   copierCopiesUsed: number;
-  /** Epoch ms after which the cooldown clears (0 = no active cooldown). */
+  /** Epoch ms after which the daily limit resets (0 = no active lock). */
   copierCooldownUntil: number;
+  /** Epoch ms when the current in-progress copy job started (null = no job running). */
+  copierJobStartedAt: number | null;
   /**
-   * Attempt to use the copier: doubles current paper reams, increments copy count,
-   * sets appropriate cooldown. Returns false if still on cooldown.
+   * Start a 1-minute copy job. Returns false if the daily limit is reached or a job
+   * is already in progress.
    */
-  useCopierCopy: () => boolean;
+  startCopierJob: () => boolean;
+  /** Cancel the current in-progress copy job (player walked away). */
+  cancelCopierJob: () => void;
+  /**
+   * Called when the job timer completes. Awards paper reams and increments daily count.
+   */
+  completeCopierJob: () => void;
 
   /** Local Vend-O-Matic treat; cleared when `expiresAt` passes or quarters reach 0 (see LocalPlayer). */
   heldIceCream: { flavorIndex: number; expiresAt: number; remainingQuarters: number } | null;
@@ -460,6 +471,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       return DEFAULT_AVATAR_CONFIG;
     }
   })(),
+  kickFromDeskFn: null,
+  setKickFromDeskFn: (fn) => set({ kickFromDeskFn: fn }),
   setNearestDeskId: (id) => set({ nearestDeskId: id }),
   setChatFocused: (focused) => set({ isChatFocused: focused }),
   setIsCustomizingOffice: (v) => set({ isCustomizingOffice: v }),
@@ -544,30 +557,41 @@ export const useGameStore = create<GameState>((set, get) => ({
   setNearCopier: (near) => set({ nearCopier: near }),
   copierCopiesUsed: 0,
   copierCooldownUntil: 0,
-  useCopierCopy: () => {
+  copierJobStartedAt: null,
+  startCopierJob: () => {
     const now = Date.now();
     const s = get();
 
-    // If the reset cooldown has expired, treat copies as cleared
+    // Already running a job
+    if (s.copierJobStartedAt !== null) return false;
+
+    // Daily limit: if the lock has expired, clear the count
     const effectiveCopies =
       s.copierCooldownUntil > 0 && now >= s.copierCooldownUntil ? 0 : s.copierCopiesUsed;
 
-    // Still within an active cooldown
+    // Still locked for today
     if (s.copierCooldownUntil > 0 && now < s.copierCooldownUntil) return false;
 
     if (effectiveCopies >= COPIER_MAX_COPIES) return false;
 
-    const newCount = effectiveCopies + 1;
-    const cooldownUntil =
-      newCount >= COPIER_MAX_COPIES
-        ? now + COPIER_RESET_COOLDOWN_MS   // all copies used — longer reset
-        : now + COPIER_PER_COPY_COOLDOWN_MS; // per-copy cooldown
+    set({ copierJobStartedAt: now, copierCopiesUsed: effectiveCopies });
+    return true;
+  },
+  cancelCopierJob: () => {
+    set({ copierJobStartedAt: null });
+  },
+  completeCopierJob: () => {
+    const now = Date.now();
+    const s = get();
+    if (s.copierJobStartedAt === null) return;
 
-    // Double current paper reams
+    const newCount = s.copierCopiesUsed + 1;
+    const cooldownUntil = newCount >= COPIER_MAX_COPIES ? now + COPIER_RESET_COOLDOWN_MS : 0;
+
+    // Double current paper reams (capped)
     const gain = Math.min(COPIER_MAX_DOUBLE_REAMS, Math.max(1, s.paperReams));
     s.addPaper(gain);
-    set({ copierCopiesUsed: newCount, copierCooldownUntil: cooldownUntil });
-    return true;
+    set({ copierCopiesUsed: newCount, copierCooldownUntil: cooldownUntil, copierJobStartedAt: null });
   },
 
   heldIceCream: null,

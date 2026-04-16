@@ -22,7 +22,8 @@ export function getFocusedDeskTransform(
     (item): item is DeskItem => item.type === 'desk' && item.id === player.activeDeskId
   );
   if (!desk) return null;
-  const chairOffset = new THREE.Vector3(0, 0, 0.8).applyAxisAngle(
+  const chairZ = (desk as DeskItem).config?.variant === 'manager' ? 1.8 : 0.8;
+  const chairOffset = new THREE.Vector3(0, 0, chairZ).applyAxisAngle(
     new THREE.Vector3(0, 1, 0),
     desk.rotation[1]
   );
