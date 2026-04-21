@@ -32,6 +32,8 @@ export interface Player {
   wornPropId?: string | null;
   /** Throwable id currently held in hands; synced for multiplayer. */
   heldThrowableId?: string | null;
+  /** True while the player has the treadmill desk upgrade active during a focus session. */
+  isTreadmilling?: boolean;
   /** Vend-O-Matic ice cream flavor index (0..4); only shown while not expired. */
   iceCreamFlavorIndex?: number | null;
   /** Wall-clock ms when the ice cream prop disappears (client + server validated). */

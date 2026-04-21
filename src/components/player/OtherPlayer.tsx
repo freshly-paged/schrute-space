@@ -130,6 +130,7 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
               heldIceCreamRemainingQuarters={syncedIce?.remainingQuarters}
               isFocused={player.isFocused ?? false}
               focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
+              isTreadmilling={player.isTreadmilling ?? false}
             />
           </group>
         </group>

@@ -30,6 +30,9 @@ import {
   monitorUpgradeCostForNextLevel,
 } from "./src/monitorUpgradeConstants.js";
 import {
+  TREADMILL_UPGRADE_COST_REAMS,
+} from "./src/treadmillUpgradeConstants.js";
+import {
   ICE_CREAM_QUARTERS_MAX,
   TEAM_PYRAMID_COST_REAMS,
   TEAM_PYRAMID_DURATION_MS,
@@ -154,6 +157,9 @@ async function initDb() {
   `);
   await pool!.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS desk_items JSONB NOT NULL DEFAULT '[]'
+  `);
+  await pool!.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS treadmill_upgrade_level INTEGER NOT NULL DEFAULT 0
   `);
   await pool!.query(`
     UPDATE users SET focus_energy_updated_at = (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
@@ -398,6 +404,56 @@ async function getChairAndMonitorLevelsForEmails(
     );
   }
   return { chairs, monitors };
+}
+
+async function getTreadmillLevelsForEmails(
+  emails: string[]
+): Promise<Record<string, number>> {
+  if (emails.length === 0) return {};
+  if (isLocalTest()) return mem.memGetTreadmillLevelsForEmails(emails);
+  const { rows } = await pool!.query(
+    "SELECT email, COALESCE(treadmill_upgrade_level, 0) AS treadmill_upgrade_level FROM users WHERE email = ANY($1::text[])",
+    [emails]
+  );
+  const treadmills: Record<string, number> = {};
+  for (const e of emails) treadmills[e] = 0;
+  for (const row of rows) {
+    treadmills[row.email] = Number(row.treadmill_upgrade_level) >= 1 ? 1 : 0;
+  }
+  return treadmills;
+}
+
+type TreadmillPurchaseResult =
+  | { ok: true; paperReams: number; treadmillUpgradeLevel: number }
+  | { ok: false; error: "already_owned" | "insufficient" };
+
+async function purchaseTreadmillUpgradeTxn(email: string): Promise<TreadmillPurchaseResult> {
+  if (isLocalTest()) return mem.memPurchaseTreadmillUpgrade(email);
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const sel = await client.query(
+      `SELECT paper_reams, COALESCE(treadmill_upgrade_level, 0) AS treadmill_upgrade_level
+       FROM users WHERE email = $1 FOR UPDATE`,
+      [email]
+    );
+    if (sel.rows.length === 0) { await client.query("ROLLBACK"); return { ok: false, error: "insufficient" }; }
+    const row = sel.rows[0] as { paper_reams: number; treadmill_upgrade_level: number };
+    if (row.treadmill_upgrade_level >= 1) { await client.query("ROLLBACK"); return { ok: false, error: "already_owned" }; }
+    if (row.paper_reams < TREADMILL_UPGRADE_COST_REAMS) { await client.query("ROLLBACK"); return { ok: false, error: "insufficient" }; }
+    const newReams = row.paper_reams - TREADMILL_UPGRADE_COST_REAMS;
+    await client.query(
+      "UPDATE users SET paper_reams = $1, treadmill_upgrade_level = 1 WHERE email = $2",
+      [newReams, email]
+    );
+    await client.query("COMMIT");
+    return { ok: true, paperReams: newReams, treadmillUpgradeLevel: 1 };
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch { /* ignore */ }
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 type ChairPurchaseResult =
@@ -665,12 +721,14 @@ async function deductReamsForTeamContribution(
 
 async function broadcastDeskChairLevels(io: Server, roomId: string, layout: FurnitureItem[]) {
   const emails = extractDeskOwnerEmails(layout);
-  const [{ chairs, monitors }, deskItemsMap] = await Promise.all([
+  const [{ chairs, monitors }, treadmills, deskItemsMap] = await Promise.all([
     getChairAndMonitorLevelsForEmails(emails),
+    getTreadmillLevelsForEmails(emails),
     getDeskItemsForEmails(emails),
   ]);
   io.to(roomId).emit("deskChairLevels", chairs);
   io.to(roomId).emit("deskMonitorLevels", monitors);
+  io.to(roomId).emit("deskTreadmillLevels", treadmills);
   io.to(roomId).emit("deskItemsLoaded", deskItemsMap);
 }
 
@@ -1639,12 +1697,14 @@ io.on("connection", (socket) => {
         getRoomLayout(room).then(async (layout) => {
           socket.emit("roomLayoutLoaded", layout);
           const emails = extractDeskOwnerEmails(layout);
-          const [{ chairs, monitors }, deskItemsMap] = await Promise.all([
+          const [{ chairs, monitors }, treadmills, deskItemsMap] = await Promise.all([
             getChairAndMonitorLevelsForEmails(emails),
+            getTreadmillLevelsForEmails(emails),
             getDeskItemsForEmails(emails),
           ]);
           socket.emit("deskChairLevels", chairs);
           socket.emit("deskMonitorLevels", monitors);
+          socket.emit("deskTreadmillLevels", treadmills);
           socket.emit("deskItemsLoaded", deskItemsMap);
         });
       }
@@ -1758,6 +1818,41 @@ io.on("connection", (socket) => {
         }
       }
     );
+
+    socket.on(
+      "purchaseTreadmillUpgrade",
+      async (ack: (r: unknown) => void) => {
+        const respond = typeof ack === "function" ? ack : () => {};
+        const playerRoom = socketToRoom.get(socket.id) ?? "";
+        if (!playerRoom) { respond({ ok: false, error: "not_in_room" }); return; }
+        try {
+          await ensureUserRow(user.email);
+          const result = await purchaseTreadmillUpgradeTxn(user.email);
+          if (!result.ok) { respond(result); return; }
+          socket.emit("paperReamsLoaded", result.paperReams);
+          io.to(playerRoom).emit("treadmillLevelUpdated", {
+            email: user.email,
+            level: result.treadmillUpgradeLevel,
+          });
+          respond({
+            ok: true,
+            paperReams: result.paperReams,
+            treadmillUpgradeLevel: result.treadmillUpgradeLevel,
+          });
+        } catch (e) {
+          console.error("purchaseTreadmillUpgrade:", e);
+          respond({ ok: false, error: "server_error" });
+        }
+      }
+    );
+
+    socket.on("treadmillToggled", (data: { active?: unknown }) => {
+      const playerRoom = socketToRoom.get(socket.id) ?? "";
+      if (!playerRoom || !rooms[playerRoom]?.[socket.id]) return;
+      const active = data?.active === true;
+      rooms[playerRoom][socket.id].isTreadmilling = active;
+      socket.to(playerRoom).emit("playerMoved", rooms[playerRoom][socket.id]);
+    });
 
     socket.on(
       "contributeTeamUpgrade",

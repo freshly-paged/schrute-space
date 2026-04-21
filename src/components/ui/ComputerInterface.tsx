@@ -13,6 +13,11 @@ import {
   monitorUpgradeCostForNextLevel,
 } from '../../monitorUpgradeConstants';
 import {
+  TREADMILL_UPGRADE_COST_REAMS,
+  TREADMILL_REAM_BOOST_PER_MIN,
+  TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN,
+} from '../../treadmillUpgradeConstants';
+import {
   FOCUS_ENERGY_SEATED_REGEN_MAX_PER_MIN,
   FOCUS_ENERGY_SEATED_REGEN_PER_CHAIR_LEVEL_PER_MIN,
 } from '../../focusEnergyModel';
@@ -34,6 +39,10 @@ type ChairPurchaseAck =
 type MonitorPurchaseAck =
   | { ok: true; paperReams: number; monitorUpgradeLevel: number }
   | { ok: false; error: 'max_level' | 'insufficient' | 'not_in_room' | 'server_error' };
+
+type TreadmillPurchaseAck =
+  | { ok: true; paperReams: number; treadmillUpgradeLevel: number }
+  | { ok: false; error: 'already_owned' | 'insufficient' | 'not_in_room' | 'server_error' };
 
 type DeskItemPurchaseAck =
   | { ok: true; paperReams: number; items: DeskItemPlacement[] }
@@ -148,9 +157,11 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
   const paperReams = useGameStore((s) => s.paperReams);
   const chairLevelByEmail = useGameStore((s) => s.chairLevelByEmail);
   const monitorLevelByEmail = useGameStore((s) => s.monitorLevelByEmail);
+  const treadmillLevelByEmail = useGameStore((s) => s.treadmillLevelByEmail);
   const setPaperReams = useGameStore((s) => s.setPaperReams);
   const patchChairLevel = useGameStore((s) => s.patchChairLevel);
   const patchMonitorLevel = useGameStore((s) => s.patchMonitorLevel);
+  const patchTreadmillLevel = useGameStore((s) => s.patchTreadmillLevel);
 
   const myChairLevel = user?.email ? (chairLevelByEmail[user.email] ?? 0) : 0;
   const chairMaxed = myChairLevel >= CHAIR_UPGRADE_MAX_LEVEL;
@@ -161,12 +172,17 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
   const nextMonitorCost = monitorMaxed ? 0 : monitorUpgradeCostForNextLevel(myMonitorLevel);
   const canAffordMonitor = !monitorMaxed && paperReams >= nextMonitorCost;
 
+  const hasTreadmill = user?.email ? (treadmillLevelByEmail[user.email] ?? 0) >= 1 : false;
+  const canAffordTreadmill = !hasTreadmill && paperReams >= TREADMILL_UPGRADE_COST_REAMS;
+
   const socketOk = socket?.connected === true;
 
   const [chairBusy, setChairBusy] = useState(false);
   const [chairFeedback, setChairFeedback] = useState<string | null>(null);
   const [monitorBusy, setMonitorBusy] = useState(false);
   const [monitorFeedback, setMonitorFeedback] = useState<string | null>(null);
+  const [treadmillBusy, setTreadmillBusy] = useState(false);
+  const [treadmillFeedback, setTreadmillFeedback] = useState<string | null>(null);
 
   const handleBuyChair = () => {
     setChairFeedback(null);
@@ -208,11 +224,32 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
     });
   };
 
+  const handleBuyTreadmill = () => {
+    setTreadmillFeedback(null);
+    if (!socketOk) { setTreadmillFeedback('offline'); return; }
+    if (hasTreadmill) { setTreadmillFeedback('already_owned'); return; }
+    if (!canAffordTreadmill) { setTreadmillFeedback('insufficient'); return; }
+    setTreadmillBusy(true);
+    socket!.timeout(12_000).emit('purchaseTreadmillUpgrade', (err: Error | null, res: unknown) => {
+      setTreadmillBusy(false);
+      if (err) { setTreadmillFeedback('server_error'); return; }
+      const r = res as TreadmillPurchaseAck;
+      if (!r || typeof r !== 'object') { setTreadmillFeedback('server_error'); return; }
+      if (r.ok) {
+        setPaperReams(r.paperReams);
+        if (user?.email) patchTreadmillLevel(user.email, r.treadmillUpgradeLevel);
+      } else {
+        setTreadmillFeedback((r as { ok: false; error: string }).error);
+      }
+    });
+  };
+
   const feedbackMsg = (code: string | null) => {
     if (!code) return null;
     const map: Record<string, string> = {
       insufficient: 'Not enough reams.',
       max_level: 'Already at max level.',
+      already_owned: 'Already purchased.',
       not_in_room: 'Join the office room first.',
       server_error: 'Could not complete — try again.',
       offline: 'Not connected.',
@@ -273,6 +310,36 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
           {monitorMaxed ? 'Monitors maxed (8 screens)' : monitorBusy ? 'Processing…' : `Add monitor (${nextMonitorCost} reams)`}
         </button>
         {monitorFeedback && <p className="text-rose-400/90 text-[10px] font-mono mt-2">{feedbackMsg(monitorFeedback)}</p>}
+      </div>
+
+      {/* Treadmill */}
+      <div className="border border-emerald-700/40 bg-emerald-950/20 p-4 rounded">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <p className="text-emerald-100 text-[10px] font-pixel mb-1">Desk Treadmill</p>
+            <p className="text-slate-400 text-[10px] leading-snug">
+              Walk while you work. Toggle on during focus sessions for a productivity boost — at the cost of more energy.
+            </p>
+            <p className="text-slate-500 text-[9px] mt-1">
+              When active: +{TREADMILL_REAM_BOOST_PER_MIN} reams/min · −{TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN} energy/min extra
+            </p>
+            <p className="text-emerald-200 text-[9px] mt-1">
+              {hasTreadmill ? 'Installed — toggle in focus session HUD' : 'One-time purchase'}
+            </p>
+          </div>
+          {!hasTreadmill && <span className="text-emerald-300 text-sm shrink-0 font-mono">{TREADMILL_UPGRADE_COST_REAMS} reams</span>}
+          {hasTreadmill && <span className="text-emerald-400 text-[9px] font-mono shrink-0 uppercase tracking-widest">Owned</span>}
+        </div>
+        {!hasTreadmill && (
+          <button
+            onClick={handleBuyTreadmill}
+            disabled={!socketOk || treadmillBusy || !canAffordTreadmill}
+            className="pixel-button font-pixel text-[8px] w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {treadmillBusy ? 'Processing…' : `Buy treadmill (${TREADMILL_UPGRADE_COST_REAMS} reams)`}
+          </button>
+        )}
+        {treadmillFeedback && <p className="text-rose-400/90 text-[10px] font-mono mt-2">{feedbackMsg(treadmillFeedback)}</p>}
       </div>
     </div>
   );

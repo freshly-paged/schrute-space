@@ -4,7 +4,7 @@ import { Square } from 'lucide-react';
 import { getEffectiveDeskUpgradeEmail } from '../../deskOwner';
 import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
-import { TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER } from '../../gameConfig';
+import { TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER, TREADMILL_REAM_BOOST_PER_MIN, TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN } from '../../gameConfig';
 import { useGameStore } from '../../store/useGameStore';
 import { FocusEnergyBar } from './FocusEnergyBar';
 
@@ -26,6 +26,9 @@ export const PomodoroUI = () => {
   const teamPyramidBuffExpiresAt = useGameStore((s) => s.teamPyramidBuffExpiresAt);
   const focusSavingModeEnabled = useGameStore((s) => s.focusSavingModeEnabled);
   const toggleFocusSavingMode = useGameStore((s) => s.toggleFocusSavingMode);
+  const treadmillLevelByEmail = useGameStore((s) => s.treadmillLevelByEmail);
+  const treadmillActive = useGameStore((s) => s.treadmillActive);
+  const setTreadmillActive = useGameStore((s) => s.setTreadmillActive);
   const upgradeEmail = getEffectiveDeskUpgradeEmail(
     roomLayout,
     activeDeskId,
@@ -39,8 +42,15 @@ export const PomodoroUI = () => {
     teamPyramidBuffExpiresAt != null &&
     Number.isFinite(teamPyramidBuffExpiresAt) &&
     Date.now() < teamPyramidBuffExpiresAt;
+  // Treadmill is available if the player purchased it and is at their own desk
+  const ownsTreadmill = user?.email ? (treadmillLevelByEmail[user.email] ?? 0) >= 1 : false;
+  const isAtOwnDesk = upgradeEmail === user?.email;
+  const showTreadmillToggle = ownsTreadmill && isAtOwnDesk;
+
   let focusEarnPerMin =
-    baseFocusPerMin * focusReamMultiplier(focusEnergy) * (teamPyramidActive ? TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER : 1);
+    (baseFocusPerMin + (treadmillActive ? TREADMILL_REAM_BOOST_PER_MIN : 0)) *
+    focusReamMultiplier(focusEnergy) *
+    (teamPyramidActive ? TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER : 1);
   focusEarnPerMin = Math.round(focusEarnPerMin * 10) / 10;
 
   useEffect(() => {
@@ -158,6 +168,36 @@ export const PomodoroUI = () => {
                       <span className="text-[8px] font-bold">
                         +{sessionPaper} ream{sessionPaper !== 1 ? 's' : ''} this session
                       </span>
+                    </div>
+                  )}
+
+                  {/* Treadmill toggle */}
+                  {showTreadmillToggle && (
+                    <div
+                      className="w-full px-3 py-2"
+                      style={{ border: '2px solid var(--color-ink)', background: 'var(--color-paper-dark)' }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-left">
+                          <div className="text-[8px] font-bold uppercase" style={{ color: 'var(--color-ink)' }}>
+                            Treadmill
+                          </div>
+                          <div className="text-[8px] leading-snug" style={{ color: 'var(--color-ink-faint)' }}>
+                            +{TREADMILL_REAM_BOOST_PER_MIN} reams/min · −{TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN} energy/min
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setTreadmillActive(!treadmillActive)}
+                          className="pixel-button text-[8px] uppercase"
+                          style={treadmillActive
+                            ? { background: '#166534', padding: '4px 10px' }
+                            : { background: 'var(--color-ink)', padding: '4px 10px' }
+                          }
+                          title="Toggle Treadmill"
+                        >
+                          {treadmillActive ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
                     </div>
                   )}
 

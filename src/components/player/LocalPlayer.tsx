@@ -105,6 +105,7 @@ export const LocalPlayer = ({
   const showVendingMenu = useGameStore((state) => state.showVendingMenu);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const focusSitPoseIndex = useGameStore((state) => state.focusSitPoseIndex);
+  const treadmillActive = useGameStore((state) => state.treadmillActive);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
   const wornPropId = useGameStore((state) => state.wornPropId);
@@ -150,6 +151,11 @@ export const LocalPlayer = ({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isTimerActive, activeDeskId, focusSitPoseIndex]);
+
+  // Sync treadmill toggle to server so other players see the walking animation
+  useEffect(() => {
+    if (socket?.connected) socket.emit('treadmillToggled', { active: treadmillActive });
+  }, [socket, treadmillActive]);
 
   useFrame((state, delta) => {
     // First-frame snap: position the player mesh and camera immediately so there
@@ -659,6 +665,7 @@ export const LocalPlayer = ({
                 heldIceCreamRemainingQuarters={heldIceCream?.remainingQuarters ?? ICE_CREAM_QUARTERS_MAX}
                 isFocused={isTimerActive}
                 focusSitPoseIndex={focusSitPoseIndex}
+                isTreadmilling={treadmillActive}
               />
             </group>
           </group>

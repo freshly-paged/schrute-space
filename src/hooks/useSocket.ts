@@ -257,6 +257,16 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       }
     });
 
+    newSocket.on('deskTreadmillLevels', (map: Record<string, number>) => {
+      if (map && typeof map === 'object') useGameStore.getState().setDeskTreadmillLevels(map);
+    });
+
+    newSocket.on('treadmillLevelUpdated', (payload: { email: string; level: number }) => {
+      if (payload?.email && typeof payload.level === 'number') {
+        useGameStore.getState().patchTreadmillLevel(payload.email, payload.level);
+      }
+    });
+
     newSocket.on('deskItemsLoaded', (map: Record<string, unknown[]>) => {
       if (map && typeof map === 'object') useGameStore.getState().setDeskItemsByEmail(map as Record<string, import('../types').DeskItemPlacement[]>);
     });
