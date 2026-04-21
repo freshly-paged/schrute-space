@@ -1411,6 +1411,15 @@ export async function createApp(injectedPool?: pg.Pool) {
 const rooms: Record<string, Record<string, any>> = {};
 const socketToRoom = new Map<string, string>();
 
+// Cache last known position per email so reconnecting players resume where they left off.
+// Entries expire after 30 seconds to avoid stale data if the player joins a different room.
+const lastKnownPositions = new Map<string, {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  roomId: string;
+  expiresAt: number;
+}>();
+
 /** Per-room team upgrade contribution pools. In-memory only; resets on server restart. */
 const roomTeamUpgradePools: Record<string, Record<string, TeamUpgradePool>> = {};
 const TEAM_PYRAMID_SYSTEM_CHAT_TEXT = "Unleash the power of Pyramid!";
@@ -1560,11 +1569,21 @@ io.on("connection", (socket) => {
 
       // Initialize player using DB display name when set
       const name = visibleName;
+      const cachedPos = lastKnownPositions.get(user.email);
+      const restoredPosition: [number, number, number] =
+        cachedPos && cachedPos.roomId === room && cachedPos.expiresAt > Date.now()
+          ? cachedPos.position
+          : [Math.random() * 5 - 2.5, 0, Math.random() * 5 - 2.5];
+      const restoredRotation: [number, number, number] =
+        cachedPos && cachedPos.roomId === room && cachedPos.expiresAt > Date.now()
+          ? cachedPos.rotation
+          : [0, 0, 0];
+      lastKnownPositions.delete(user.email);
       rooms[room][socket.id] = {
         id: socket.id,
         email: user.email,
-        position: [Math.random() * 5 - 2.5, 0, Math.random() * 5 - 2.5],
-        rotation: [0, 0, 0],
+        position: restoredPosition,
+        rotation: restoredRotation,
         color: getDeterministicColor(name),
         name: name,
         room: room,
@@ -2095,6 +2114,15 @@ io.on("connection", (socket) => {
 
       const playerRoom = socketToRoom.get(socket.id);
       if (playerRoom && rooms[playerRoom]?.[socket.id]) {
+        const p = rooms[playerRoom][socket.id];
+        if (user?.email && p.position) {
+          lastKnownPositions.set(user.email, {
+            position: p.position as [number, number, number],
+            rotation: (p.rotation ?? [0, 0, 0]) as [number, number, number],
+            roomId: playerRoom,
+            expiresAt: Date.now() + 30_000,
+          });
+        }
         delete rooms[playerRoom][socket.id];
         socketToRoom.delete(socket.id);
         io.to(playerRoom).emit("playerDisconnected", socket.id);
