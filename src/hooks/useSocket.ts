@@ -5,6 +5,7 @@ import { AuthUser } from './useAuth';
 import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { useGameStore } from '../store/useGameStore';
 import { MS_BODY_THROWABLE_ID } from '../propIds';
+import { localPlayerPositionRef } from '../localPlayerPositionRef';
 
 export function useSocket(user: AuthUser | null, currentRoom: string | null) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -63,6 +64,8 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       newSocket.emit('joinRoom', {
         roomId: currentRoom,
         focusEnergy: useGameStore.getState().focusEnergy,
+        position: localPlayerPositionRef.position,
+        rotation: localPlayerPositionRef.rotation,
       });
       useGameStore.getState().setKickFromDeskFn((deskId) => newSocket.emit('kickFromDesk', { deskId }));
     });

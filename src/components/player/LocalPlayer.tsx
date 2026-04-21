@@ -28,6 +28,7 @@ import {
 } from '../../gameConfig';
 import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
+import { localPlayerPositionRef } from '../../localPlayerPositionRef';
 
 function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
   if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
@@ -616,6 +617,9 @@ export const LocalPlayer = ({
           .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
       }
     }
+
+    localPlayerPositionRef.position = positionRef.current;
+    localPlayerPositionRef.rotation = rotationRef.current;
   });
 
   return (
