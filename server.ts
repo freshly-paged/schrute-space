@@ -2164,18 +2164,28 @@ io.on("connection", (socket) => {
           nextFocused && !!nextDeskId && (!wasFocused || prevDeskId !== nextDeskId);
 
         if (startedOrSwitchedDesk) {
+          const triggerDeskId = nextDeskId;
           void getRoomLayout(playerRoom)
             .then((layout) => {
-              const deskOwnerEmail = deskOwnerEmailByDeskId(layout, nextDeskId);
-              const sittingPlayerEmail = typeof player.email === "string" ? player.email : user.email;
+              const latestPlayer = rooms[playerRoom]?.[socket.id];
+              if (!latestPlayer || !latestPlayer.isFocused) return;
+              const latestDeskId =
+                typeof latestPlayer.activeDeskId === "string" ? latestPlayer.activeDeskId : null;
+              if (!latestDeskId || latestDeskId !== triggerDeskId) return;
+
+              const deskOwnerEmail = deskOwnerEmailByDeskId(layout, triggerDeskId);
+              const sittingPlayerEmail =
+                typeof latestPlayer.email === "string" ? latestPlayer.email : user.email;
+              const normalizedDeskOwner = deskOwnerEmail?.trim().toLowerCase();
+              const normalizedSitter = sittingPlayerEmail.trim().toLowerCase();
               if (
-                deskOwnerEmail &&
-                deskOwnerEmail.toLowerCase() !== sittingPlayerEmail.toLowerCase()
+                normalizedDeskOwner &&
+                normalizedDeskOwner !== normalizedSitter
               ) {
                 const messageTime = Date.now();
-                player.lastMessage = IDENTITY_THEFT_OVERHEAD_TEXT;
-                player.lastMessageTime = messageTime;
-                player.lastMessageDurationMs = IDENTITY_THEFT_OVERHEAD_DURATION_MS;
+                latestPlayer.lastMessage = IDENTITY_THEFT_OVERHEAD_TEXT;
+                latestPlayer.lastMessageTime = messageTime;
+                latestPlayer.lastMessageDurationMs = IDENTITY_THEFT_OVERHEAD_DURATION_MS;
                 io.to(playerRoom).emit(
                   "chatMessage",
                   systemChatMessage(IDENTITY_THEFT_SYSTEM_CHAT_TEXT)
