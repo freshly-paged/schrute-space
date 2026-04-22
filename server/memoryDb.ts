@@ -50,6 +50,11 @@ interface UserRow {
   desk_items: DeskItemPlacement[];
 }
 
+export interface FocusEnergySnapshot {
+  mode: FocusEnergyMode;
+  deskOwnerEmail: string | null;
+}
+
 interface RoomRow {
   max_workers: number;
   allow_new_employees: boolean;
@@ -308,6 +313,18 @@ export async function memSaveFocusEnergy(
       ? focusDeskOwnerEmail
       : null;
   users.set(email, u);
+}
+
+export async function memGetFocusEnergySnapshot(
+  email: string
+): Promise<FocusEnergySnapshot> {
+  const u = users.get(email) ?? defaultUserRow();
+  patchFocusEnergyFields(u);
+  users.set(email, u);
+  return {
+    mode: parseFocusEnergyMode(u.focus_energy_mode),
+    deskOwnerEmail: u.focus_energy_desk_owner_email,
+  };
 }
 
 /** On socket disconnect: settle to now with last mode, then force idle for offline regen. */

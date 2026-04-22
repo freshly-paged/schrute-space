@@ -360,6 +360,11 @@ interface DeskItem extends FurnitureItem {
   config: { ownerEmail: string; ownerName: string; [key: string]: unknown };
 }
 
+interface PersistedFocusState {
+  activeDeskId: string | null;
+  deskPosition: [number, number, number] | null;
+}
+
 function extractDeskOwnerEmails(layout: FurnitureItem[]): string[] {
   const seen = new Set<string>();
   for (const f of layout) {
@@ -368,6 +373,58 @@ function extractDeskOwnerEmails(layout: FurnitureItem[]): string[] {
     if (typeof email === "string" && email.length > 0) seen.add(email);
   }
   return [...seen];
+}
+
+function findDeskByOwnerEmail(
+  layout: FurnitureItem[],
+  ownerEmail: string
+): DeskItem | null {
+  const target = ownerEmail.trim().toLowerCase();
+  if (!target) return null;
+  for (const item of layout) {
+    if (item.type !== "desk") continue;
+    const desk = item as DeskItem;
+    const rawOwner = desk.config?.ownerEmail;
+    if (typeof rawOwner !== "string") continue;
+    if (rawOwner.trim().toLowerCase() === target) return desk;
+  }
+  return null;
+}
+
+async function loadPersistedFocusState(
+  email: string,
+  roomId: string
+): Promise<PersistedFocusState> {
+  let mode: FocusEnergyMode = "idle";
+  let deskOwnerEmail: string | null = null;
+
+  if (isLocalTest()) {
+    const snapshot = await mem.memGetFocusEnergySnapshot(email);
+    mode = snapshot.mode;
+    deskOwnerEmail = normalizeFocusDeskOwnerEmail(snapshot.deskOwnerEmail);
+  } else {
+    const { rows } = await pool!.query<{
+      focus_energy_mode: string;
+      focus_energy_desk_owner_email: string | null;
+    }>(
+      `SELECT focus_energy_mode, focus_energy_desk_owner_email
+       FROM users
+       WHERE email = $1`,
+      [email]
+    );
+    if (!rows[0]) return { activeDeskId: null, deskPosition: null };
+    mode = parseFocusEnergyMode(rows[0].focus_energy_mode);
+    deskOwnerEmail = normalizeFocusDeskOwnerEmail(rows[0].focus_energy_desk_owner_email);
+  }
+
+  if (mode !== "focus" || !deskOwnerEmail) {
+    return { activeDeskId: null, deskPosition: null };
+  }
+
+  const layout = await getRoomLayout(roomId);
+  const desk = findDeskByOwnerEmail(layout, deskOwnerEmail);
+  if (!desk) return { activeDeskId: null, deskPosition: null };
+  return { activeDeskId: desk.id, deskPosition: [...desk.position] };
 }
 
 async function getChairAndMonitorLevelsForEmails(
@@ -1637,6 +1694,19 @@ io.on("connection", (socket) => {
         wornPropId: null,
         heldThrowableId: null,
       };
+      try {
+        const persistedFocus = await loadPersistedFocusState(user.email, room);
+        if (persistedFocus.activeDeskId) {
+          rooms[room][socket.id].isFocused = true;
+          rooms[room][socket.id].activeDeskId = persistedFocus.activeDeskId;
+          rooms[room][socket.id].focusProgress = 0;
+          if (persistedFocus.deskPosition) {
+            rooms[room][socket.id].position = persistedFocus.deskPosition;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to restore persisted focus state:", err);
+      }
       socketToRoom.set(socket.id, room);
 
       // Remove stale entries for the same email before sending currentPlayers.
