@@ -9,8 +9,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.6',
     date: '2026-04-21',
     changes: [
-      { tag: 'new', text: 'Desk treadmill upgrade — walk while you focus for a productivity boost (1,000 reams, toggle in computer hub)' },
-      { tag: 'new', text: 'Treadmill appears as a 3D prop at your desk, replacing the chair when active' },
+      { tag: 'new', text: 'Desk treadmill upgrade — walk while you focus for a productivity boost' },
       { tag: 'fix', text: 'Player position no longer resets when temporarily losing connection — your spot is restored on reconnect' },
     ],
   },
