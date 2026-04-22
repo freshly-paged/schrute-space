@@ -117,7 +117,7 @@ export const ICE_CREAM_BITE_FOCUS_ENERGY = 4;
 // ---------------------------------------------------------------------------
 
 /** Paper reams required to purchase the treadmill desk upgrade (one-time). */
-export const TREADMILL_UPGRADE_COST_REAMS = 500;
+export const TREADMILL_UPGRADE_COST_REAMS = 1000;
 
 /** Extra focus energy drained per minute while the treadmill is active (on top of the base focus drain). */
 export const TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN = 10;

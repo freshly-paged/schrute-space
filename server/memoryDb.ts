@@ -13,7 +13,7 @@ import {
 } from "../src/focusEnergyModel.js";
 
 /** Starting paper reams for each mock player in local test mode. */
-export const LOCAL_TEST_INITIAL_PAPER_REAMS = 3000;
+export const LOCAL_TEST_INITIAL_PAPER_REAMS = 999_999;
 
 export interface FurnitureItem {
   id: string;
