@@ -26,6 +26,8 @@ export const CharacterAvatar = ({
   heldIceCreamRemainingQuarters = ICE_CREAM_QUARTERS_MAX,
   isFocused = false,
   focusSitPoseIndex = 0,
+  isTreadmilling = false,
+  yOffset = 0,
 }: {
   color: string;
   isMoving: boolean;
@@ -43,6 +45,10 @@ export const CharacterAvatar = ({
   isFocused?: boolean;
   /** Index into `FOCUS_SIT_POSES` (clamped). */
   focusSitPoseIndex?: number;
+  /** When true (and isFocused), plays walking animation to indicate treadmill use. */
+  isTreadmilling?: boolean;
+  /** Extra Y offset applied to the root group (e.g. to stand on the treadmill belt). */
+  yOffset?: number;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
@@ -65,30 +71,55 @@ export const CharacterAvatar = ({
     }
 
     if (isFocused) {
-      const idx = Math.min(
-        Math.max(0, focusSitPoseIndex),
-        FOCUS_SIT_POSE_COUNT - 1
-      );
-      const [lx, ly, lz, rx, ry, rz] = FOCUS_SIT_POSES[idx]!;
-      if (leftArmRef.current) {
-        leftArmRef.current.rotation.x = 0.38;
-        leftArmRef.current.rotation.y = -0.06;
-        leftArmRef.current.rotation.z = 0.05;
-      }
-      if (rightArmRef.current) {
-        rightArmRef.current.rotation.x = 0.38;
-        rightArmRef.current.rotation.y = 0.06;
-        rightArmRef.current.rotation.z = -0.05;
-      }
-      if (leftLegRef.current) {
-        leftLegRef.current.rotation.x = lx;
-        leftLegRef.current.rotation.y = ly;
-        leftLegRef.current.rotation.z = lz;
-      }
-      if (rightLegRef.current) {
-        rightLegRef.current.rotation.x = rx;
-        rightLegRef.current.rotation.y = ry;
-        rightLegRef.current.rotation.z = rz;
+      if (isTreadmilling) {
+        // Slow, steady treadmill pace
+        const swing = Math.sin(t * (walkSpeed * 0.6)) * (walkAmount * 0.7);
+        if (leftArmRef.current) {
+          leftArmRef.current.rotation.x = swing;
+          leftArmRef.current.rotation.y = 0;
+          leftArmRef.current.rotation.z = 0;
+        }
+        if (rightArmRef.current) {
+          rightArmRef.current.rotation.x = -swing;
+          rightArmRef.current.rotation.y = 0;
+          rightArmRef.current.rotation.z = 0;
+        }
+        if (leftLegRef.current) {
+          leftLegRef.current.rotation.x = -swing;
+          leftLegRef.current.rotation.y = 0;
+          leftLegRef.current.rotation.z = 0;
+        }
+        if (rightLegRef.current) {
+          rightLegRef.current.rotation.x = swing;
+          rightLegRef.current.rotation.y = 0;
+          rightLegRef.current.rotation.z = 0;
+        }
+      } else {
+        const idx = Math.min(
+          Math.max(0, focusSitPoseIndex),
+          FOCUS_SIT_POSE_COUNT - 1
+        );
+        const [lx, ly, lz, rx, ry, rz] = FOCUS_SIT_POSES[idx]!;
+        if (leftArmRef.current) {
+          leftArmRef.current.rotation.x = 0.38;
+          leftArmRef.current.rotation.y = -0.06;
+          leftArmRef.current.rotation.z = 0.05;
+        }
+        if (rightArmRef.current) {
+          rightArmRef.current.rotation.x = 0.38;
+          rightArmRef.current.rotation.y = 0.06;
+          rightArmRef.current.rotation.z = -0.05;
+        }
+        if (leftLegRef.current) {
+          leftLegRef.current.rotation.x = lx;
+          leftLegRef.current.rotation.y = ly;
+          leftLegRef.current.rotation.z = lz;
+        }
+        if (rightLegRef.current) {
+          rightLegRef.current.rotation.x = rx;
+          rightLegRef.current.rotation.y = ry;
+          rightLegRef.current.rotation.z = rz;
+        }
       }
       return;
     }
@@ -164,10 +195,10 @@ export const CharacterAvatar = ({
   });
 
   const suitReplacesHead = wornUpperPropId === MS_BODY_THROWABLE_ID;
-  const legAnchorZ = isFocused ? FOCUS_LEG_FORWARD_Z : 0;
+  const legAnchorZ = isFocused && !isTreadmilling ? FOCUS_LEG_FORWARD_Z : 0;
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} position={yOffset ? [0, yOffset, 0] : undefined}>
       {/* Torso + arms always visible; suit covers upper chest/shoulders and replaces the block head */}
       <Box args={[0.5, 0.8, 0.3]} position={[0, 0.9, 0]}>
         <meshStandardMaterial color={color} />

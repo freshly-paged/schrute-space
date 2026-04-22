@@ -4,7 +4,7 @@ import { Square } from 'lucide-react';
 import { getEffectiveDeskUpgradeEmail } from '../../deskOwner';
 import { focusReamMultiplier } from '../../focusEnergyModel';
 import { focusReamsPerMinute } from '../../monitorUpgradeConstants';
-import { TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER } from '../../gameConfig';
+import { TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER, TREADMILL_REAM_BOOST_PER_MIN } from '../../gameConfig';
 import { useGameStore } from '../../store/useGameStore';
 import { FocusEnergyBar } from './FocusEnergyBar';
 
@@ -26,6 +26,7 @@ export const PomodoroUI = () => {
   const teamPyramidBuffExpiresAt = useGameStore((s) => s.teamPyramidBuffExpiresAt);
   const focusSavingModeEnabled = useGameStore((s) => s.focusSavingModeEnabled);
   const toggleFocusSavingMode = useGameStore((s) => s.toggleFocusSavingMode);
+  const treadmillActive = useGameStore((s) => s.treadmillActive);
   const upgradeEmail = getEffectiveDeskUpgradeEmail(
     roomLayout,
     activeDeskId,
@@ -40,7 +41,9 @@ export const PomodoroUI = () => {
     Number.isFinite(teamPyramidBuffExpiresAt) &&
     Date.now() < teamPyramidBuffExpiresAt;
   let focusEarnPerMin =
-    baseFocusPerMin * focusReamMultiplier(focusEnergy) * (teamPyramidActive ? TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER : 1);
+    (baseFocusPerMin + (treadmillActive ? TREADMILL_REAM_BOOST_PER_MIN : 0)) *
+    focusReamMultiplier(focusEnergy) *
+    (teamPyramidActive ? TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER : 1);
   focusEarnPerMin = Math.round(focusEarnPerMin * 10) / 10;
 
   useEffect(() => {

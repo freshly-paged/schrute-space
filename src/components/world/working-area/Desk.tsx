@@ -161,6 +161,51 @@ function DeskItemInteractable({ def, item }: { def: DeskItemDef; item: DeskItemP
   );
 }
 
+const treadmillBeltMat = new THREE.MeshStandardMaterial({ color: '#1a1a1a' });
+const treadmillFrameMat = new THREE.MeshStandardMaterial({ color: '#333333' });
+const treadmillConsoleMat = new THREE.MeshStandardMaterial({ color: '#111111' });
+const treadmillScreenMat = new THREE.MeshStandardMaterial({ color: '#0a1f33', emissive: new THREE.Color('#1a3a5c'), emissiveIntensity: 0.5 });
+const treadmillAccentMat = new THREE.MeshStandardMaterial({ color: '#cc3300' });
+
+function DeskTreadmill() {
+  // Placed at z=0.8 in front of the desk, same as the chair
+  return (
+    <group position={[0, 0, 0.8]}>
+      {/* Belt deck — the flat running surface */}
+      <Box args={[0.7, 0.08, 1.3]} position={[0, 0.12, 0]} material={treadmillBeltMat} />
+      {/* Belt surface texture strip */}
+      <Box args={[0.62, 0.005, 1.2]} position={[0, 0.165, 0]} material={treadmillFrameMat} />
+
+      {/* Side rails */}
+      <Box args={[0.06, 0.06, 1.3]} position={[-0.35, 0.18, 0]} material={treadmillFrameMat} />
+      <Box args={[0.06, 0.06, 1.3]} position={[0.35, 0.18, 0]} material={treadmillFrameMat} />
+
+      {/* Front roller */}
+      <Cylinder args={[0.06, 0.06, 0.7, 10]} rotation={[0, 0, Math.PI / 2]} position={[0, 0.12, -0.62]} material={treadmillFrameMat} />
+      {/* Rear roller */}
+      <Cylinder args={[0.06, 0.06, 0.7, 10]} rotation={[0, 0, Math.PI / 2]} position={[0, 0.12, 0.62]} material={treadmillFrameMat} />
+
+      {/* Upright handle posts */}
+      <Box args={[0.05, 0.7, 0.05]} position={[-0.3, 0.55, -0.5]} material={treadmillFrameMat} />
+      <Box args={[0.05, 0.7, 0.05]} position={[0.3, 0.55, -0.5]} material={treadmillFrameMat} />
+
+      {/* Handlebar crossbar */}
+      <Box args={[0.66, 0.05, 0.05]} position={[0, 0.88, -0.5]} material={treadmillFrameMat} />
+
+      {/* Console panel */}
+      <Box args={[0.42, 0.22, 0.06]} position={[0, 0.88, -0.53]} rotation={[0.3, 0, 0]} material={treadmillConsoleMat} />
+      {/* Console screen */}
+      <Box args={[0.32, 0.13, 0.01]} position={[0, 0.895, -0.497]} rotation={[0.3, 0, 0]} material={treadmillScreenMat} />
+      {/* Speed accent strip */}
+      <Box args={[0.42, 0.03, 0.04]} position={[0, 0.77, -0.52]} rotation={[0.3, 0, 0]} material={treadmillAccentMat} />
+
+      {/* Foot platform extensions on each side */}
+      <Box args={[0.18, 0.06, 0.5]} position={[-0.47, 0.12, 0.2]} material={treadmillFrameMat} />
+      <Box args={[0.18, 0.06, 0.5]} position={[0.47, 0.12, 0.2]} material={treadmillFrameMat} />
+    </group>
+  );
+}
+
 function DeskDecorations({ ownerEmail }: { ownerEmail?: string }) {
   const deskItemsByEmail = useGameStore((s) => s.deskItemsByEmail);
   if (!ownerEmail) return null;
@@ -202,6 +247,11 @@ export const Desk = ({
   const myRole = useGameStore((state) => state.roomInfo?.myRole);
   const chairLevelByEmail = useGameStore((state) => state.chairLevelByEmail);
   const chairLevel = ownerEmail ? (chairLevelByEmail[ownerEmail] ?? 0) : 0;
+  const treadmillLevelByEmail = useGameStore((state) => state.treadmillLevelByEmail);
+  const treadmillActiveByEmail = useGameStore((state) => state.treadmillActiveByEmail);
+  const hasTreadmill = ownerEmail ? (treadmillLevelByEmail[ownerEmail] ?? 0) >= 1 : false;
+  const isTreadmilling = ownerEmail ? (treadmillActiveByEmail[ownerEmail] ?? false) : false;
+  const showTreadmill = hasTreadmill && isTreadmilling;
   const monitorLevelByEmail = useGameStore((state) => state.monitorLevelByEmail);
   const rawMonitorLv = ownerEmail ? (monitorLevelByEmail[ownerEmail] ?? 0) : 0;
   const monitorLv = Math.min(
@@ -320,9 +370,10 @@ export const Desk = ({
 
       <DeskDecorations ownerEmail={ownerEmail} />
 
-      {hasChair && (
+      {hasChair && !showTreadmill && (
         <Chair position={[0, 0, 0.8]} rotation={[0, Math.PI, 0]} level={chairLevel} />
       )}
+      {hasChair && showTreadmill && <DeskTreadmill />}
     </group>
   );
 };

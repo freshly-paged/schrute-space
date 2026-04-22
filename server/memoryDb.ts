@@ -1,6 +1,7 @@
 /** In-memory DB for LOCAL_TEST=1 only. Not used when PostgreSQL is active. */
 
 import { MONITOR_UPGRADE_MAX_LEVEL, monitorUpgradeCostForNextLevel } from "../src/monitorUpgradeConstants.js";
+import { TREADMILL_UPGRADE_COST_REAMS } from "../src/treadmillUpgradeConstants.js";
 import { DESK_ITEM_CATALOG } from "../src/deskItemCatalog.js";
 import type { DeskItemPlacement } from "../src/types.js";
 import { totalPaperReamsEarnedFloor } from "../src/paperReamsLifetime.js";
@@ -12,7 +13,7 @@ import {
 } from "../src/focusEnergyModel.js";
 
 /** Starting paper reams for each mock player in local test mode. */
-export const LOCAL_TEST_INITIAL_PAPER_REAMS = 3000;
+export const LOCAL_TEST_INITIAL_PAPER_REAMS = 999_999;
 
 export interface FurnitureItem {
   id: string;
@@ -39,6 +40,7 @@ interface UserRow {
   job_title: string | null;
   chair_upgrade_level: number;
   monitor_upgrade_level: number;
+  treadmill_upgrade_level: number;
   focus_energy: number;
   focus_energy_updated_at: number;
   focus_energy_mode: FocusEnergyMode;
@@ -90,6 +92,7 @@ function defaultUserRow(): UserRow {
     job_title: null,
     chair_upgrade_level: 0,
     monitor_upgrade_level: 0,
+    treadmill_upgrade_level: 0,
     focus_energy: 100,
     focus_energy_updated_at: now,
     focus_energy_mode: "idle",
@@ -434,6 +437,29 @@ export async function memPurchaseMonitorUpgrade(email: string): Promise<MemMonit
   );
   users.set(email, u);
   return { ok: true, paperReams: u.paper_reams, monitorUpgradeLevel: u.monitor_upgrade_level };
+}
+
+export async function memGetTreadmillLevelsForEmails(emails: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const e of emails) {
+    const row = users.get(e);
+    out[e] = row?.treadmill_upgrade_level ?? 0;
+  }
+  return out;
+}
+
+export type MemTreadmillPurchaseResult =
+  | { ok: true; paperReams: number; treadmillUpgradeLevel: number }
+  | { ok: false; error: 'already_owned' | 'insufficient' };
+
+export async function memPurchaseTreadmillUpgrade(email: string): Promise<MemTreadmillPurchaseResult> {
+  const u = users.get(email) ?? defaultUserRow();
+  if (u.treadmill_upgrade_level >= 1) return { ok: false, error: 'already_owned' };
+  if (u.paper_reams < TREADMILL_UPGRADE_COST_REAMS) return { ok: false, error: 'insufficient' };
+  u.paper_reams -= TREADMILL_UPGRADE_COST_REAMS;
+  u.treadmill_upgrade_level = 1;
+  users.set(email, u);
+  return { ok: true, paperReams: u.paper_reams, treadmillUpgradeLevel: 1 };
 }
 
 /** Deduct reams for a team upgrade contribution (replaces single-payer pyramid purchase). */

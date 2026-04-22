@@ -28,6 +28,7 @@ import {
 } from '../../gameConfig';
 import { requestFocusNotificationPermissionIfNeeded } from '../../lib/focusSessionCompleteFeedback';
 import { onOverlayTextSync } from '../../utils/overlayTextSync';
+import { localPlayerPositionRef } from '../../localPlayerPositionRef';
 
 function emitHeldThrowableSync(socket: Socket | null, propId: string | null) {
   if (socket?.connected) socket.emit('playerHeldThrowable', { propId });
@@ -104,6 +105,7 @@ export const LocalPlayer = ({
   const showVendingMenu = useGameStore((state) => state.showVendingMenu);
   const timeLeft = useGameStore((state) => state.timeLeft);
   const focusSitPoseIndex = useGameStore((state) => state.focusSitPoseIndex);
+  const treadmillActive = useGameStore((state) => state.treadmillActive);
   const occupiedDeskIds = useGameStore((state) => state.occupiedDeskIds);
   const roomLayout = useGameStore((state) => state.roomLayout);
   const wornPropId = useGameStore((state) => state.wornPropId);
@@ -149,6 +151,11 @@ export const LocalPlayer = ({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isTimerActive, activeDeskId, focusSitPoseIndex]);
+
+  // Sync treadmill toggle to server so other players see the walking animation
+  useEffect(() => {
+    if (socket?.connected) socket.emit('treadmillToggled', { active: treadmillActive });
+  }, [socket, treadmillActive]);
 
   useFrame((state, delta) => {
     // First-frame snap: position the player mesh and camera immediately so there
@@ -616,6 +623,9 @@ export const LocalPlayer = ({
           .addScaledVector(cameraRayRef.current.direction, Math.max(nearestDist - 0.3, 1.0));
       }
     }
+
+    localPlayerPositionRef.position = positionRef.current;
+    localPlayerPositionRef.rotation = rotationRef.current;
   });
 
   return (
@@ -655,6 +665,8 @@ export const LocalPlayer = ({
                 heldIceCreamRemainingQuarters={heldIceCream?.remainingQuarters ?? ICE_CREAM_QUARTERS_MAX}
                 isFocused={isTimerActive}
                 focusSitPoseIndex={focusSitPoseIndex}
+                isTreadmilling={treadmillActive}
+                yOffset={treadmillActive ? 0.16 : 0}
               />
             </group>
           </group>

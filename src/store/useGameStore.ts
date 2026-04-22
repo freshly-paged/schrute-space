@@ -17,6 +17,8 @@ import {
   COPIER_RESET_COOLDOWN_MS,
   POMODORO_BREAK_DURATION_SEC,
   TEAM_PYRAMID_FOCUS_REAM_MULTIPLIER,
+  TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN,
+  TREADMILL_REAM_BOOST_PER_MIN,
 } from '../gameConfig';
 import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, DeskItemPlacement, FurnitureItem, RoomInfo, TeamUpgradePool } from '../types';
@@ -132,6 +134,17 @@ interface GameState {
   setDeskMonitorLevels: (map: Record<string, number>) => void;
   patchMonitorLevel: (email: string, level: number) => void;
   resetMonitorLevels: () => void;
+  /** Desk owner email → treadmill purchased (0 = no, 1 = yes); synced from server. */
+  treadmillLevelByEmail: Record<string, number>;
+  setDeskTreadmillLevels: (map: Record<string, number>) => void;
+  patchTreadmillLevel: (email: string, level: number) => void;
+  resetTreadmillLevels: () => void;
+  /** Whether the local player has treadmill mode on (persistent desk config, not session-scoped). */
+  treadmillActive: boolean;
+  setTreadmillActive: (active: boolean) => void;
+  /** Per-email treadmill active state — includes local and remote players; drives desk visual. */
+  treadmillActiveByEmail: Record<string, boolean>;
+  setTreadmillActiveForEmail: (email: string, active: boolean) => void;
   /** Desk owner email → purchased desk decoration placements; synced from server. */
   deskItemsByEmail: Record<string, DeskItemPlacement[]>;
   setDeskItemsByEmail: (map: Record<string, DeskItemPlacement[]>) => void;
@@ -355,7 +368,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       );
       const basePerMin = focusReamsPerMinute(monitorLv);
       const mult = focusReamMultiplier(state.focusEnergy);
-      let reamsPerMin = basePerMin * mult;
+      let reamsPerMin = (basePerMin + (state.treadmillActive ? TREADMILL_REAM_BOOST_PER_MIN : 0)) * mult;
       const pyramidExp = state.teamPyramidBuffExpiresAt;
       if (
         typeof pyramidExp === 'number' &&
@@ -434,8 +447,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       );
       const overlapMin = waterBuffOverlapMinutes(last, now, state.waterBuffExpiresAt);
       const base = settleFocusEnergy(state.focusEnergy, last, now, mode, chairLv);
+      const treadmillDrainMin = (inSeatedFocus && state.treadmillActive)
+        ? (now - last) / 60_000 * TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN
+        : 0;
       const settled = clampFocusEnergy(
-        base + FOCUS_ENERGY_WATER_BUFF_REGEN_PER_MIN * overlapMin
+        base - treadmillDrainMin + FOCUS_ENERGY_WATER_BUFF_REGEN_PER_MIN * overlapMin
       );
       return { focusEnergy: settled, focusEnergyLastTickAt: now };
     }),
@@ -506,6 +522,26 @@ export const useGameStore = create<GameState>((set, get) => ({
       monitorLevelByEmail: { ...s.monitorLevelByEmail, [email]: level },
     })),
   resetMonitorLevels: () => set({ monitorLevelByEmail: {} }),
+  treadmillLevelByEmail: {},
+  setDeskTreadmillLevels: (map) =>
+    set((s) => ({ treadmillLevelByEmail: { ...s.treadmillLevelByEmail, ...map } })),
+  patchTreadmillLevel: (email, level) =>
+    set((s) => ({ treadmillLevelByEmail: { ...s.treadmillLevelByEmail, [email]: level } })),
+  resetTreadmillLevels: () => set({ treadmillLevelByEmail: {} }),
+  treadmillActive: false,
+  setTreadmillActive: (active) =>
+    set((s) => {
+      const email = s.user?.email;
+      return {
+        treadmillActive: active,
+        treadmillActiveByEmail: email
+          ? { ...s.treadmillActiveByEmail, [email]: active }
+          : s.treadmillActiveByEmail,
+      };
+    }),
+  treadmillActiveByEmail: {},
+  setTreadmillActiveForEmail: (email, active) =>
+    set((s) => ({ treadmillActiveByEmail: { ...s.treadmillActiveByEmail, [email]: active } })),
   deskItemsByEmail: {},
   setDeskItemsByEmail: (map) =>
     set((s) => ({ deskItemsByEmail: { ...s.deskItemsByEmail, ...map } })),
