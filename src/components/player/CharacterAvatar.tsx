@@ -69,8 +69,8 @@ export const CharacterAvatar = ({
 
     if (isFocused) {
       if (isTreadmilling) {
-        // Walking-at-desk animation: arms and legs swing like normal walking
-        const swing = Math.sin(t * walkSpeed) * walkAmount;
+        // Slow, steady treadmill pace — about half normal walk speed
+        const swing = Math.sin(t * (walkSpeed * 0.45)) * (walkAmount * 0.7);
         if (leftArmRef.current) {
           leftArmRef.current.rotation.x = swing;
           leftArmRef.current.rotation.y = 0;

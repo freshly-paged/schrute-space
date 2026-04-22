@@ -158,6 +158,8 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
   const chairLevelByEmail = useGameStore((s) => s.chairLevelByEmail);
   const monitorLevelByEmail = useGameStore((s) => s.monitorLevelByEmail);
   const treadmillLevelByEmail = useGameStore((s) => s.treadmillLevelByEmail);
+  const treadmillActive = useGameStore((s) => s.treadmillActive);
+  const setTreadmillActive = useGameStore((s) => s.setTreadmillActive);
   const setPaperReams = useGameStore((s) => s.setPaperReams);
   const patchChairLevel = useGameStore((s) => s.patchChairLevel);
   const patchMonitorLevel = useGameStore((s) => s.patchMonitorLevel);
@@ -318,13 +320,10 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
           <div>
             <p className="text-emerald-100 text-[10px] font-pixel mb-1">Desk Treadmill</p>
             <p className="text-slate-400 text-[10px] leading-snug">
-              Walk while you work. Toggle on during focus sessions for a productivity boost — at the cost of more energy.
+              Walk while you work. When active, replaces your chair — boosts productivity at the cost of more energy.
             </p>
             <p className="text-slate-500 text-[9px] mt-1">
               When active: +{TREADMILL_REAM_BOOST_PER_MIN} reams/min · −{TREADMILL_ENERGY_EXTRA_DRAIN_PER_MIN} energy/min extra
-            </p>
-            <p className="text-emerald-200 text-[9px] mt-1">
-              {hasTreadmill ? 'Installed — toggle in focus session HUD' : 'One-time purchase'}
             </p>
           </div>
           {!hasTreadmill && <span className="text-emerald-300 text-sm shrink-0 font-mono">{TREADMILL_UPGRADE_COST_REAMS} reams</span>}
@@ -338,6 +337,23 @@ function UpgradesTab({ socket }: { socket: Socket | null }) {
           >
             {treadmillBusy ? 'Processing…' : `Buy treadmill (${TREADMILL_UPGRADE_COST_REAMS} reams)`}
           </button>
+        )}
+        {hasTreadmill && (
+          <div className="flex items-center justify-between gap-3 mt-1">
+            <span className="text-[9px] font-mono" style={{ color: treadmillActive ? '#4ade80' : '#94a3b8' }}>
+              {treadmillActive ? 'Treadmill active — chair stowed' : 'Chair active — treadmill stowed'}
+            </span>
+            <button
+              onClick={() => setTreadmillActive(!treadmillActive)}
+              className="pixel-button font-pixel text-[8px] uppercase"
+              style={treadmillActive
+                ? { background: '#166534', padding: '4px 12px' }
+                : { background: '#1e293b', padding: '4px 12px' }
+              }
+            >
+              {treadmillActive ? 'Switch to Chair' : 'Use Treadmill'}
+            </button>
+          </div>
         )}
         {treadmillFeedback && <p className="text-rose-400/90 text-[10px] font-mono mt-2">{feedbackMsg(treadmillFeedback)}</p>}
       </div>

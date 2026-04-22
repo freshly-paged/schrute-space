@@ -98,12 +98,21 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
       newSocket.disconnect();
     });
 
+    const syncTreadmillFromPlayers = (playerMap: Record<string, Player>) => {
+      for (const p of Object.values(playerMap)) {
+        if (p.email && typeof p.isTreadmilling === 'boolean') {
+          useGameStore.getState().setTreadmillActiveForEmail(p.email, p.isTreadmilling);
+        }
+      }
+    };
+
     newSocket.on('currentPlayers', (serverPlayers: Record<string, Player>) => {
       const others = { ...serverPlayers };
       delete others[newSocket.id!];
       console.log(`[socket] currentPlayers: ${Object.keys(others).length} other player(s) in room`);
       setPlayers(others);
       syncFromPlayerMap(others);
+      syncTreadmillFromPlayers(others);
     });
 
     newSocket.on('newPlayer', (player: Player) => {
@@ -113,6 +122,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
         syncFromPlayerMap(next);
         return next;
       });
+      syncTreadmillFromPlayers({ [player.id]: player });
     });
 
     newSocket.on('playerMoved', (player: Player) => {
@@ -121,6 +131,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
         syncFromPlayerMap(next);
         return next;
       });
+      syncTreadmillFromPlayers({ [player.id]: player });
     });
 
     newSocket.on('playersMoved', (batch: { id: string; position: [number,number,number]; rotation: [number,number,number]; isRolling: boolean; rollTimer: number }[]) => {

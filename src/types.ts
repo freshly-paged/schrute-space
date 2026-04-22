@@ -12,6 +12,7 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
 
 export interface Player {
   id: string;
+  email?: string;
   position: [number, number, number];
   rotation: [number, number, number];
   color: string;

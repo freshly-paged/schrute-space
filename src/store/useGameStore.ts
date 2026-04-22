@@ -139,9 +139,12 @@ interface GameState {
   setDeskTreadmillLevels: (map: Record<string, number>) => void;
   patchTreadmillLevel: (email: string, level: number) => void;
   resetTreadmillLevels: () => void;
-  /** Whether the local player has the treadmill active during the current focus session. */
+  /** Whether the local player has treadmill mode on (persistent desk config, not session-scoped). */
   treadmillActive: boolean;
   setTreadmillActive: (active: boolean) => void;
+  /** Per-email treadmill active state — includes local and remote players; drives desk visual. */
+  treadmillActiveByEmail: Record<string, boolean>;
+  setTreadmillActiveForEmail: (email: string, active: boolean) => void;
   /** Desk owner email → purchased desk decoration placements; synced from server. */
   deskItemsByEmail: Record<string, DeskItemPlacement[]>;
   setDeskItemsByEmail: (map: Record<string, DeskItemPlacement[]>) => void;
@@ -299,7 +302,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       focusSitPoseIndex: 0,
       focusSavingModeEnabled: false,
       timerEndsAt: null,
-      treadmillActive: false,
     }),
   togglePause: () =>
     set((state) => {
@@ -412,7 +414,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       focusSitPoseIndex: 0,
       focusSavingModeEnabled: false,
       timerEndsAt: null,
-      treadmillActive: false,
     })),
 
   focusEnergy: 100,
@@ -529,9 +530,18 @@ export const useGameStore = create<GameState>((set, get) => ({
   resetTreadmillLevels: () => set({ treadmillLevelByEmail: {} }),
   treadmillActive: false,
   setTreadmillActive: (active) =>
-    set((s) => ({
-      treadmillActive: s.isTimerActive && s.timerMode === 'focus' ? active : false,
-    })),
+    set((s) => {
+      const email = s.user?.email;
+      return {
+        treadmillActive: active,
+        treadmillActiveByEmail: email
+          ? { ...s.treadmillActiveByEmail, [email]: active }
+          : s.treadmillActiveByEmail,
+      };
+    }),
+  treadmillActiveByEmail: {},
+  setTreadmillActiveForEmail: (email, active) =>
+    set((s) => ({ treadmillActiveByEmail: { ...s.treadmillActiveByEmail, [email]: active } })),
   deskItemsByEmail: {},
   setDeskItemsByEmail: (map) =>
     set((s) => ({ deskItemsByEmail: { ...s.deskItemsByEmail, ...map } })),
