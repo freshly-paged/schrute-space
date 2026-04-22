@@ -131,6 +131,7 @@ export const OtherPlayer = React.memo(({ player }: { player: Player }) => {
               isFocused={player.isFocused ?? false}
               focusSitPoseIndex={player.focusSitPoseIndex ?? 0}
               isTreadmilling={player.isTreadmilling ?? false}
+              yOffset={player.isTreadmilling ? 0.16 : 0}
             />
           </group>
         </group>

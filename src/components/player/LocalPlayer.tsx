@@ -666,6 +666,7 @@ export const LocalPlayer = ({
                 isFocused={isTimerActive}
                 focusSitPoseIndex={focusSitPoseIndex}
                 isTreadmilling={treadmillActive}
+                yOffset={treadmillActive ? 0.16 : 0}
               />
             </group>
           </group>

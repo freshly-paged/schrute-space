@@ -27,6 +27,7 @@ export const CharacterAvatar = ({
   isFocused = false,
   focusSitPoseIndex = 0,
   isTreadmilling = false,
+  yOffset = 0,
 }: {
   color: string;
   isMoving: boolean;
@@ -46,6 +47,8 @@ export const CharacterAvatar = ({
   focusSitPoseIndex?: number;
   /** When true (and isFocused), plays walking animation to indicate treadmill use. */
   isTreadmilling?: boolean;
+  /** Extra Y offset applied to the root group (e.g. to stand on the treadmill belt). */
+  yOffset?: number;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Mesh>(null);
@@ -69,8 +72,8 @@ export const CharacterAvatar = ({
 
     if (isFocused) {
       if (isTreadmilling) {
-        // Slow, steady treadmill pace — about half normal walk speed
-        const swing = Math.sin(t * (walkSpeed * 0.45)) * (walkAmount * 0.7);
+        // Slow, steady treadmill pace
+        const swing = Math.sin(t * (walkSpeed * 0.6)) * (walkAmount * 0.7);
         if (leftArmRef.current) {
           leftArmRef.current.rotation.x = swing;
           leftArmRef.current.rotation.y = 0;
@@ -195,7 +198,7 @@ export const CharacterAvatar = ({
   const legAnchorZ = isFocused && !isTreadmilling ? FOCUS_LEG_FORWARD_Z : 0;
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} position={yOffset ? [0, yOffset, 0] : undefined}>
       {/* Torso + arms always visible; suit covers upper chest/shoulders and replaces the block head */}
       <Box args={[0.5, 0.8, 0.3]} position={[0, 0.9, 0]}>
         <meshStandardMaterial color={color} />
