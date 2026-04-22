@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, MyRoom } from '../../types';
 import { AvatarPreview } from './AvatarPreview';
+import { CHANGELOG } from '../../changelog';
 
 export const PixelBeet = () => (
   <div className="relative w-12 h-12 scale-75">
@@ -18,6 +19,58 @@ interface LandingPageProps {
   onCustomize: () => void;
   avatarConfig: AvatarConfig;
   paperReams: number;
+}
+
+const TAG_STYLES: Record<string, string> = {
+  new: 'bg-emerald-200 text-emerald-900',
+  fix: 'bg-rose-200 text-rose-900',
+  improvement: 'bg-sky-200 text-sky-900',
+};
+
+function ChangelogPanel() {
+  const [open, setOpen] = useState(false);
+  const latest = CHANGELOG[0];
+
+  return (
+    <div className="relative z-10 max-w-3xl w-full mt-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between bg-[#e8e0d0] pixel-border px-5 py-3 text-black hover:bg-[#f5f0e8] transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-widest font-bold text-indigo-900">What's New</span>
+          <span className="text-[8px] text-slate-500 uppercase tracking-widest">v{latest?.version} · {latest?.date}</span>
+        </div>
+        <span className="text-[10px] text-slate-500">{open ? '▲ collapse' : '▼ expand'}</span>
+      </button>
+
+      {open && (
+        <div className="bg-[#f0f0f0] pixel-border border-t-0 max-h-80 overflow-y-auto">
+          {CHANGELOG.map((entry, i) => (
+            <div key={entry.version} className={`px-5 py-4 ${i < CHANGELOG.length - 1 ? 'border-b-2 border-black/10' : ''}`}>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className="text-[11px] font-bold text-indigo-900 uppercase">v{entry.version}</span>
+                <span className="text-[8px] text-slate-400 uppercase tracking-widest">{entry.date}</span>
+                {i === 0 && (
+                  <span className="text-[7px] px-2 py-0.5 bg-amber-300 text-amber-900 pixel-border uppercase tracking-widest">Latest</span>
+                )}
+              </div>
+              <ul className="space-y-1.5">
+                {entry.changes.map((c, j) => (
+                  <li key={j} className="flex items-start gap-2">
+                    <span className={`shrink-0 text-[7px] px-1.5 py-0.5 uppercase tracking-widest font-bold mt-0.5 ${TAG_STYLES[c.tag]}`}>
+                      {c.tag}
+                    </span>
+                    <span className="text-[9px] text-slate-700 leading-snug">{c.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const LandingPage = ({ onJoin, userName, onLogout, onCustomize, avatarConfig, paperReams }: LandingPageProps) => {
@@ -176,6 +229,8 @@ export const LandingPage = ({ onJoin, userName, onLogout, onCustomize, avatarCon
           © 1765 SCHRUTE FARMS. ALL RIGHTS RESERVED.
         </div>
       </motion.div>
+
+      <ChangelogPanel />
     </div>
   );
 };
