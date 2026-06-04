@@ -26,6 +26,8 @@ import { ComputerInterface } from './components/ui/ComputerInterface';
 import { VendingMenu } from './components/ui/VendingMenu';
 import { InspectOverlay } from './components/ui/InspectOverlay';
 import { FocusScreensaver } from './components/ui/FocusScreensaver';
+import { NotificationToast } from './components/ui/NotificationToast';
+import { GameSettingsPage } from './components/ui/GameSettingsPage';
 import { FurnitureItem } from './types';
 import { OfficeEnvironment } from './components/world/OfficeEnvironment';
 import { LocalPlayer } from './components/player/LocalPlayer';
@@ -91,6 +93,8 @@ export default function App() {
   const setPlayerProfileFromServer = useGameStore((s) => s.setPlayerProfileFromServer);
   const setFocusEnergy = useGameStore((s) => s.setFocusEnergy);
   const tickFocusEnergyWallClock = useGameStore((s) => s.tickFocusEnergyWallClock);
+  const showGameSettings = useGameStore((s) => s.showGameSettings);
+  const setShowGameSettings = useGameStore((s) => s.setShowGameSettings);
   const [view, setView] = useState<'landing' | 'customize' | 'customize-office'>('landing');
   const setIsCustomizingOffice = useGameStore((s) => s.setIsCustomizingOffice);
 
@@ -399,6 +403,7 @@ export default function App() {
               paperReams={paperReams}
               focusEnergy={focusEnergy}
               myRole={roomInfo?.myRole ?? null}
+              onOpenSettings={() => setShowGameSettings(true)}
             />
           </motion.div>
         )}
@@ -411,6 +416,7 @@ export default function App() {
           <WaterEnergyBuffOverlay />
           <PaperBurst />
           <InspectOverlay />
+          {!showChat && <NotificationToast />}
         </>
       )}
 
@@ -585,6 +591,13 @@ export default function App() {
       {isFocusSavingModeActive && (
         <div className="absolute inset-0 z-30">
           <FocusScreensaver />
+        </div>
+      )}
+
+      {/* Settings overlay */}
+      {showGameSettings && (
+        <div className="absolute inset-0 z-50">
+          <GameSettingsPage onClose={() => setShowGameSettings(false)} />
         </div>
       )}
 

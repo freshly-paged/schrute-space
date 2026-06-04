@@ -23,6 +23,15 @@ import {
 import { getEffectiveDeskUpgradeEmail } from '../deskOwner';
 import { AvatarConfig, DEFAULT_AVATAR_CONFIG, DeskItemPlacement, FurnitureItem, RoomInfo, TeamUpgradePool } from '../types';
 
+export type NotificationType = 'join' | 'leave' | 'chat' | 'kick';
+
+export interface GameNotification {
+  id: string;
+  type: NotificationType;
+  message: string;
+  createdAt: number;
+}
+
 export type InspectPreviewKind = 'model' | 'pyramid';
 
 export type InspectedObjectData = {
@@ -176,6 +185,15 @@ interface GameState {
   setShowAdminPanel: (show: boolean) => void;
   showComputerInterface: boolean;
   setShowComputerInterface: (show: boolean) => void;
+
+  // In-game notifications
+  notifications: GameNotification[];
+  notificationsEnabled: boolean;
+  showGameSettings: boolean;
+  pushNotification: (type: NotificationType, message: string) => void;
+  dismissNotification: (id: string) => void;
+  toggleNotificationsEnabled: () => void;
+  setShowGameSettings: (show: boolean) => void;
   /** Set to true by the entryway door; App.tsx watches and calls handleExitRoom. */
   requestExitRoom: boolean;
   setRequestExitRoom: (v: boolean) => void;
@@ -432,15 +450,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       const inSeatedFocus =
         state.isTimerActive && state.timerMode === 'focus' && !state.isTimerPaused;
       const mode = inSeatedFocus ? 'focus' : 'idle';
-      const upgradeEmail = inSeatedFocus
-        ? getEffectiveDeskUpgradeEmail(
-            state.roomLayout,
-            state.activeDeskId,
-            state.user?.email
-          )
-        : undefined;
-      const rawChair =
-        upgradeEmail !== undefined ? (state.chairLevelByEmail[upgradeEmail] ?? 0) : 0;
+      // Chair regen only applies at your own desk; squatting someone else's desk gives no regen benefit.
+      const isOwnDesk = inSeatedFocus && state.activeDeskId === `desk-${state.user?.email}`;
+      const rawChair = isOwnDesk
+        ? (state.chairLevelByEmail[state.user?.email ?? ''] ?? 0)
+        : 0;
       const chairLv = Math.min(
         CHAIR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawChair))
@@ -648,4 +662,35 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((s) => ({
       throwableRest: { ...s.throwableRest, [id]: { position, rotation } },
     })),
+
+  notifications: [],
+  notificationsEnabled: (() => {
+    try {
+      const stored = localStorage.getItem('notifications_enabled');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  })(),
+  showGameSettings: false,
+  pushNotification: (type, message) =>
+    set((s) => {
+      if (!s.notificationsEnabled) return {};
+      const note: GameNotification = {
+        id: crypto.randomUUID(),
+        type,
+        message,
+        createdAt: Date.now(),
+      };
+      return { notifications: [...s.notifications, note].slice(-8) };
+    }),
+  dismissNotification: (id) =>
+    set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
+  toggleNotificationsEnabled: () =>
+    set((s) => {
+      const next = !s.notificationsEnabled;
+      try { localStorage.setItem('notifications_enabled', String(next)); } catch {}
+      return { notificationsEnabled: next };
+    }),
+  setShowGameSettings: (show) => set({ showGameSettings: show }),
 }));

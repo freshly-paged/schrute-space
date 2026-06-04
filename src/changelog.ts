@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.7',
+    date: '2026-06-03',
+    changes: [
+      { tag: 'new', text: 'Office notifications — toast alerts when players join, leave, chat, or get kicked from a desk' },
+      { tag: 'new', text: 'Settings panel — toggle notifications on/off via the ⚙ button in the status memo' },
+      { tag: 'fix', text: 'Focus energy no longer freezes when sitting at someone else\'s high-level chair desk' },
+    ],
+  },
+  {
     version: '0.6',
     date: '2026-04-21',
     changes: [
