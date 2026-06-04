@@ -237,14 +237,10 @@ async function loadAndSettleFocusEnergy(email: string): Promise<number> {
     focus_energy_updated_at: string | number | null;
     focus_energy_mode: string;
     chair_upgrade_level: number;
-    effective_focus_chair: number;
   }>(
-    `SELECT u.focus_energy, u.focus_energy_updated_at, u.focus_energy_mode,
-            COALESCE(u.chair_upgrade_level, 0) AS chair_upgrade_level,
-            COALESCE(o.chair_upgrade_level, u.chair_upgrade_level) AS effective_focus_chair
-     FROM users u
-     LEFT JOIN users o ON o.email = u.focus_energy_desk_owner_email
-     WHERE u.email = $1`,
+    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
+            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
+     FROM users WHERE email = $1`,
     [email]
   );
   const r = rows[0];
@@ -254,10 +250,8 @@ async function loadAndSettleFocusEnergy(email: string): Promise<number> {
   const rawStored = Number(r?.focus_energy);
   const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
   const mode = parseFocusEnergyMode(r?.focus_energy_mode);
-  const chairLv =
-    mode === "focus"
-      ? Number(r?.effective_focus_chair ?? r?.chair_upgrade_level ?? 0)
-      : Number(r?.chair_upgrade_level ?? 0);
+  // Chair regen uses only the user's own chair level; sitting at someone else's desk gives no bonus.
+  const chairLv = mode === "focus" ? Number(r?.chair_upgrade_level ?? 0) : 0;
   const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
   await pool!.query(
     `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = $3 WHERE email = $4`,
@@ -293,14 +287,10 @@ async function settleFocusEnergyOnDisconnect(email: string): Promise<void> {
     focus_energy_updated_at: string | number | null;
     focus_energy_mode: string;
     chair_upgrade_level: number;
-    effective_focus_chair: number;
   }>(
-    `SELECT u.focus_energy, u.focus_energy_updated_at, u.focus_energy_mode,
-            COALESCE(u.chair_upgrade_level, 0) AS chair_upgrade_level,
-            COALESCE(o.chair_upgrade_level, u.chair_upgrade_level) AS effective_focus_chair
-     FROM users u
-     LEFT JOIN users o ON o.email = u.focus_energy_desk_owner_email
-     WHERE u.email = $1`,
+    `SELECT focus_energy, focus_energy_updated_at, focus_energy_mode,
+            COALESCE(chair_upgrade_level, 0) AS chair_upgrade_level
+     FROM users WHERE email = $1`,
     [email]
   );
   if (!rows[0]) return;
@@ -311,10 +301,8 @@ async function settleFocusEnergyOnDisconnect(email: string): Promise<void> {
   const rawStored = Number(r.focus_energy);
   const stored = Number.isFinite(rawStored) ? rawStored : FOCUS_ENERGY_MAX;
   const mode = parseFocusEnergyMode(r.focus_energy_mode);
-  const chairLv =
-    mode === "focus"
-      ? Number(r.effective_focus_chair ?? r.chair_upgrade_level ?? 0)
-      : Number(r.chair_upgrade_level ?? 0);
+  // Chair regen uses only the user's own chair level; sitting at someone else's desk gives no bonus.
+  const chairLv = mode === "focus" ? Number(r.chair_upgrade_level ?? 0) : 0;
   const settled = settleFocusEnergy(stored, fromMs, now, mode, chairLv);
   await pool!.query(
     `UPDATE users SET focus_energy = $1, focus_energy_updated_at = $2, focus_energy_mode = 'idle',

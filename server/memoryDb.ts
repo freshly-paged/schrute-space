@@ -274,11 +274,7 @@ function patchFocusEnergyFields(u: UserRow): void {
 }
 
 function chairLevelForFocusSettlement(u: UserRow): number {
-  const ref = u.focus_energy_desk_owner_email;
-  if (typeof ref === "string" && ref.length > 0) {
-    const o = users.get(ref);
-    if (o) return o.chair_upgrade_level;
-  }
+  // Chair regen uses only the user's own chair level; sitting at someone else's desk gives no bonus.
   return u.chair_upgrade_level;
 }
 

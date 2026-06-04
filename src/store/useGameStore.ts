@@ -432,15 +432,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       const inSeatedFocus =
         state.isTimerActive && state.timerMode === 'focus' && !state.isTimerPaused;
       const mode = inSeatedFocus ? 'focus' : 'idle';
-      const upgradeEmail = inSeatedFocus
-        ? getEffectiveDeskUpgradeEmail(
-            state.roomLayout,
-            state.activeDeskId,
-            state.user?.email
-          )
-        : undefined;
-      const rawChair =
-        upgradeEmail !== undefined ? (state.chairLevelByEmail[upgradeEmail] ?? 0) : 0;
+      // Chair regen only applies at your own desk; squatting someone else's desk gives no regen benefit.
+      const isOwnDesk = inSeatedFocus && state.activeDeskId === `desk-${state.user?.email}`;
+      const rawChair = isOwnDesk
+        ? (state.chairLevelByEmail[state.user?.email ?? ''] ?? 0)
+        : 0;
       const chairLv = Math.min(
         CHAIR_UPGRADE_MAX_LEVEL,
         Math.max(0, Math.floor(rawChair))
