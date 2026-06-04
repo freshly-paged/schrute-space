@@ -123,6 +123,7 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
         return next;
       });
       syncTreadmillFromPlayers({ [player.id]: player });
+      useGameStore.getState().pushNotification('join', `${player.name} has entered the office`);
     });
 
     newSocket.on('playerMoved', (player: Player) => {
@@ -167,6 +168,10 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
             },
           };
         });
+        if (!useGameStore.getState().isChatFocused) {
+          const t = message.text.length > 40 ? message.text.slice(0, 37) + '...' : message.text;
+          useGameStore.getState().pushNotification('chat', `${message.playerName}: ${t}`);
+        }
       } else {
         setLastLocalMessage({ text: message.text, time: message.time, durationMs: undefined });
       }
@@ -204,6 +209,10 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('playerDisconnected', (id: string) => {
       console.log(`[socket] playerDisconnected: ${id}`);
       setPlayers((prev) => {
+        const leavingName = prev[id]?.name;
+        if (leavingName) {
+          useGameStore.getState().pushNotification('leave', `${leavingName} has left the office`);
+        }
         const next = { ...prev };
         delete next[id];
         syncFromPlayerMap(next);
@@ -306,6 +315,15 @@ export function useSocket(user: AuthUser | null, currentRoom: string | null) {
     newSocket.on('kickedFromDesk', (_data: { deskId: string }) => {
       console.log('[socket] kickedFromDesk — ending focus session');
       useGameStore.getState().stopTimer();
+    });
+
+    newSocket.on('deskKickNotification', (data: { ownerName: string; victimName: string }) => {
+      if (data?.ownerName && data?.victimName) {
+        useGameStore.getState().pushNotification(
+          'kick',
+          `${data.ownerName} removed ${data.victimName} from their desk`
+        );
+      }
     });
 
     newSocket.on('roomMembersUpdated', (payload: { roomId: string; members?: RoomMember[]; maxWorkers?: number; allowNewEmployees?: boolean }) => {

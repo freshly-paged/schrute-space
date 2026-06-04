@@ -2217,10 +2217,16 @@ io.on("connection", (socket) => {
         // Tell the victim their session is being ended
         io.to(victimSocketId).emit("kickedFromDesk", { deskId });
 
+        // Broadcast kick notification to the whole room
+        const ownerPlayer = roomPlayers[socket.id];
+        io.to(playerRoom).emit("deskKickNotification", {
+          ownerName: ownerPlayer?.name ?? "Unknown",
+          victimName: victimPlayer.name ?? "Unknown",
+        });
+
         // Owner yells something funny
         const yell = DESK_KICK_YELLS[Math.floor(Math.random() * DESK_KICK_YELLS.length)];
         const now = Date.now();
-        const ownerPlayer = roomPlayers[socket.id];
         if (ownerPlayer) {
           ownerPlayer.lastMessage = yell;
           ownerPlayer.lastMessageTime = now;

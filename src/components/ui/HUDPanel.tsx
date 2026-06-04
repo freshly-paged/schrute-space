@@ -9,6 +9,7 @@ interface HUDPanelProps {
   paperReams: number;
   focusEnergy: number;
   myRole?: RoomRole | null;
+  onOpenSettings: () => void;
 }
 
 export const HUDPanel = ({
@@ -18,15 +19,33 @@ export const HUDPanel = ({
   paperReams,
   focusEnergy,
   myRole,
+  onOpenSettings,
 }: HUDPanelProps) => (
   <div className="font-pixel">
     <div className="pixel-panel max-w-xs overflow-hidden">
       {/* Memo header band */}
-      <div className="px-4 py-2" style={{ background: 'var(--color-schrute)' }}>
-        <div className="text-white text-[8px] uppercase tracking-widest">DUNDER MIFFLIN</div>
-        <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
-          Internal Memorandum
+      <div className="px-4 py-2 flex justify-between items-start" style={{ background: 'var(--color-schrute)' }}>
+        <div>
+          <div className="text-white text-[8px] uppercase tracking-widest">DUNDER MIFFLIN</div>
+          <div className="text-[7px] uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Internal Memorandum
+          </div>
         </div>
+        <button
+          onClick={onOpenSettings}
+          title="Settings"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'rgba(255,255,255,0.6)',
+            cursor: 'pointer',
+            fontSize: '11px',
+            padding: '2px 4px',
+            lineHeight: 1,
+          }}
+        >
+          ⚙
+        </button>
       </div>
 
       <div className="p-4 space-y-3">
