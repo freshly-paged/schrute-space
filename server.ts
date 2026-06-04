@@ -1193,6 +1193,19 @@ export async function createApp(injectedPool?: pg.Pool) {
 
   // Track active users by email to prevent multiple sessions
   const activeUsers = new Map<string, string>(); // email -> socketId
+  type DisconnectedPlayerSnapshot = {
+    roomId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    isFocused: boolean;
+    activeDeskId: string | null;
+    focusProgress: number;
+    focusSitPoseIndex?: number;
+    disconnectedAt: number;
+  };
+  const disconnectedPlayers = new Map<string, DisconnectedPlayerSnapshot>();
+  const pendingDisconnectSettleTimers = new Map<string, NodeJS.Timeout>();
+  const DISCONNECT_RESTORE_WINDOW_MS = 2 * 60 * 1000;
 
   // Buffered movement state: flushed to clients at MOVEMENT_TICK_MS intervals
   const MOVEMENT_TICK_MS = 50; // 20 Hz
@@ -1611,6 +1624,12 @@ io.on("connection", (socket) => {
 
     console.log("User connected:", socket.id, user.email);
 
+    const pendingSettle = pendingDisconnectSettleTimers.get(user.email);
+    if (pendingSettle) {
+      clearTimeout(pendingSettle);
+      pendingDisconnectSettleTimers.delete(user.email);
+    }
+
     // Single session enforcement
     const existingSocketId = activeUsers.get(user.email);
     if (existingSocketId) {
@@ -1671,19 +1690,44 @@ io.on("connection", (socket) => {
       const spawnRotation: [number, number, number] = isValidCoord(data.rotation)
         ? data.rotation
         : [0, 0, 0];
+      const disconnectedSnapshot = disconnectedPlayers.get(user.email);
+      const canRestoreFromDisconnectSnapshot =
+        !!disconnectedSnapshot &&
+        disconnectedSnapshot.roomId === room &&
+        Date.now() - disconnectedSnapshot.disconnectedAt <= DISCONNECT_RESTORE_WINDOW_MS;
       rooms[room][socket.id] = {
         id: socket.id,
         email: user.email,
-        position: spawnPosition,
-        rotation: spawnRotation,
+        position:
+          canRestoreFromDisconnectSnapshot && disconnectedSnapshot
+            ? disconnectedSnapshot.position
+            : spawnPosition,
+        rotation:
+          canRestoreFromDisconnectSnapshot && disconnectedSnapshot
+            ? disconnectedSnapshot.rotation
+            : spawnRotation,
         color: getDeterministicColor(name),
         name: name,
         room: room,
         wornPropId: null,
         heldThrowableId: null,
       };
+      if (canRestoreFromDisconnectSnapshot && disconnectedSnapshot) {
+        rooms[room][socket.id].isFocused = disconnectedSnapshot.isFocused;
+        rooms[room][socket.id].activeDeskId = disconnectedSnapshot.activeDeskId;
+        rooms[room][socket.id].focusProgress = disconnectedSnapshot.focusProgress;
+        if (typeof disconnectedSnapshot.focusSitPoseIndex === "number") {
+          rooms[room][socket.id].focusSitPoseIndex = disconnectedSnapshot.focusSitPoseIndex;
+        }
+      }
       try {
-        const persistedFocus = await loadPersistedFocusState(user.email, room);
+        const shouldRestorePersistedFocus =
+          !canRestoreFromDisconnectSnapshot ||
+          !disconnectedSnapshot?.isFocused ||
+          !disconnectedSnapshot.activeDeskId;
+        const persistedFocus = shouldRestorePersistedFocus
+          ? await loadPersistedFocusState(user.email, room)
+          : { activeDeskId: null, deskPosition: null };
         if (persistedFocus.activeDeskId) {
           rooms[room][socket.id].isFocused = true;
           rooms[room][socket.id].activeDeskId = persistedFocus.activeDeskId;
@@ -1695,6 +1739,7 @@ io.on("connection", (socket) => {
       } catch (err) {
         console.error("Failed to restore persisted focus state:", err);
       }
+      disconnectedPlayers.delete(user.email);
       socketToRoom.set(socket.id, room);
 
       // Remove stale entries for the same email before sending currentPlayers.
@@ -2152,18 +2197,28 @@ io.on("connection", (socket) => {
           nextFocused && !!nextDeskId && (!wasFocused || prevDeskId !== nextDeskId);
 
         if (startedOrSwitchedDesk) {
+          const triggerDeskId = nextDeskId;
           void getRoomLayout(playerRoom)
             .then((layout) => {
-              const deskOwnerEmail = deskOwnerEmailByDeskId(layout, nextDeskId);
-              const sittingPlayerEmail = typeof player.email === "string" ? player.email : user.email;
+              const latestPlayer = rooms[playerRoom]?.[socket.id];
+              if (!latestPlayer || !latestPlayer.isFocused) return;
+              const latestDeskId =
+                typeof latestPlayer.activeDeskId === "string" ? latestPlayer.activeDeskId : null;
+              if (!latestDeskId || latestDeskId !== triggerDeskId) return;
+
+              const deskOwnerEmail = deskOwnerEmailByDeskId(layout, triggerDeskId);
+              const sittingPlayerEmail =
+                typeof latestPlayer.email === "string" ? latestPlayer.email : user.email;
+              const normalizedDeskOwner = deskOwnerEmail?.trim().toLowerCase();
+              const normalizedSitter = sittingPlayerEmail.trim().toLowerCase();
               if (
-                deskOwnerEmail &&
-                deskOwnerEmail.toLowerCase() !== sittingPlayerEmail.toLowerCase()
+                normalizedDeskOwner &&
+                normalizedDeskOwner !== normalizedSitter
               ) {
                 const messageTime = Date.now();
-                player.lastMessage = IDENTITY_THEFT_OVERHEAD_TEXT;
-                player.lastMessageTime = messageTime;
-                player.lastMessageDurationMs = IDENTITY_THEFT_OVERHEAD_DURATION_MS;
+                latestPlayer.lastMessage = IDENTITY_THEFT_OVERHEAD_TEXT;
+                latestPlayer.lastMessageTime = messageTime;
+                latestPlayer.lastMessageDurationMs = IDENTITY_THEFT_OVERHEAD_DURATION_MS;
                 io.to(playerRoom).emit(
                   "chatMessage",
                   systemChatMessage(IDENTITY_THEFT_SYSTEM_CHAT_TEXT)
@@ -2252,16 +2307,47 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
 
-      if (user?.email) {
-        void settleFocusEnergyOnDisconnect(user.email);
-      }
-
-      if (user?.email && activeUsers.get(user.email) === socket.id) {
-        activeUsers.delete(user.email);
-      }
-
       const playerRoom = socketToRoom.get(socket.id);
       if (playerRoom && rooms[playerRoom]?.[socket.id]) {
+        const disconnectedPlayer = rooms[playerRoom][socket.id];
+        if (user?.email) {
+          disconnectedPlayers.set(user.email, {
+            roomId: playerRoom,
+            position: Array.isArray(disconnectedPlayer.position)
+              ? disconnectedPlayer.position
+              : [0, 0, 0],
+            rotation: Array.isArray(disconnectedPlayer.rotation)
+              ? disconnectedPlayer.rotation
+              : [0, 0, 0],
+            isFocused: !!disconnectedPlayer.isFocused,
+            activeDeskId:
+              typeof disconnectedPlayer.activeDeskId === "string"
+                ? disconnectedPlayer.activeDeskId
+                : null,
+            focusProgress:
+              typeof disconnectedPlayer.focusProgress === "number"
+                ? disconnectedPlayer.focusProgress
+                : 0,
+            focusSitPoseIndex:
+              typeof disconnectedPlayer.focusSitPoseIndex === "number"
+                ? disconnectedPlayer.focusSitPoseIndex
+                : undefined,
+            disconnectedAt: Date.now(),
+          });
+
+          const existingTimer = pendingDisconnectSettleTimers.get(user.email);
+          if (existingTimer) clearTimeout(existingTimer);
+          const timer = setTimeout(() => {
+            const activeSocketId = activeUsers.get(user.email);
+            if (!activeSocketId) {
+              disconnectedPlayers.delete(user.email);
+              void settleFocusEnergyOnDisconnect(user.email);
+            }
+            pendingDisconnectSettleTimers.delete(user.email);
+          }, DISCONNECT_RESTORE_WINDOW_MS);
+          pendingDisconnectSettleTimers.set(user.email, timer);
+        }
+
         delete rooms[playerRoom][socket.id];
         socketToRoom.delete(socket.id);
         io.to(playerRoom).emit("playerDisconnected", socket.id);
@@ -2270,6 +2356,10 @@ io.on("connection", (socket) => {
         if (Object.keys(rooms[playerRoom]).length === 0) {
           delete rooms[playerRoom];
         }
+      }
+
+      if (user?.email && activeUsers.get(user.email) === socket.id) {
+        activeUsers.delete(user.email);
       }
     });
   });
