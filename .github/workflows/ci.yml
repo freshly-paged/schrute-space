@@ -70,7 +70,23 @@ jobs:
       - name: Verify dist/index.html was produced
         run: test -f dist/index.html
 
-  # ── 4. Integration tests ─────────────────────────────────────────────────────
+  # ── 4. Deploy to Fly.io (main branch only) ──────────────────────────────────
+  deploy:
+    name: Deploy to Fly.io
+    needs: [typecheck, unit-tests, build, integration-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        run: flyctl deploy --remote-only --build-arg GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # ── 5. Integration tests ─────────────────────────────────────────────────────
   # Uses a mock pg.Pool injected via createApp(pool) — no real database needed.
   # The postgres service block below is kept for future end-to-end expansion but
   # is not required for the current mock-based suite.
