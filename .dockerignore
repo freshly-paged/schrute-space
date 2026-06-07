@@ -2,3 +2,8 @@ node_modules
 dist
 .env.local
 .env
+.env.*
+cloudbuild.yaml
+*.md
+docs/
+src/__tests__/
